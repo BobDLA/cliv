@@ -2,6 +2,7 @@ import { memo, useEffect, useCallback } from "react";
 import { Clock, Trash2, FileText, MessageSquare } from "lucide-react";
 import { useSessionStore, useAnnotationStore, useDocumentStore } from "@/stores";
 import type { SessionSummary } from "@/services/sessionService";
+import { useT } from "@/lib/useT";
 
 /**
  * SessionTree — left sidebar component showing saved sessions.
@@ -16,6 +17,7 @@ export const SessionTree = memo(function SessionTree() {
     openSession,
     deleteSessionById,
   } = useSessionStore();
+  const t = useT();
 
   // Load sessions on mount
   useEffect(() => {
@@ -66,9 +68,9 @@ export const SessionTree = memo(function SessionTree() {
             opacity: 0.5,
           }}
         />
-        <p>暂无历史会话</p>
+        <p>{t("session.noHistory")}</p>
         <p style={{ fontSize: "11px", marginTop: "4px" }}>
-          保存批注后会在此处显示
+          {t("session.saveHint")}
         </p>
       </div>
     );
@@ -91,6 +93,7 @@ export const SessionTree = memo(function SessionTree() {
           isActive={s.id === currentSessionId}
           onOpen={handleOpen}
           onDelete={handleDelete}
+          t={t}
         />
       ))}
     </div>
@@ -102,11 +105,13 @@ const SessionItem = memo(function SessionItem({
   isActive,
   onOpen,
   onDelete,
+  t,
 }: {
   session: SessionSummary;
   isActive: boolean;
   onOpen: (id: string) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
+  t: (key: string, n?: number | string) => string;
 }) {
   return (
     <div
@@ -174,13 +179,13 @@ const SessionItem = memo(function SessionItem({
             <MessageSquare style={{ width: "10px", height: "10px" }} />
             {session.annotationCount}
           </span>
-          <span>{formatTime(session.updatedAt)}</span>
+          <span>{formatTime(session.updatedAt, t)}</span>
         </div>
       </div>
       <button
         type="button"
         onClick={(e) => onDelete(e, session.id)}
-        title="删除会话"
+        title={t("session.deleteTitle")}
         style={{
           padding: "2px",
           border: "none",
@@ -207,16 +212,16 @@ const SessionItem = memo(function SessionItem({
   );
 });
 
-function formatTime(isoString: string): string {
+function formatTime(isoString: string, t: (key: string, n?: number | string) => string): string {
   const d = new Date(isoString);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "刚刚";
-  if (mins < 60) return `${mins}分钟前`;
+  if (mins < 1) return t("time.justNow");
+  if (mins < 60) return t("time.minutesAgo", mins);
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}小时前`;
+  if (hours < 24) return t("time.hoursAgo", hours);
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}天前`;
-  return d.toLocaleDateString("zh-CN");
+  if (days < 30) return t("time.daysAgo", days);
+  return d.toLocaleDateString();
 }

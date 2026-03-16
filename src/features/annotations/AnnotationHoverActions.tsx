@@ -2,6 +2,7 @@ import { memo, useEffect, useState, useRef, useCallback } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { useAnnotationStore } from "@/stores";
 import { getAnnotationRect } from "./AnnotationOverlay";
+import { useT } from "@/lib/useT";
 
 /**
  * AnnotationHoverActions — floating mini-toolbar above annotated text.
@@ -18,6 +19,7 @@ export const AnnotationHoverActions = memo(function AnnotationHoverActions({
 }) {
   const { setEditingAnnotation, removeAnnotation } = useAnnotationStore();
   const hoveredAnnotationId = useAnnotationStore((s) => s.hoveredAnnotationId);
+  const t = useT();
 
   // Local state: which annotation's toolbar is visible
   // This has DELAYED clearing so the toolbar stays clickable
@@ -138,7 +140,7 @@ export const AnnotationHoverActions = memo(function AnnotationHoverActions({
         }}
       >
         <Pencil style={{ width: "13px", height: "13px" }} />
-        编辑
+        {t("annHover.edit")}
       </button>
       <button
         type="button"
@@ -173,7 +175,7 @@ export const AnnotationHoverActions = memo(function AnnotationHoverActions({
         }}
       >
         <Trash2 style={{ width: "13px", height: "13px" }} />
-        删除
+        {t("annHover.delete")}
       </button>
     </div>
   );

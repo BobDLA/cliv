@@ -1,5 +1,7 @@
 # cliV: Agent Integration Guide
 
+**[中文版](integrations.zh-CN.md)**
+
 This document explains how to integrate cliV with Codex, Claude Code, and Gemini CLI.
 
 ## How It Works

@@ -1,5 +1,7 @@
 # cliV
 
+**[中文版](README.zh-CN.md)**
+
 **cliV** — A GUI reviewer for AI agent replies, triggered from your CLI.
 Read, annotate, and return structured feedback to the current thread.
 
@@ -28,12 +30,12 @@ AI coding agents (Codex, Claude Code, Gemini CLI) produce long, structured repli
 
 ### Download (recommended)
 
-Grab the latest release from [GitHub Releases](https://github.com/<your-username>/cliv/releases):
+Grab the latest release from [GitHub Releases](https://github.com/BobDLA/cliv/releases):
 
 - **Linux**: `.deb` package or standalone binary
 
 ```bash
-# Example: install .deb
+# Install .deb
 sudo dpkg -i cliv_0.2.0_amd64.deb
 
 # Or copy the binary directly
@@ -44,7 +46,7 @@ cp cliv ~/.local/bin/
 
 ```bash
 # Prerequisites: Node.js 20+, Rust 1.75+, pnpm
-git clone https://github.com/<your-username>/cliv.git
+git clone https://github.com/BobDLA/cliv.git
 cd cliv
 pnpm install
 pnpm tauri build

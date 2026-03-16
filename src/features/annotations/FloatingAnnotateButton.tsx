@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import { useSelectionStore } from "@/stores";
+import { useT } from "@/lib/useT";
 
 /**
  * FloatingAnnotateButton — appears near the END of selected text on mouseup.
@@ -8,6 +9,7 @@ import { useSelectionStore } from "@/stores";
  */
 export const FloatingAnnotateButton = memo(function FloatingAnnotateButton() {
   const { selection, showPopup, openPopup } = useSelectionStore();
+  const t = useT();
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<number>(0);
 
@@ -81,7 +83,7 @@ export const FloatingAnnotateButton = memo(function FloatingAnnotateButton() {
         }}
       >
         <MessageSquarePlus style={{ width: "14px", height: "14px" }} />
-        <span>添加批注</span>
+        <span>{t("annBtn.add")}</span>
         <kbd
           style={{
             marginLeft: "4px",

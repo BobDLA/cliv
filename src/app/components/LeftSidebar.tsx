@@ -4,6 +4,7 @@ import { useSessionStore, useAnnotationStore } from "@/stores";
 import { DocumentOutline, type HeadingInfo } from "@/features/documents";
 import { SessionTree } from "@/features/sessions";
 import { ResizeHandle } from "./ResizeHandle";
+import { useT } from "@/lib/useT";
 
 interface LeftSidebarProps {
   width: number;
@@ -23,6 +24,7 @@ export function LeftSidebar({
   );
   const { createNewSession, autoSave, currentSessionId } = useSessionStore();
   const annotations = useAnnotationStore((s) => s.annotations);
+  const t = useT();
 
   return (
     <>
@@ -39,7 +41,7 @@ export function LeftSidebar({
                 : "text-text-subtle hover:text-text-primary"
             }`}
           >
-            大纲
+            {t("sidebar.outline")}
           </button>
           <button
             onClick={() => setSidebarTab("history")}
@@ -49,7 +51,7 @@ export function LeftSidebar({
                 : "text-text-subtle hover:text-text-primary"
             }`}
           >
-            历史
+            {t("sidebar.history")}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -74,7 +76,7 @@ export function LeftSidebar({
               className="w-full flex items-center justify-center gap-2 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
             >
               <Save className="h-3.5 w-3.5" />
-              {currentSessionId ? "保存" : "保存会话"}
+              {currentSessionId ? t("sidebar.save") : t("sidebar.saveSession")}
             </button>
           </div>
         )}

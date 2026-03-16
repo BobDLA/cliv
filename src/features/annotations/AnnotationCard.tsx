@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { useAnnotationStore } from "@/stores";
 import type { Annotation, AnnotationKind } from "@/types";
+import { useT } from "@/lib/useT";
 
 const KIND_COLORS: Record<AnnotationKind, string> = {
   comment: "#3b82f6",
@@ -28,6 +29,7 @@ export const AnnotationCard = memo(function AnnotationCard({
     setEditingAnnotation,
     removeAnnotation,
   } = useAnnotationStore();
+  const t = useT();
 
   const isHovered = hoveredAnnotationId === annotation.id;
   const kindColor = KIND_COLORS[annotation.kind];
@@ -83,13 +85,13 @@ export const AnnotationCard = memo(function AnnotationCard({
             color: "var(--color-text-secondary)",
           }}
         >
-          {formatRelativeTime(annotation.createdAt)}
+          {formatRelativeTime(annotation.createdAt, t)}
         </span>
         <div style={{ display: "flex", gap: "2px" }}>
           <button
             type="button"
             onClick={() => setEditingAnnotation(annotation.id)}
-            title="编辑"
+            title={t("ann.editTitle")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -114,12 +116,12 @@ export const AnnotationCard = memo(function AnnotationCard({
             }}
           >
             <Pencil style={{ width: "12px", height: "12px" }} />
-            编辑
+            {t("ann.edit")}
           </button>
           <button
             type="button"
             onClick={() => removeAnnotation(annotation.id)}
-            title="删除"
+            title={t("ann.deleteTitle")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -144,7 +146,7 @@ export const AnnotationCard = memo(function AnnotationCard({
             }}
           >
             <Trash2 style={{ width: "12px", height: "12px" }} />
-            删除
+            {t("ann.delete")}
           </button>
         </div>
       </div>
@@ -152,12 +154,12 @@ export const AnnotationCard = memo(function AnnotationCard({
   );
 });
 
-function formatRelativeTime(isoString: string): string {
+function formatRelativeTime(isoString: string, t: (key: string, n?: number | string) => string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "刚刚";
-  if (mins < 60) return `${mins}分钟前`;
+  if (mins < 1) return t("time.justNow");
+  if (mins < 60) return t("time.minutesAgo", mins);
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}小时前`;
-  return `${Math.floor(hours / 24)}天前`;
+  if (hours < 24) return t("time.hoursAgo", hours);
+  return t("time.daysAgo", Math.floor(hours / 24));
 }
