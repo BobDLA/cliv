@@ -9,12 +9,30 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: cliv-linux-x86_64
+            bundle_ext: deb
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: cliv-macos-aarch64
+            bundle_ext: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: cliv-windows-x86_64.exe
+            bundle_ext: msi
+
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -36,6 +54,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -46,15 +66,30 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app
-        run: pnpm tauri build
+        run: pnpm tauri build --target ${{ matrix.target }}
 
-      - name: Prepare release assets
+      - name: Prepare Linux assets
+        if: matrix.os == 'ubuntu-latest'
         run: |
           mkdir -p release-assets
-          cp src-tauri/target/release/cliv release-assets/cliv-linux-x86_64
-          cp src-tauri/target/release/bundle/deb/*.deb release-assets/
+          cp src-tauri/target/${{ matrix.target }}/release/cliv release-assets/${{ matrix.asset_name }}
+          cp src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb release-assets/
 
-      - name: Create GitHub Release
+      - name: Prepare macOS assets
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p release-assets
+          cp src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg release-assets/
+
+      - name: Prepare Windows assets
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets
+          Copy-Item src-tauri/target/${{ matrix.target }}/release/cliv.exe release-assets/${{ matrix.asset_name }}
+          Copy-Item src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi release-assets/
+
+      - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
