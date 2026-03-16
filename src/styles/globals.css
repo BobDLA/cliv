@@ -1,0 +1,215 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens (Dark Theme — Default) ────────────────── */
+
+@theme {
+  /* Text hierarchy */
+  --color-text-strong: #ffffff;
+  --color-text-primary: #e6e7ea;
+  --color-text-muted: #b0b4bc;
+  --color-text-subtle: #8e929c;
+  --color-text-faint: #6b7080;
+  --color-text-dim: #4e5260;
+
+  /* Surface layers */
+  --color-surface-app: #0e1017;
+  --color-surface-sidebar: #12131c;
+  --color-surface-topbar: #181a28;
+  --color-surface-main: #0d0e16;
+  --color-surface-panel: #10111a;
+  --color-surface-card: #1a1b26;
+  --color-surface-card-strong: #22232f;
+  --color-surface-hover: #1e1f2c;
+  --color-surface-popover: #13141e;
+
+  /* Borders */
+  --color-border-subtle: #1e2030;
+  --color-border-strong: #2a2c3e;
+  --color-border-accent: rgba(100, 200, 255, 0.6);
+
+  /* Accent */
+  --color-accent: #a4c3ff;
+  --color-accent-glow: rgba(92, 168, 255, 0.28);
+
+  /* Kind Colors (Annotation types) */
+  --color-kind-comment: #3b82f6;
+  --color-kind-comment-bg: rgba(59, 130, 246, 0.15);
+  --color-kind-comment-text: #8cb4ff;
+  --color-kind-question: #ffaf55;
+  --color-kind-question-bg: rgba(255, 175, 85, 0.15);
+  --color-kind-question-text: #ffc378;
+  --color-kind-rewrite: #78ebb4;
+  --color-kind-rewrite-bg: rgba(120, 235, 190, 0.15);
+  --color-kind-rewrite-text: #78ebb4;
+  --color-kind-challenge: #ff6e6e;
+  --color-kind-challenge-bg: rgba(255, 110, 110, 0.15);
+  --color-kind-challenge-text: #ff8c8c;
+
+  /* Spacing scale */
+  --spacing-panel-gap: 1px;
+
+  /* Font */
+  --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace,
+    monospace;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+/* ─── Base Styles ─────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--font-scale, 14px);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-subtle);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* ─── Selection ───────────────────────────────────────────── */
+
+::selection {
+  background-color: var(--color-accent-glow);
+  color: var(--color-text-strong);
+}
+
+/* ─── List Alignment ──────────────────────────────────────── */
+
+[data-viewer-root] ul,
+[data-viewer-root] ol {
+  padding-left: 1.5em;
+  list-style-position: outside;
+}
+
+/* ─── Search Highlights (CSS Highlight API) ───────────────── */
+
+::highlight(search-results) {
+  background-color: rgba(250, 204, 21, 0.35);
+  color: inherit;
+}
+
+::highlight(search-current) {
+  background-color: rgba(250, 204, 21, 0.7);
+  color: var(--color-text-strong);
+}
+
+/* ─── Annotation Highlights (CSS Highlight API) ───────────── */
+
+::highlight(annotation-comment) {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+::highlight(annotation-question) {
+  background-color: rgba(255, 175, 85, 0.2);
+}
+
+::highlight(annotation-rewrite) {
+  background-color: rgba(120, 235, 190, 0.2);
+}
+
+::highlight(annotation-challenge) {
+  background-color: rgba(255, 110, 110, 0.2);
+}
+
+::highlight(annotation-active) {
+  background-color: rgba(164, 195, 255, 0.4);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+}
+
+/* ─── Dim Theme ───────────────────────────────────────────── */
+
+[data-theme="dim"] {
+  --color-surface-app: #1a1b2e;
+  --color-surface-sidebar: #1e1f33;
+  --color-surface-main: #1c1d30;
+  --color-surface-panel: #1f2035;
+  --color-surface-card: #252640;
+  --color-surface-card-strong: #2c2d48;
+  --color-surface-hover: #2a2b46;
+  --color-surface-popover: #212238;
+  --color-border-subtle: #2a2b48;
+  --color-border-strong: #363858;
+}
+
+/* ─── Light Theme ─────────────────────────────────────────── */
+
+[data-theme="light"] {
+  --color-text-strong: #111827;
+  --color-text-primary: #1f2937;
+  --color-text-muted: #6b7280;
+  --color-text-subtle: #9ca3af;
+  --color-text-faint: #d1d5db;
+  --color-text-dim: #e5e7eb;
+
+  --color-surface-app: #f9fafb;
+  --color-surface-sidebar: #f3f4f6;
+  --color-surface-main: #ffffff;
+  --color-surface-panel: #f9fafb;
+  --color-surface-card: #ffffff;
+  --color-surface-card-strong: #f3f4f6;
+  --color-surface-hover: #e5e7eb;
+  --color-surface-popover: #ffffff;
+
+  --color-border-subtle: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-border-accent: rgba(59, 130, 246, 0.5);
+
+  --color-accent: #3b82f6;
+  --color-accent-glow: rgba(59, 130, 246, 0.15);
+
+  --color-kind-comment-bg: rgba(59, 130, 246, 0.1);
+  --color-kind-comment-text: #2563eb;
+  --color-kind-question-bg: rgba(245, 158, 11, 0.1);
+  --color-kind-question-text: #d97706;
+  --color-kind-rewrite-bg: rgba(16, 185, 129, 0.1);
+  --color-kind-rewrite-text: #059669;
+  --color-kind-challenge-bg: rgba(239, 68, 68, 0.1);
+  --color-kind-challenge-text: #dc2626;
+}

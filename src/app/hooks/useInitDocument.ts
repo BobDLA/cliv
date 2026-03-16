@@ -1,0 +1,148 @@
+import { useEffect } from "react";
+import { useDocumentStore } from "@/stores";
+import { useAnnotationStore } from "@/stores";
+import { DEMO_CONTENT } from "@/app/demoContent";
+
+// Check if running inside Tauri
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+type ExtractFn = () => Promise<string | null>;
+
+/**
+ * Build an ordered list of extraction attempts based on which agent triggered us.
+ * The calling agent goes first; others follow as fallback.
+ */
+function buildExtractionPlan(
+  agent: string | null | undefined,
+  extractCodex: () => Promise<string>,
+  extractClaude: () => Promise<string>,
+  extractGemini: () => Promise<string>,
+): ExtractFn[] {
+  const codex: ExtractFn = async () => {
+    try { const r = await extractCodex(); return r?.trim() ? r : null; } catch { return null; }
+  };
+  const claude: ExtractFn = async () => {
+    try { const r = await extractClaude(); return r?.trim() ? r : null; } catch { return null; }
+  };
+  const gemini: ExtractFn = async () => {
+    try { const r = await extractGemini(); return r?.trim() ? r : null; } catch { return null; }
+  };
+
+  switch (agent) {
+    case "codex":   return [codex, claude, gemini];
+    case "claude":  return [claude, gemini, codex];
+    case "gemini":  return [gemini, claude, codex];
+    default:        return [claude, gemini, codex]; // default fallback order
+  }
+}
+
+/**
+ * Hook: initialize document from CLI args (Tauri) or demo content (browser dev).
+ *
+ * Agent reply extraction priority is determined by CLIV_AGENT:
+ *   - codex:   Codex → Claude → Gemini
+ *   - claude:  Claude → Gemini → Codex
+ *   - gemini:  Gemini → Claude → Codex
+ *   - unknown: Claude → Gemini → Codex (original default)
+ */
+export function useInitDocument() {
+  const { setDocument, setLoading, setError } = useDocumentStore();
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true);
+
+      if (isTauri) {
+        try {
+          const {
+            getCliArgs,
+            loadFiles,
+            extractCodexReply,
+            extractClaudeReply,
+            extractGeminiReply,
+          } = await import("@/services/tauri-ipc");
+          const args = await getCliArgs();
+          const result = await loadFiles(args.composePath, args.metadataPath);
+
+          if (result.error && !result.reply) {
+            setError(result.error);
+            return;
+          }
+
+          // Try to extract the last reply using cached hooks
+          let replyContent = result.reply;
+          if (!replyContent || replyContent.trim() === "") {
+            const plan = buildExtractionPlan(
+              args.agent,
+              () => extractCodexReply(null, null),
+              () => extractClaudeReply(null),
+              () => extractGeminiReply(null),
+            );
+
+            for (const attempt of plan) {
+              const reply = await attempt();
+              if (reply) {
+                replyContent = reply;
+                break;
+              }
+            }
+          }
+
+          setDocument({
+            reply: replyContent,
+            compose: result.compose,
+            composePath: result.composePath,
+            replyPath: result.replyPath,
+            documentId: result.metadata?.turn?.id ?? "default",
+          });
+        } catch (e) {
+          setError(
+            `加载失败: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      } else {
+        // Browser dev mode: use demo content
+        setDocument({ reply: DEMO_CONTENT, documentId: "demo" });
+      }
+
+      setLoading(false);
+    }
+
+    init();
+  }, [setDocument, setLoading, setError]);
+}
+
+/**
+ * Open file handler — works in both browser and Tauri.
+ * Returns a function to trigger the file open dialog or browser file input.
+ */
+export function openFileFromTauri(
+  setDocument: ReturnType<typeof useDocumentStore.getState>["setDocument"],
+  fileInputRef: React.RefObject<HTMLInputElement | null>,
+) {
+  return async () => {
+    if (isTauri) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const selected = await invoke<string | null>("open_file_dialog");
+        if (selected) {
+          const content = await invoke<string>("read_file", {
+            path: selected,
+          });
+          setDocument({
+            reply: content,
+            replyPath: selected,
+            documentId: selected.split("/").pop() ?? "file",
+          });
+          useAnnotationStore.getState().clearAnnotations();
+        }
+      } catch {
+        // Tauri command may not exist yet — fallback to browser file input
+        fileInputRef.current?.click();
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+}
