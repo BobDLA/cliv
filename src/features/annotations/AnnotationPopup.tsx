@@ -2,16 +2,17 @@ import { memo, useState, useRef, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 import { useSelectionStore, useAnnotationStore } from "@/stores";
 import type { AnnotationKind } from "@/types";
+import { useT } from "@/lib/useT";
 
 const KIND_OPTIONS: {
   value: AnnotationKind;
-  label: string;
+  labelKey: string;
   icon: string;
 }[] = [
-  { value: "comment", label: "批注", icon: "💬" },
-  { value: "question", label: "提问", icon: "❓" },
-  { value: "rewrite", label: "重写", icon: "✏️" },
-  { value: "challenge", label: "质疑", icon: "⚡" },
+  { value: "comment", labelKey: "annPopup.comment", icon: "💬" },
+  { value: "question", labelKey: "annPopup.question", icon: "❓" },
+  { value: "rewrite", labelKey: "annPopup.rewrite", icon: "✏️" },
+  { value: "challenge", labelKey: "annPopup.challenge", icon: "⚡" },
 ];
 
 /**
@@ -30,6 +31,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
     updateAnnotation,
     setEditingAnnotation,
   } = useAnnotationStore();
+  const t = useT();
 
   const editingAnnotation = editingAnnotationId
     ? annotations.find((a) => a.id === editingAnnotationId) ?? null
@@ -229,7 +231,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                     : "var(--color-text-faint)",
               }}
             >
-              {k.icon} {k.label}
+              {k.icon} {t(k.labelKey)}
             </button>
           ))}
         </div>
@@ -240,7 +242,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
             ref={textareaRef}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder={isEditMode ? "编辑批注内容…" : "添加批注…"}
+            placeholder={isEditMode ? t("annPopup.editPlaceholder") : t("annPopup.addPlaceholder")}
             rows={3}
             style={{
               width: "100%",
@@ -283,7 +285,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               color: "var(--color-text-faint)",
             }}
           >
-            Ctrl+Enter 提交
+            {t("annPopup.submitHint")}
           </span>
           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
             <button
@@ -300,7 +302,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 cursor: "pointer",
               }}
             >
-              取消
+              {t("annPopup.cancel")}
             </button>
             <button
               type="button"
@@ -326,7 +328,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 transition: "all 0.15s",
               }}
             >
-              {isEditMode ? "保存" : "添加批注"}
+              {isEditMode ? t("annPopup.save") : t("annPopup.add")}
             </button>
           </div>
         </div>

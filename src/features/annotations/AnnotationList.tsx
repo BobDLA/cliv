@@ -3,6 +3,7 @@ import { MessageSquare } from "lucide-react";
 import { useAnnotationStore } from "@/stores";
 import { AnnotationCard } from "./AnnotationCard";
 import { getAnnotationRect } from "./AnnotationOverlay";
+import { useT } from "@/lib/useT";
 
 /**
  * AnnotationList — right margin panel with Word-style positioning.
@@ -20,6 +21,7 @@ export const AnnotationList = memo(function AnnotationList({
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
 }) {
   const { annotations } = useAnnotationStore();
+  const t = useT();
   const listRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Map<string, number>>(new Map());
 
@@ -141,7 +143,7 @@ export const AnnotationList = memo(function AnnotationList({
                 fontFamily: "var(--font-sans)",
               }}
             >
-              选中文本后点击“添加批注”增加批注
+              {t("annList.hint")}
             </p>
             <p
               style={{

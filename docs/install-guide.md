@@ -1,6 +1,8 @@
-# cliV 安装与配置指南
+# cliV Installation & Configuration Guide
 
-## 1. 构建
+**[中文版](install-guide.zh-CN.md)**
+
+## 1. Build
 
 ```bash
 cd cliv
@@ -8,52 +10,52 @@ pnpm install
 pnpm tauri build
 ```
 
-构建产物：
-- **二进制**：`src-tauri/target/release/cliv`
-- **deb 包**：`src-tauri/target/release/bundle/deb/cliv_0.2.0_amd64.deb`
+Build artifacts:
+- **Binary**: `src-tauri/target/release/cliv`
+- **deb package**: `src-tauri/target/release/bundle/deb/cliv_0.2.0_amd64.deb`
 
-## 2. 安装二进制
+## 2. Install the Binary
 
-选择一种方式：
+Choose one method:
 
 ```bash
-# 方式 A：直接拷贝到 PATH
+# Method A: Copy to PATH
 cp src-tauri/target/release/cliv ~/.local/bin/
 
-# 方式 B：安装 deb 包（会自动放到 /usr/bin/）
+# Method B: Install .deb package (installs to /usr/bin/)
 sudo dpkg -i src-tauri/target/release/bundle/deb/cliv_*.deb
 
-# 验证
-cliv --help  # 或 which cliv
+# Verify
+cliv --help  # or: which cliv
 ```
 
-## 3. 设置环境变量
+## 3. Set Environment Variable
 
-编辑 `~/.bashrc` 或 `~/.zshrc`：
+Edit `~/.bashrc` or `~/.zshrc`:
 
 ```bash
 export EDITOR="cliv"
 ```
 
-然后 `source ~/.bashrc`（或重启终端）。
+Then run `source ~/.bashrc` (or restart your terminal).
 
-> **原理**：当 AI agent 触发 Ctrl+G 时，它会调用 `$EDITOR`。设成 `cliv` 后，agent 会直接启动 cliV。
+> **How it works**: When an AI agent triggers `Ctrl+G`, it invokes `$EDITOR`. Setting it to `cliv` launches the cliV GUI directly.
 
-## 4. 配置 Agent Hook
+## 4. Configure Agent Hooks
 
-每个 agent 需要一行 hook 配置，让它在回复完成后调用 `cliv cache-xxx` 缓存回复。
+Each agent needs a one-line hook config so it calls `cliv cache-xxx` to cache the reply after each turn.
 
 ---
 
 ### 4a. Codex
 
-编辑 `~/.codex/config.toml`，添加：
+Edit `~/.codex/config.toml` and add:
 
 ```toml
 notify = ["cliv", "cache-codex"]
 ```
 
-**完整示例**（如果文件不存在就新建）：
+**Full example** (create the file if it doesn't exist):
 
 ```toml
 # ~/.codex/config.toml
@@ -61,24 +63,24 @@ model = "o4-mini"
 notify = ["cliv", "cache-codex"]
 ```
 
-**测试**：
+**Test**:
 ```bash
-# 手动测试 cache-codex
+# Manual test
 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
 cat ~/.codex/reply_cache/test-123.md
-# 应该输出: # Hello\nTest reply.
+# Should output: # Hello\nTest reply.
 ```
 
-**真实测试**：
-1. 启动 Codex → 进行一轮对话
-2. 按 `Ctrl+G`
-3. cliV 应弹出并显示 AI 最新回复
+**Live test**:
+1. Start Codex → have a conversation
+2. Press `Ctrl+G`
+3. cliV should launch and display the latest AI reply
 
 ---
 
 ### 4b. Claude Code
 
-编辑 `~/.claude/settings.json`，添加 Stop hook：
+Edit `~/.claude/settings.json` and add the Stop hook:
 
 ```json
 {
@@ -97,25 +99,25 @@ cat ~/.codex/reply_cache/test-123.md
 }
 ```
 
-> ⚠️ 如果文件已有其他配置，把 `hooks` 部分合并进去，不要覆盖。
+> ⚠️ If the file already has other configuration, merge the `hooks` section — don't overwrite.
 
-**测试**：
+**Test**:
 ```bash
-# 手动测试 cache-claude
+# Manual test
 echo '{"hook_event_name":"Stop","session_id":"test-456","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
 cat ~/.claude/reply_cache/test-456.md
 ```
 
-**真实测试**：
-1. 启动 Claude Code → 进行一轮对话
-2. 按 `Ctrl+G`
-3. cliV 应弹出并显示 Claude 最新回复
+**Live test**:
+1. Start Claude Code → have a conversation
+2. Press `Ctrl+G`
+3. cliV should launch and display Claude's latest reply
 
 ---
 
 ### 4c. Gemini CLI
 
-编辑 `~/.gemini/settings.json`，添加 AfterAgent hook：
+Edit `~/.gemini/settings.json` and add the AfterAgent hook:
 
 ```json
 {
@@ -134,42 +136,42 @@ cat ~/.claude/reply_cache/test-456.md
 }
 ```
 
-**测试**：
+**Test**:
 ```bash
-# 手动测试 cache-gemini
+# Manual test
 echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-789 cliv cache-gemini
 cat ~/.gemini/reply_cache/test-789.md
 ```
 
-**真实测试**：
-1. 启动 Gemini CLI → 进行一轮对话
-2. 按 `Ctrl+G`（需要 $EDITOR 支持后）
-3. cliV 应弹出并显示 Gemini 最新回复
+**Live test**:
+1. Start Gemini CLI → have a conversation
+2. Press `Ctrl+G`
+3. cliV should launch and display Gemini's latest reply
 
 ---
 
-## 5. 验证清单
+## 5. Verification Checklist
 
-| 步骤 | 命令 | 预期 |
+| Step | Command | Expected |
 |---|---|---|
-| 二进制存在 | `which cliv` | 显示路径 |
-| EDITOR 设置 | `echo $EDITOR` | `cliv` |
-| Codex hook 配置 | `cat ~/.codex/config.toml` | 含 `notify = ["cliv", "cache-codex"]` |
-| Claude hook 配置 | `cat ~/.claude/settings.json` | 含 `"command": "cliv cache-claude"` |
-| Codex cache 测试 | 上面的手动命令 | 文件写入成功 |
-| Claude cache 测试 | 上面的手动命令 | 文件写入成功 |
-| Ctrl+G 真实测试 | 在 agent 中按 Ctrl+G | cliV 窗口弹出 |
+| Binary exists | `which cliv` | Shows path |
+| EDITOR is set | `echo $EDITOR` | `cliv` |
+| Codex hook config | `cat ~/.codex/config.toml` | Contains `notify = ["cliv", "cache-codex"]` |
+| Claude hook config | `cat ~/.claude/settings.json` | Contains `"command": "cliv cache-claude"` |
+| Codex cache test | Manual command above | File written successfully |
+| Claude cache test | Manual command above | File written successfully |
+| Ctrl+G live test | Press Ctrl+G in an agent | cliV window opens |
 
-## 6. 卸载
+## 6. Uninstall
 
 ```bash
-# 如果用方式 A 安装
+# If installed via Method A
 rm ~/.local/bin/cliv
 
-# 如果用 deb 安装
+# If installed via .deb
 sudo dpkg -r cliv
 
-# 清理用户数据和缓存（可选）
+# Clean up user data and cache (optional)
 rm -rf ~/.cliv
 rm -rf ~/.codex/reply_cache
 rm -rf ~/.claude/reply_cache

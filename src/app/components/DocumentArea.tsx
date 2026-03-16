@@ -14,6 +14,7 @@ import {
 } from "@/features/annotations";
 import { ReturnBuilder } from "@/features/return";
 import { ResizeHandle } from "./ResizeHandle";
+import { useT } from "@/lib/useT";
 
 interface DocumentAreaProps {
   replyContent: string | null;
@@ -34,6 +35,8 @@ export function DocumentArea({
   onHeadingsChange,
   onOpenFile,
 }: DocumentAreaProps) {
+  const t = useT();
+
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
@@ -68,18 +71,18 @@ export function DocumentArea({
                     cliV v0.2
                   </h2>
                   <p className="text-sm text-text-muted">
-                    使用{" "}
+                    {t("docarea.hintUse")}{" "}
                     <code className="bg-surface-card px-1 rounded text-xs">
                       cliv &lt;file.md&gt;
                     </code>{" "}
-                    或点击下方按钮打开文件。
+                    {t("docarea.hint")}
                   </p>
                   <button
                     onClick={onOpenFile}
                     className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 hover:shadow-xl active:scale-95"
                   >
                     <FolderOpen className="h-4 w-4" />
-                    打开 Markdown 文件
+                    {t("docarea.openMarkdown")}
                   </button>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { memo, useCallback } from "react";
 import type { HeadingInfo } from "./MarkdownViewer";
+import { useT } from "@/lib/useT";
 
 interface DocumentOutlineProps {
   headings: HeadingInfo[];
@@ -13,6 +14,8 @@ export const DocumentOutline = memo(function DocumentOutline({
   headings,
   className,
 }: DocumentOutlineProps) {
+  const t = useT();
+
   const scrollTo = useCallback((id: string) => {
     const el = document.getElementById(id);
     if (el) {
@@ -23,7 +26,7 @@ export const DocumentOutline = memo(function DocumentOutline({
   if (headings.length === 0) {
     return (
       <div className={`p-4 text-xs text-text-subtle ${className || ""}`}>
-        无标题
+        {t("outline.noHeadings")}
       </div>
     );
   }
@@ -35,10 +38,10 @@ export const DocumentOutline = memo(function DocumentOutline({
     <nav
       className={`space-y-0.5 p-3 ${className || ""}`}
       data-testid="document-outline"
-      aria-label="文档目录"
+      aria-label={t("outline.ariaLabel")}
     >
       <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-subtle">
-        目录
+        {t("outline.toc")}
       </div>
       {headings.map((heading) => (
         <button

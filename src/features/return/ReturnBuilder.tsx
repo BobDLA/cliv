@@ -13,29 +13,36 @@ import {
 } from "lucide-react";
 import { useUIStore, useAnnotationStore, useReturnStore, useDocumentStore } from "@/stores";
 import { writeBack, closeWindow } from "@/services/writeBack";
+import { useT } from "@/lib/useT";
+import { messages, type Locale } from "@/lib/locales";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export type TemplateMode = "reply" | "iterate";
 
-const TEMPLATE_LABELS: Record<TemplateMode, { label: string; desc: string }> = {
-  reply: { label: "回复模式", desc: "作为对话反馈返回当前会话" },
-  iterate: { label: "迭代编辑", desc: "对同一文本反复修改完善" },
+const TEMPLATE_LABELS: Record<TemplateMode, { labelKey: string; descKey: string }> = {
+  reply: { labelKey: "return.replyMode", descKey: "return.replyDesc" },
+  iterate: { labelKey: "return.iterateMode", descKey: "return.iterateDesc" },
 };
 
-const TEMPLATE_DEFAULTS: Record<TemplateMode, string> = {
-  reply:
-    "请基于以下批注逐条回应。除非我明确要求，不要重写未标注的部分。",
-  iterate:
-    "请根据以下批注，对原文进行增量修改。保持未标注部分不变，仅修改被标注的内容。",
+const TEMPLATE_HEADER_KEYS: Record<TemplateMode, string> = {
+  reply: "prompt.replyHeader",
+  iterate: "prompt.iterateHeader",
 };
 
-const KIND_LABELS: Record<string, string> = {
-  comment: "评论",
-  question: "提问",
-  rewrite: "改写",
-  challenge: "质疑",
+const PROMPT_KIND_KEYS: Record<string, string> = {
+  comment: "prompt.kindComment",
+  question: "prompt.kindQuestion",
+  rewrite: "prompt.kindRewrite",
+  challenge: "prompt.kindChallenge",
 };
+
+/** Resolve i18n key for given locale */
+function tl(locale: Locale, key: string, n?: number | string): string {
+  const str = messages[locale]?.[key] ?? messages.en?.[key] ?? key;
+  if (n !== undefined) return str.replace("{n}", String(n));
+  return str;
+}
 
 /**
  * ReturnBuilder — bottom split panel.
@@ -49,14 +56,16 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     useReturnStore();
   const composePath = useDocumentStore((s) => s.composePath);
   const fontSize = useUIStore((s) => s.fontSize);
+  const locale = useUIStore((s) => s.locale);
+  const t = useT();
 
-  const [userText, setUserText] = useState(TEMPLATE_DEFAULTS["reply"]);
+  const [userText, setUserText] = useState(tl(locale, TEMPLATE_HEADER_KEYS["reply"]));
   const [templateMode, setTemplateMode] = useState<TemplateMode>("reply");
 
   // Switch template → insert default text into editor
   const handleSetTemplate = useCallback((mode: TemplateMode) => {
     setTemplateMode(mode);
-    setUserText(TEMPLATE_DEFAULTS[mode]);
+    setUserText(tl(locale, TEMPLATE_HEADER_KEYS[mode]));
   }, []);
 
   // Auto-select all annotations on mount and when annotations change
@@ -128,16 +137,22 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const annotationPrompt = useMemo(() => {
     if (selectedAnns.length === 0) return "";
     const items = selectedAnns.map((ann, i) => {
-      const kind = KIND_LABELS[ann.kind] ?? ann.kind;
+      const kindKey = PROMPT_KIND_KEYS[ann.kind] ?? ann.kind;
+      const kind = tl(locale, kindKey);
       return [
-        `--- 批注 ${i + 1} ---`,
-        `#${kind}`,
-        `#原文: ${ann.quote.trim()}`,
-        `#评论: ${ann.comment.trim()}`,
+        `## ${tl(locale, "prompt.annotationHeading", i + 1)}`,
+        "",
+        `**${tl(locale, "prompt.type")}**: ${kind}`,
+        "",
+        `**${tl(locale, "prompt.originalText")}**:`,
+        `> ${ann.quote.trim()}`,
+        "",
+        `**${tl(locale, "prompt.comment")}**:`,
+        ann.comment.trim(),
       ].join("\n");
     });
-    return items.join("\n\n");
-  }, [selectedAnns]);
+    return items.join("\n\n---\n\n");
+  }, [selectedAnns, locale]);
 
   // Final combined output = user text + annotations
   const finalOutput = useMemo(() => {
@@ -171,7 +186,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
         setTimeout(() => setCopySuccess(false), 2500);
       }
     } catch (e) {
-      setWriteError(e instanceof Error ? e.message : "写回失败");
+      setWriteError(e instanceof Error ? e.message : t("return.writeFail"));
     }
   }, [finalOutput, composePath, hasContent]);
 
@@ -238,7 +253,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               color: "var(--color-text-primary)",
             }}
           >
-            输出编辑器
+            {t("return.outputEditor")}
           </span>
           {selectedAnns.length > 0 && (
             <span
@@ -251,7 +266,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 fontWeight: 500,
               }}
             >
-              {selectedAnns.length} 条批注
+              {selectedAnns.length} {t("return.annotationCount", selectedAnns.length).replace(String(selectedAnns.length) + " ", "")}
             </span>
           )}
         </div>
@@ -266,7 +281,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 key={mode}
                 type="button"
                 onClick={() => handleSetTemplate(mode)}
-                title={TEMPLATE_LABELS[mode].desc}
+                title={t(TEMPLATE_LABELS[mode].descKey)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -288,14 +303,14 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                       : "var(--color-text-secondary)",
                 }}
               >
-                {mode === "reply" ? (
+                {TEMPLATE_LABELS[mode].labelKey === "return.replyMode" ? (
                   <MessageSquare
                     style={{ width: "11px", height: "11px" }}
                   />
                 ) : (
                   <Repeat style={{ width: "11px", height: "11px" }} />
                 )}
-                {TEMPLATE_LABELS[mode].label}
+                {t(TEMPLATE_LABELS[mode].labelKey)}
               </button>
             ))}
           </div>
@@ -350,12 +365,12 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 flexShrink: 0,
               }}
             >
-              自由编辑（全文评论 / 额外指令）
+              {t("return.freeEdit")}
             </div>
             <textarea
               value={userText}
               onChange={(e) => setUserText(e.target.value)}
-              placeholder="在此输入对整篇文档的评论、额外指令或修改要求…"
+              placeholder={t("return.freeEditPlaceholder")}
               style={{
                 flex: 1,
                 border: "none",
@@ -408,7 +423,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 flexShrink: 0,
               }}
             >
-              <span>批注聚合预览</span>
+              <span>{t("return.aggregatePreview")}</span>
               {annotations.length > 0 && (
                 <button
                   type="button"
@@ -432,7 +447,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   ) : (
                     <Square style={{ width: "11px", height: "11px" }} />
                   )}
-                  {allSelected ? "取消" : "全选"}
+                  {allSelected ? t("return.deselectAll") : t("return.selectAll")}
                 </button>
               )}
             </div>
@@ -448,7 +463,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   fontSize: `${fontSize - 1}px`,
                 }}
               >
-                暂无批注
+                {t("return.noAnnotations")}
               </div>
             ) : (
               <div
@@ -512,7 +527,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                               marginBottom: "2px",
                             }}
                           >
-                            #{KIND_LABELS[ann.kind] ?? ann.kind}
+                          #{tl(locale, PROMPT_KIND_KEYS[ann.kind] ?? ann.kind)}
                           </div>
                           <div
                             style={{
@@ -522,7 +537,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                               marginBottom: "2px",
                             }}
                           >
-                            #原文: {ann.quote}
+                            {tl(locale, "prompt.originalText")}: {ann.quote}
                           </div>
                           <div
                             style={{
@@ -531,7 +546,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                               lineHeight: 1.4,
                             }}
                           >
-                            #评论: {ann.comment}
+                            {tl(locale, "prompt.comment")}: {ann.comment}
                           </div>
                         </div>
                       </label>
@@ -579,7 +594,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 }}
               >
                 <Check style={{ width: "12px", height: "12px" }} />
-                已复制到剪贴板
+                {t("return.copied")}
               </span>
             )}
             {!writeError && !copySuccess && (
@@ -589,9 +604,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   color: "var(--color-text-secondary)",
                 }}
               >
-                {templateMode === "reply" ? "回复模式" : "迭代编辑模式"}
+                {templateMode === "reply" ? t("return.replyModeStatus") : t("return.iterateModeStatus")}
                 {selectedAnns.length > 0 &&
-                  ` · ${selectedAnns.length} 条批注已选`}
+                  t("return.selectedCount", selectedAnns.length)}
               </span>
             )}
           </div>
@@ -619,9 +634,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             }}
           >
             {composePath && isTauri ? (
-              <><LogOut style={{ width: "13px", height: "13px" }} />写回并关闭</>
+              <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}</>
             ) : (
-              <><Copy style={{ width: "13px", height: "13px" }} />复制并提交</>
+              <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}</>
             )}
           </button>
         </div>

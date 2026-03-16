@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { Search, X } from "lucide-react";
+import { useT } from "@/lib/useT";
 
 interface DocumentSearchProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -13,6 +14,7 @@ export const DocumentSearch = memo(function DocumentSearch({
   containerRef,
   className,
 }: DocumentSearchProps) {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
@@ -132,12 +134,12 @@ export const DocumentSearch = memo(function DocumentSearch({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="搜索文档..."
+        placeholder={t("search.placeholder")}
         className="w-48 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-faint"
       />
       {query && (
         <span className="text-xs text-text-subtle">
-          {matchCount > 0 ? `${currentMatch}/${matchCount}` : "无结果"}
+          {matchCount > 0 ? `${currentMatch}/${matchCount}` : t("search.noResult")}
         </span>
       )}
       <button

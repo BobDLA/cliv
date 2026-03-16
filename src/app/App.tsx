@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useUIStore, useDocumentStore } from "@/stores";
 import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
 import { Minimize2, AlertCircle, Loader2 } from "lucide-react";
+import { useT } from "@/lib/useT";
 
 import { useInitDocument, openFileFromTauri } from "./hooks/useInitDocument";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -18,6 +19,7 @@ export function App() {
   const { theme, isFullscreen, toggleFullscreen } = useUIStore();
   const { replyContent, composePath, isLoading, error, setDocument, setError } =
     useDocumentStore();
+  const t = useT();
 
   const [headings, setHeadings] = useState<HeadingInfo[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -65,7 +67,7 @@ export function App() {
         }
       };
       reader.onerror = () => {
-        setError(`读取文件失败: ${file.name}`);
+        setError(`${t("app.readFileFail")}: ${file.name}`);
       };
       reader.readAsText(file);
 
@@ -81,14 +83,14 @@ export function App() {
       <div className="flex h-screen w-screen items-center justify-center bg-surface-app">
         <div className="max-w-md space-y-4 text-center" data-testid="error-view">
           <AlertCircle className="mx-auto h-12 w-12 text-kind-challenge-text" />
-          <h2 className="text-lg font-semibold text-text-strong">加载错误</h2>
+          <h2 className="text-lg font-semibold text-text-strong">{t("app.errorTitle")}</h2>
           <p className="text-sm text-text-muted">{error}</p>
           <p className="text-xs text-text-subtle">
-            请检查文件路径或使用{" "}
+            {t("app.errorHint")}{" "}
             <code className="bg-surface-card px-1 rounded">
               cliv &lt;file.md&gt;
             </code>{" "}
-            打开
+            {t("app.errorHintOpen")}
           </p>
         </div>
       </div>
@@ -101,7 +103,7 @@ export function App() {
       <div className="flex h-screen w-screen items-center justify-center bg-surface-app">
         <div className="flex items-center gap-3 text-text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">加载文档...</span>
+          <span className="text-sm">{t("app.loading")}</span>
         </div>
       </div>
     );
@@ -117,7 +119,7 @@ export function App() {
         <button
           onClick={toggleFullscreen}
           className="fixed right-4 top-4 z-50 rounded-lg border border-border-subtle bg-surface-popover p-2 text-text-muted shadow-lg hover:text-text-primary transition-colors"
-          title="退出全屏 (Esc)"
+          title={t("app.exitFullscreen")}
         >
           <Minimize2 className="h-4 w-4" />
         </button>

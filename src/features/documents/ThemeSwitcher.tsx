@@ -2,11 +2,12 @@ import { memo } from "react";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { useUIStore } from "@/stores";
 import type { Theme } from "@/types";
+import { useT } from "@/lib/useT";
 
-const themes: { value: Theme; icon: typeof Sun; title: string }[] = [
-  { value: "dark", icon: Moon, title: "深色" },
-  { value: "dim", icon: Monitor, title: "柔和" },
-  { value: "light", icon: Sun, title: "浅色" },
+const themes: { value: Theme; icon: typeof Sun; titleKey: string }[] = [
+  { value: "dark", icon: Moon, titleKey: "theme.dark" },
+  { value: "dim", icon: Monitor, titleKey: "theme.dim" },
+  { value: "light", icon: Sun, titleKey: "theme.light" },
 ];
 
 /**
@@ -15,6 +16,7 @@ const themes: { value: Theme; icon: typeof Sun; title: string }[] = [
  */
 export const ThemeSwitcher = memo(function ThemeSwitcher() {
   const { theme, setTheme } = useUIStore();
+  const t = useT();
 
   return (
     <div
@@ -28,18 +30,18 @@ export const ThemeSwitcher = memo(function ThemeSwitcher() {
       }}
       data-testid="theme-switcher"
       role="radiogroup"
-      aria-label="主题切换"
+      aria-label={t("theme.ariaLabel")}
     >
-      {themes.map((t) => {
-        const active = theme === t.value;
-        const Icon = t.icon;
+      {themes.map((item) => {
+        const active = theme === item.value;
+        const Icon = item.icon;
         return (
           <button
-            key={t.value}
-            onClick={() => setTheme(t.value)}
+            key={item.value}
+            onClick={() => setTheme(item.value)}
             role="radio"
             aria-checked={active}
-            title={t.title}
+            title={t(item.titleKey)}
             style={{
               display: "flex",
               alignItems: "center",
