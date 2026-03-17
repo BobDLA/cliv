@@ -64,7 +64,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <h1
             id={id}
-            className="mt-8 mb-4 text-2xl font-bold text-text-strong"
+            className="mt-8 mb-4 border-b border-border-subtle pb-2 text-[2em] font-semibold tracking-tight text-text-strong"
             {...props}
           >
             {children}
@@ -77,7 +77,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <h2
             id={id}
-            className="mt-6 mb-3 text-xl font-semibold text-text-strong border-b border-border-subtle pb-2"
+            className="mt-6 mb-4 border-b border-border-subtle pb-2 text-[1.5em] font-semibold tracking-tight text-text-strong"
             {...props}
           >
             {children}
@@ -90,7 +90,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <h3
             id={id}
-            className="mt-5 mb-2 text-lg font-semibold text-text-strong"
+            className="mt-6 mb-4 text-[1.25em] font-semibold tracking-tight text-text-strong"
             {...props}
           >
             {children}
@@ -103,7 +103,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <h4
             id={id}
-            className="mt-4 mb-2 text-base font-semibold text-text-strong"
+            className="mt-5 mb-3 text-[1em] font-semibold tracking-tight text-text-strong"
             {...props}
           >
             {children}
@@ -116,7 +116,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <h5
             id={id}
-            className="mt-3 mb-1 text-sm font-semibold text-text-strong"
+            className="mt-4 mb-2 text-[0.875em] font-semibold tracking-tight text-text-strong"
             {...props}
           >
             {children}
@@ -129,7 +129,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <h6
             id={id}
-            className="mt-3 mb-1 text-sm font-medium text-text-muted"
+            className="mt-4 mb-2 text-[0.85em] font-semibold tracking-tight text-text-muted"
             {...props}
           >
             {children}
@@ -139,7 +139,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
 
       // Paragraphs
       p: ({ children, ...props }) => (
-        <p className="mb-4 leading-7 text-text-primary" {...props}>
+        <p className="mb-4 text-[0.95em] leading-[1.65] text-text-primary" {...props}>
           {children}
         </p>
       ),
@@ -159,7 +159,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         if (!codeClassName) {
           return (
             <code
-              className="rounded bg-surface-card px-1.5 py-0.5 font-mono text-[0.85em] text-kind-comment-text"
+              className="rounded-md bg-surface-hover px-[0.4em] py-[0.15em] font-mono text-[0.85em] text-text-strong"
               {...props}
             >
               {children}
@@ -171,11 +171,11 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         return (
           <div className="group relative mb-4">
             {lang && (
-              <div className="absolute right-2 top-2 rounded bg-surface-card-strong px-2 py-0.5 text-[0.7rem] text-text-subtle opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="absolute right-2 top-2 rounded bg-surface-card-strong px-2 py-0.5 font-sans text-[0.7rem] font-medium text-text-subtle opacity-0 transition-opacity group-hover:opacity-100">
                 {lang}
               </div>
             )}
-            <pre className="overflow-x-auto rounded-lg border border-border-subtle bg-surface-card p-4 font-mono text-sm leading-6">
+            <pre className="overflow-x-auto rounded-xl border border-border-subtle bg-surface-card p-4 font-mono text-[0.85em] leading-[1.6]">
               <code className={codeClassName} {...props}>
                 {children}
               </code>
@@ -187,7 +187,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
       // Blockquotes
       blockquote: ({ children, ...props }) => (
         <blockquote
-          className="my-4 border-l-3 border-accent pl-4 text-text-muted italic"
+          className="my-4 border-l-4 border-border-strong pl-4 text-text-subtle"
           {...props}
         >
           {children}
@@ -196,26 +196,26 @@ export const MarkdownViewer = memo(function MarkdownViewer({
 
       // Lists
       ul: ({ children, ...props }) => (
-        <ul className="mb-4 ml-6 list-disc space-y-1" {...props}>
+        <ul className="mb-4 ml-5 list-disc space-y-2 text-[0.95em]" {...props}>
           {children}
         </ul>
       ),
       ol: ({ children, ...props }) => (
-        <ol className="mb-4 ml-6 list-decimal space-y-1" {...props}>
+        <ol className="mb-4 ml-5 list-decimal space-y-2 text-[0.95em]" {...props}>
           {children}
         </ol>
       ),
       li: ({ children, ...props }) => (
-        <li className="leading-7 text-text-primary" {...props}>
+        <li className="leading-[1.65] text-text-primary" {...props}>
           {children}
         </li>
       ),
 
       // Tables
       table: ({ children, ...props }) => (
-        <div className="mb-4 overflow-x-auto">
+        <div className="mb-4 overflow-x-auto rounded-lg border border-border-strong">
           <table
-            className="w-full border-collapse text-sm"
+            className="w-full border-collapse text-[0.9em]"
             {...props}
           >
             {children}
@@ -223,13 +223,18 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         </div>
       ),
       thead: ({ children, ...props }) => (
-        <thead className="border-b border-border-strong bg-surface-card" {...props}>
+        <thead className="bg-surface-card-strong border-b border-border-strong" {...props}>
           {children}
         </thead>
       ),
+      tr: ({ children, ...props }) => (
+        <tr className="even:bg-surface-hover border-b border-border-subtle last:border-0" {...props}>
+          {children}
+        </tr>
+      ),
       th: ({ children, ...props }) => (
         <th
-          className="px-3 py-2 text-left font-semibold text-text-strong"
+          className="border-x border-border-subtle px-4 py-2 text-left font-semibold text-text-strong"
           {...props}
         >
           {children}
@@ -237,7 +242,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
       ),
       td: ({ children, ...props }) => (
         <td
-          className="border-b border-border-subtle px-3 py-2 text-text-primary"
+          className="border-x border-border-subtle px-4 py-2 text-text-primary"
           {...props}
         >
           {children}
