@@ -115,8 +115,8 @@ const zh = {
   "lang.switch": "EN",
 
   // ── Prompt Output (sent to AI agents) ──
-  "prompt.replyHeader": "请基于以下批注逐条回应。除非我明确要求，不要重写未标注的部分。",
-  "prompt.iterateHeader": "请根据以下批注，对原文进行增量修改。保持未标注部分不变，仅修改被标注的内容。",
+  "prompt.replyHeader": "请基于以下批注逐条回应。请以 Markdown 格式返回，除非我明确要求，不要重写未标注的部分。",
+  "prompt.iterateHeader": "请根据以下批注，对原文进行增量修改。请以 Markdown 格式返回，保持未标注部分不变，仅修改被标注的内容。",
   "prompt.annotationHeading": "批注 {n}",
   "prompt.kindComment": "评论",
   "prompt.kindQuestion": "提问",
@@ -234,8 +234,8 @@ const en: Record<keyof typeof zh, string> = {
   "lang.switch": "中",
 
   // ── Prompt Output (sent to AI agents) ──
-  "prompt.replyHeader": "Please respond to each annotation below. Do not rewrite parts of the text that are not annotated unless explicitly requested.",
-  "prompt.iterateHeader": "Please make incremental revisions to the original text based on the following annotations. Keep the unannotated parts unchanged and only modify the annotated content.",
+  "prompt.replyHeader": "Please respond to each annotation below. Please format your response in Markdown. Do not rewrite parts of the text that are not annotated unless explicitly requested.",
+  "prompt.iterateHeader": "Please make incremental revisions to the original text based on the following annotations. Please format your response in Markdown, keep the unannotated parts unchanged and only modify the annotated content.",
   "prompt.annotationHeading": "Annotation {n}",
   "prompt.kindComment": "Comment",
   "prompt.kindQuestion": "Question",
