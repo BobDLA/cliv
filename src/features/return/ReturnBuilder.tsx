@@ -11,7 +11,7 @@ import {
   MessageSquare,
   LogOut,
 } from "lucide-react";
-import { useAnnotationStore, useReturnStore, useDocumentStore } from "@/stores";
+import { useAnnotationStore, useReturnStore, useDocumentStore, useUIStore } from "@/stores";
 import { writeBack, closeWindow } from "@/services/writeBack";
 import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
@@ -66,15 +66,30 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const composePath = useDocumentStore((s) => s.composePath);
   const composeContent = useDocumentStore((s) => s.composeContent);
   const t = useT();
+  const uiLocale = useUIStore((s) => s.locale);
 
   // Content locale dynamically detected from selected annotations
   const contentLocale = useMemo(() => {
     const combinedText = annotations.map(a => a.quote + " " + a.comment).join("\n");
+    if (!combinedText) return uiLocale;
     return detectContentLocale(combinedText);
-  }, [annotations]);
+  }, [annotations, uiLocale]);
 
   const [userText, setUserText] = useState(tl(contentLocale, TEMPLATE_HEADER_KEYS["reply"]));
   const [templateMode, setTemplateMode] = useState<TemplateMode>("reply");
+
+  // Update default text automatically when contentLocale changes, 
+  // if the user hasn't modified the default text manually.
+  useEffect(() => {
+    setUserText((prev) => {
+      const enText = tl("en", TEMPLATE_HEADER_KEYS[templateMode]);
+      const zhText = tl("zh", TEMPLATE_HEADER_KEYS[templateMode]);
+      if (prev === enText || prev === zhText) {
+        return tl(contentLocale, TEMPLATE_HEADER_KEYS[templateMode]);
+      }
+      return prev;
+    });
+  }, [contentLocale, templateMode]);
 
   // Switch template → insert default text into editor (based on contentLocale)
   const handleSetTemplate = useCallback((mode: TemplateMode) => {
