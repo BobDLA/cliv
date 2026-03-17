@@ -11,10 +11,10 @@ import {
   MessageSquare,
   LogOut,
 } from "lucide-react";
-import { useUIStore, useAnnotationStore, useReturnStore, useDocumentStore } from "@/stores";
+import { useAnnotationStore, useReturnStore, useDocumentStore } from "@/stores";
 import { writeBack, closeWindow } from "@/services/writeBack";
 import { useT } from "@/lib/useT";
-import { messages, type Locale } from "@/lib/locales";
+import { messages, type Locale, detectContentLocale } from "@/lib/locales";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -55,18 +55,22 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const { selectedAnnotationIds, selectAll, deselectAll, toggleSelect } =
     useReturnStore();
   const composePath = useDocumentStore((s) => s.composePath);
-  const fontSize = useUIStore((s) => s.fontSize);
-  const locale = useUIStore((s) => s.locale);
   const t = useT();
 
-  const [userText, setUserText] = useState(tl(locale, TEMPLATE_HEADER_KEYS["reply"]));
+  // Content locale dynamically detected from selected annotations
+  const contentLocale = useMemo(() => {
+    const combinedText = annotations.map(a => a.quote + " " + a.comment).join("\n");
+    return detectContentLocale(combinedText);
+  }, [annotations]);
+
+  const [userText, setUserText] = useState(tl(contentLocale, TEMPLATE_HEADER_KEYS["reply"]));
   const [templateMode, setTemplateMode] = useState<TemplateMode>("reply");
 
-  // Switch template → insert default text into editor
+  // Switch template → insert default text into editor (based on contentLocale)
   const handleSetTemplate = useCallback((mode: TemplateMode) => {
     setTemplateMode(mode);
-    setUserText(tl(locale, TEMPLATE_HEADER_KEYS[mode]));
-  }, []);
+    setUserText(tl(contentLocale, TEMPLATE_HEADER_KEYS[mode]));
+  }, [contentLocale]);
 
   // Auto-select all annotations on mount and when annotations change
   useEffect(() => {
@@ -138,21 +142,21 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     if (selectedAnns.length === 0) return "";
     const items = selectedAnns.map((ann, i) => {
       const kindKey = PROMPT_KIND_KEYS[ann.kind] ?? ann.kind;
-      const kind = tl(locale, kindKey);
+      const kind = tl(contentLocale, kindKey);
       return [
-        `## ${tl(locale, "prompt.annotationHeading", i + 1)}`,
+        `## ${tl(contentLocale, "prompt.annotationHeading", i + 1)}`,
         "",
-        `**${tl(locale, "prompt.type")}**: ${kind}`,
+        `**${tl(contentLocale, "prompt.type")}**: ${kind}`,
         "",
-        `**${tl(locale, "prompt.originalText")}**:`,
+        `**${tl(contentLocale, "prompt.originalText")}**:`,
         `> ${ann.quote.trim()}`,
         "",
-        `**${tl(locale, "prompt.comment")}**:`,
+        `**${tl(contentLocale, "prompt.comment")}**:`,
         ann.comment.trim(),
       ].join("\n");
     });
     return items.join("\n\n---\n\n");
-  }, [selectedAnns, locale]);
+  }, [selectedAnns, contentLocale]);
 
   // Final combined output = user text + annotations
   const finalOutput = useMemo(() => {
@@ -248,7 +252,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           />
           <span
             style={{
-              fontSize: `${fontSize}px`,
+              fontSize: "1rem",
               fontWeight: 600,
               color: "var(--color-text-primary)",
             }}
@@ -258,7 +262,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           {selectedAnns.length > 0 && (
             <span
               style={{
-                fontSize: `${fontSize - 2}px`,
+                fontSize: "0.85rem",
                 padding: "1px 6px",
                 borderRadius: "9999px",
                 backgroundColor: "var(--color-accent)",
@@ -289,7 +293,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   padding: "3px 8px",
                   borderRadius: "4px",
                   border: "none",
-                  fontSize: `${fontSize - 2}px`,
+                  fontSize: "0.85rem",
                   fontFamily: "var(--font-sans)",
                   cursor: "pointer",
                   transition: "all 0.12s",
@@ -358,7 +362,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             <div
               style={{
                 padding: "4px 10px",
-                fontSize: `${fontSize - 2}px`,
+                fontSize: "0.85rem",
                 fontWeight: 600,
                 color: "var(--color-text-secondary)",
                 borderBottom: "1px solid var(--color-border-subtle)",
@@ -377,7 +381,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 outline: "none",
                 resize: "none",
                 padding: "8px 14px",
-                fontSize: `${fontSize}px`,
+                fontSize: "0.95rem",
                 lineHeight: 1.6,
                 fontFamily: "var(--font-sans)",
                 color: "var(--color-text-primary)",
@@ -413,7 +417,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             <div
               style={{
                 padding: "4px 10px",
-                fontSize: `${fontSize - 2}px`,
+                fontSize: "0.85rem",
                 fontWeight: 600,
                 color: "var(--color-text-secondary)",
                 borderBottom: "1px solid var(--color-border-subtle)",
@@ -438,7 +442,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                     backgroundColor: "transparent",
                     color: "var(--color-text-secondary)",
                     cursor: "pointer",
-                    fontSize: `${fontSize - 3}px`,
+                    fontSize: "0.8rem",
                     fontFamily: "var(--font-sans)",
                   }}
                 >
@@ -460,7 +464,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   alignItems: "center",
                   justifyContent: "center",
                   color: "var(--color-text-faint)",
-                  fontSize: `${fontSize - 1}px`,
+                  fontSize: "0.9rem",
                 }}
               >
                 {t("return.noAnnotations")}
@@ -521,32 +525,32 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
-                              fontSize: `${fontSize - 2}px`,
+                              fontSize: "0.85rem",
                               fontWeight: 600,
                               color: "var(--color-accent)",
                               marginBottom: "2px",
                             }}
                           >
-                          #{tl(locale, PROMPT_KIND_KEYS[ann.kind] ?? ann.kind)}
+                          #{tl(contentLocale, PROMPT_KIND_KEYS[ann.kind] ?? ann.kind)}
                           </div>
                           <div
                             style={{
-                              fontSize: `${fontSize - 2}px`,
+                              fontSize: "0.85rem",
                               color: "var(--color-text-secondary)",
                               lineHeight: 1.4,
                               marginBottom: "2px",
                             }}
                           >
-                            {tl(locale, "prompt.originalText")}: {ann.quote}
+                            {tl(contentLocale, "prompt.originalText")}: {ann.quote}
                           </div>
                           <div
                             style={{
-                              fontSize: `${fontSize}px`,
+                              fontSize: "0.95rem",
                               color: "var(--color-text-primary)",
                               lineHeight: 1.4,
                             }}
                           >
-                            {tl(locale, "prompt.comment")}: {ann.comment}
+                            {tl(contentLocale, "prompt.comment")}: {ann.comment}
                           </div>
                         </div>
                       </label>
@@ -579,14 +583,14 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             }}
           >
             {writeError && (
-              <span style={{ fontSize: `${fontSize - 2}px`, color: "#ef4444" }}>
+              <span style={{ fontSize: "0.85rem", color: "#ef4444" }}>
                 {writeError}
               </span>
             )}
             {copySuccess && (
               <span
                 style={{
-                  fontSize: `${fontSize - 2}px`,
+                  fontSize: "0.85rem",
                   color: "#10b981",
                   display: "flex",
                   alignItems: "center",
@@ -600,7 +604,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             {!writeError && !copySuccess && (
               <span
                 style={{
-                  fontSize: `${fontSize - 2}px`,
+                  fontSize: "0.85rem",
                   color: "var(--color-text-secondary)",
                 }}
               >
@@ -625,7 +629,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 ? composePath && isTauri ? "#10b981" : "#3b82f6"
                 : "var(--color-text-faint)",
               color: "#fff",
-              fontSize: `${fontSize - 1}px`,
+              fontSize: "0.9rem",
               fontWeight: 600,
               fontFamily: "var(--font-sans)",
               cursor: hasContent ? "pointer" : "not-allowed",

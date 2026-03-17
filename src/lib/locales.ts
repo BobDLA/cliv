@@ -260,3 +260,20 @@ export function detectLocale(): Locale {
     return "en";
   }
 }
+
+/**
+ * Detect locale based on content text (e.g. document body or annotations).
+ * If the text contains a significant amount of Chinese characters, returns 'zh'.
+ * Otherwise returns 'en'.
+ */
+export function detectContentLocale(text: string): Locale {
+  if (!text) return "en";
+  // Match Chinese characters (using explicit unicode ranges to avoid TS target issues)
+  const match = text.match(/[\u4e00-\u9fa5]/g);
+  if (!match) return "en";
+  
+  // If > 2% of the text are Chinese characters, consider it Chinese content.
+  // This helps avoid false positives from a single stray character in a large English text.
+  const hanRatio = match.length / text.length;
+  return hanRatio > 0.02 ? "zh" : "en";
+}
