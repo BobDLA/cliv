@@ -36,9 +36,9 @@ describe("buildPrompt", () => {
     expect(result).toContain("# Please respond to each annotation below");
     expect(result).toContain("## Annotation 1");
     expect(result).toContain("**Type**: Comment");
-    expect(result).toContain("**Original**:");
+    expect(result).toContain("**Original Text**:");
     expect(result).toContain("> 原文片段");
-    expect(result).toContain("**Comment**:");
+    expect(result).toContain("**Annotation**:");
     expect(result).toContain("我的批注");
   });
 

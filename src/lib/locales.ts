@@ -2,8 +2,8 @@
  * locales.ts — centralized i18n dictionary for cliV UI.
  *
  * All user-facing strings live here. Components use `useT()` to access them.
- * Prompt output strings (sent to AI agents) are deliberately NOT included —
- * those stay in Chinese regardless of UI language.
+ * Prompt output strings (sent to AI agents) are also translated here
+ * so that the output matches the user's selected UI language.
  */
 
 export type Locale = "zh" | "en";
@@ -234,16 +234,16 @@ const en: Record<keyof typeof zh, string> = {
   "lang.switch": "中",
 
   // ── Prompt Output (sent to AI agents) ──
-  "prompt.replyHeader": "Please respond to each annotation below. Do not rewrite sections that are not annotated unless explicitly asked.",
-  "prompt.iterateHeader": "Please apply incremental edits based on the annotations below. Keep unannotated sections unchanged.",
+  "prompt.replyHeader": "Please respond to each annotation below. Do not rewrite parts of the text that are not annotated unless explicitly requested.",
+  "prompt.iterateHeader": "Please make incremental revisions to the original text based on the following annotations. Keep the unannotated parts unchanged and only modify the annotated content.",
   "prompt.annotationHeading": "Annotation {n}",
   "prompt.kindComment": "Comment",
   "prompt.kindQuestion": "Question",
   "prompt.kindRewrite": "Rewrite",
   "prompt.kindChallenge": "Challenge",
   "prompt.type": "Type",
-  "prompt.originalText": "Original",
-  "prompt.comment": "Comment",
+  "prompt.originalText": "Original Text",
+  "prompt.comment": "Annotation",
 };
 
 export const messages: Record<Locale, Record<string, string>> = { zh, en };
