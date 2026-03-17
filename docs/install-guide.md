@@ -16,16 +16,26 @@ Build artifacts:
 
 ## 2. Install the Binary
 
-Choose one method:
+Choose the method for your platform:
 
+### Linux
 ```bash
-# Method A: Copy to PATH
-cp src-tauri/target/release/cliv ~/.local/bin/
+# Install .deb package
+sudo dpkg -i cliv_*.deb
+```
 
-# Method B: Install .deb package (installs to /usr/bin/)
-sudo dpkg -i src-tauri/target/release/bundle/deb/cliv_*.deb
+### macOS
+1. Open the `.dmg` and drag `cliV.app` to your **Applications** folder.
 
-# Verify
+> **💡 Easiest Method**: You can skip creating a symlink. When configuring your Agents or `$EDITOR` later, just copy and paste the absolute path: `/Applications/cliV.app/Contents/MacOS/cliv`
+
+2. *(Optional)* Create a symlink to use the short `cliv` command in your terminal:
+```bash
+sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
+```
+
+### Verify
+```bash
 cliv --help  # or: which cliv
 ```
 
@@ -162,7 +172,16 @@ cat ~/.gemini/reply_cache/test-789.md
 | Claude cache test | Manual command above | File written successfully |
 | Ctrl+G live test | Press Ctrl+G in an agent | cliV window opens |
 
-## 6. Uninstall
+## 6. FAQ & Troubleshooting
+
+### macOS says "cliV is damaged and can't be opened"
+This happens because macOS Gatekeeper quarantines apps downloaded from GitHub Releases that aren't signed with an Apple Developer certificate.
+**Solution**: Move `cliV.app` to your Applications folder, then run this command in Terminal to remove the quarantine flag:
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/cliV.app
+```
+
+## 7. Uninstall
 
 ```bash
 # If installed via Method A

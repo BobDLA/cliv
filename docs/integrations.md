@@ -6,6 +6,8 @@ This document explains how to integrate cliV with Codex, Claude Code, and Gemini
 
 ## How It Works
 
+> **💡 Note**: This section explains the underlying mechanics. If you just want to use the tool, you can **skip this and go straight to [Setup](#setup)**.
+
 cliV is a single binary with no external dependencies (no Python, no Bash).
 
 1. **Agent hook** calls `cliv cache-xxx` after each reply → caches to disk
@@ -56,7 +58,11 @@ Pick your agent(s) below.
 Add to `~/.codex/config.toml`:
 
 ```toml
+# Linux / macOS (if cliv is symlinked in PATH)
 notify = ["cliv", "cache-codex"]
+
+# 🍏 macOS Easiest Setup (Direct path, no symlink needed)
+# notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
 **How it works**: When Codex completes a turn, it calls `cliv cache-codex '<json>'` with JSON as an argument. cliV extracts `thread-id` and `last-assistant-message` and caches to `~/.codex/reply_cache/{thread-id}.md`.
@@ -72,6 +78,8 @@ notify = ["cliv", "cache-codex"]
 ## Claude Code
 
 Add to `~/.claude/settings.json`:
+
+> **🍏 macOS Note**: If you didn't create a symlink, change `"cliv cache-claude"` below to the exact absolute path: `"/Applications/cliV.app/Contents/MacOS/cliv cache-claude"`
 
 ```json
 {
@@ -102,6 +110,8 @@ Add to `~/.claude/settings.json`:
 ## Gemini CLI
 
 Add to `~/.gemini/settings.json`:
+
+> **🍏 macOS Note**: If you didn't create a symlink, change `"cliv cache-gemini"` below to the exact absolute path: `"/Applications/cliV.app/Contents/MacOS/cliv cache-gemini"`
 
 ```json
 {

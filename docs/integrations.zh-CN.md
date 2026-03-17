@@ -6,6 +6,8 @@
 
 ## 工作原理
 
+> **💡 提示**：本节解释底部运行机制。如果只关心如何使用，**可以跳过此节，直接看 [配置步骤](#配置步骤)**。
+
 cliV 是一个单一二进制文件，无需任何外部依赖（不需要 Python、Bash）。
 
 1. **Agent hook** 在每次回复后调用 `cliv cache-xxx` → 缓存到磁盘
@@ -56,7 +58,11 @@ export EDITOR="cliv"
 在 `~/.codex/config.toml` 中添加：
 
 ```toml
+# Linux / macOS (已配置软链接或 PATH)
 notify = ["cliv", "cache-codex"]
+
+# 🍏 macOS 最简配置（免软链接，直接粘贴绝对路径）
+# notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
 **工作原理**：Codex 完成一轮对话后，调用 `cliv cache-codex '<json>'`，JSON 作为命令行参数传入。cliV 提取 `thread-id` 和 `last-assistant-message`，缓存到 `~/.codex/reply_cache/{thread-id}.md`。
@@ -72,6 +78,8 @@ notify = ["cliv", "cache-codex"]
 ## Claude Code
 
 在 `~/.claude/settings.json` 中添加：
+
+> **🍏 macOS 免软链接提示**：如果你未配置环境变量，请将下方 JSON 中的 `"cliv cache-claude"` 替换为绝对路径：`"/Applications/cliV.app/Contents/MacOS/cliv cache-claude"`
 
 ```json
 {
@@ -102,6 +110,8 @@ notify = ["cliv", "cache-codex"]
 ## Gemini CLI
 
 在 `~/.gemini/settings.json` 中添加：
+
+> **🍏 macOS 免软链接提示**：如果你未配置环境变量，请将下方 JSON 中的 `"cliv cache-gemini"` 替换为绝对路径：`"/Applications/cliV.app/Contents/MacOS/cliv cache-gemini"`
 
 ```json
 {

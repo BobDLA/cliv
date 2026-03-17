@@ -14,18 +14,28 @@ pnpm tauri build
 - **二进制**：`src-tauri/target/release/cliv`
 - **deb 包**：`src-tauri/target/release/bundle/deb/cliv_0.2.0_amd64.deb`
 
-## 2. 安装二进制
+## 2. 安装
 
-选择一种方式：
+根据你的系统选择一种方式：
 
+### Linux
 ```bash
-# 方式 A：直接拷贝到 PATH
-cp src-tauri/target/release/cliv ~/.local/bin/
+# 安装 deb 包（自动放置到 /usr/bin/）
+sudo dpkg -i cliv_*.deb
+```
 
-# 方式 B：安装 deb 包（会自动放到 /usr/bin/）
-sudo dpkg -i src-tauri/target/release/bundle/deb/cliv_*.deb
+### macOS
+1. 打开 `.dmg` 并将 `cliV.app` 拖入 **应用程序 (Applications)** 文件夹。
 
-# 验证
+> **💡 最简配置（推荐普通用户使用）**：你可以完全跳过终端敲代码的步骤。在后续配置 Agent 和环境变量时，只要看到 `cliv`，直接替换成这个绝对路径即可：`/Applications/cliV.app/Contents/MacOS/cliv`
+
+2. *(可选)* 创建软链接，让你可以在终端随时输入短命令 `cliv`：
+```bash
+sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
+```
+
+### 验证
+```bash
 cliv --help  # 或 which cliv
 ```
 
@@ -162,7 +172,16 @@ cat ~/.gemini/reply_cache/test-789.md
 | Claude cache 测试 | 上面的手动命令 | 文件写入成功 |
 | Ctrl+G 真实测试 | 在 agent 中按 Ctrl+G | cliV 窗口弹出 |
 
-## 6. 卸载
+## 6. 常见问题 (FAQ)
+
+### macOS 提示“已损坏，无法打开。您应该将它移到废纸篓”
+这是因为通过网页下载的 GitHub Releases 产物会被 macOS 的 Gatekeeper 隔离（缺少 Apple 开发者签名和公证）。
+**解决方法**：将 `cliV.app` 拖入“应用程序”(Applications) 文件夹，然后在终端运行以下命令移除隔离属性：
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/cliV.app
+```
+
+## 7. 卸载
 
 ```bash
 # 如果用方式 A 安装
