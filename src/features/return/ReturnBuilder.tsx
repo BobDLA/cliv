@@ -44,6 +44,15 @@ function tl(locale: Locale, key: string, n?: number | string): string {
   return str;
 }
 
+function getLineRange(text: string, startOffset?: number, endOffset?: number): [number, number] | null {
+  if (startOffset == null || endOffset == null || !text) return null;
+  const prefix = text.slice(0, startOffset);
+  const startLine = (prefix.match(/\n/g) || []).length + 1;
+  const selection = text.slice(startOffset, endOffset);
+  const lineCount = (selection.match(/\n/g) || []).length;
+  return [startLine, startLine + lineCount];
+}
+
 /**
  * ReturnBuilder — bottom split panel.
  * Left: user custom editing area (global comments, free-form text).
@@ -55,6 +64,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const { selectedAnnotationIds, selectAll, deselectAll, toggleSelect } =
     useReturnStore();
   const composePath = useDocumentStore((s) => s.composePath);
+  const composeContent = useDocumentStore((s) => s.composeContent);
   const t = useT();
 
   // Content locale dynamically detected from selected annotations
@@ -143,20 +153,35 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     const items = selectedAnns.map((ann, i) => {
       const kindKey = PROMPT_KIND_KEYS[ann.kind] ?? ann.kind;
       const kind = tl(contentLocale, kindKey);
+      
+      let linesInfo = "";
+      if (composeContent && ann.range) {
+        const lines = getLineRange(composeContent, ann.range.startOffset, ann.range.endOffset);
+        if (lines) {
+          if (lines[0] === lines[1]) {
+            linesInfo = tl(contentLocale, "prompt.lineNumber", lines[0]);
+          } else {
+            linesInfo = tl(contentLocale, "prompt.lineRange", `${lines[0]}-${lines[1]}`);
+          }
+        }
+      }
+
+      const formattedQuote = ann.quote.trim().split('\n').join('\n> ');
+
       return [
         `## ${tl(contentLocale, "prompt.annotationHeading", i + 1)}`,
         "",
         `**${tl(contentLocale, "prompt.type")}**: ${kind}`,
         "",
-        `**${tl(contentLocale, "prompt.originalText")}**:`,
-        `> ${ann.quote.trim()}`,
+        `**${tl(contentLocale, "prompt.originalText")}**${linesInfo}:`,
+        `> ${formattedQuote}`,
         "",
         `**${tl(contentLocale, "prompt.comment")}**:`,
         ann.comment.trim(),
       ].join("\n");
     });
     return items.join("\n\n---\n\n");
-  }, [selectedAnns, contentLocale]);
+  }, [selectedAnns, contentLocale, composeContent]);
 
   // Final combined output = user text + annotations
   const finalOutput = useMemo(() => {

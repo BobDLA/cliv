@@ -124,6 +124,8 @@ const zh = {
   "prompt.kindChallenge": "质疑",
   "prompt.type": "类型",
   "prompt.originalText": "原文",
+  "prompt.lineNumber": " (第 {n} 行)",
+  "prompt.lineRange": " (第 {n} 行)",
   "prompt.comment": "批注",
 } as const;
 
@@ -243,6 +245,8 @@ const en: Record<keyof typeof zh, string> = {
   "prompt.kindChallenge": "Challenge",
   "prompt.type": "Type",
   "prompt.originalText": "Original Text",
+  "prompt.lineNumber": " (Line {n})",
+  "prompt.lineRange": " (Lines {n})",
   "prompt.comment": "Annotation",
 };
 
