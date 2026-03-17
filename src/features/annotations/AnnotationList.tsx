@@ -138,7 +138,7 @@ export const AnnotationList = memo(function AnnotationList({
             />
             <p
               style={{
-                fontSize: "12px",
+                fontSize: "0.85rem",
                 color: "var(--color-text-faint)",
                 fontFamily: "var(--font-sans)",
               }}
@@ -147,7 +147,7 @@ export const AnnotationList = memo(function AnnotationList({
             </p>
             <p
               style={{
-                fontSize: "10px",
+                fontSize: "0.75rem",
                 color: "var(--color-text-faint)",
                 opacity: 0.6,
                 marginTop: "4px",

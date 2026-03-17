@@ -72,7 +72,7 @@
 }
 
 html {
-  font-size: var(--font-scale, 14px);
+  font-size: var(--font-scale, 18px);
 }
 
 body {

@@ -10,11 +10,11 @@ describe("App", () => {
 
   it("should display the title", () => {
     render(<App />);
-    expect(screen.getByText("Open Reviewer")).toBeInTheDocument();
+    expect(screen.getByText("cliV")).toBeInTheDocument();
   });
 
   it("should show the version message", () => {
     render(<App />);
-    expect(screen.getByText("Open Reviewer v0.2")).toBeInTheDocument();
+    expect(screen.getByText("cliV v0.2")).toBeInTheDocument();
   });
 });

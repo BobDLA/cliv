@@ -56,7 +56,7 @@ export const SessionTree = memo(function SessionTree() {
           padding: "16px 12px",
           textAlign: "center",
           color: "var(--color-text-faint)",
-          fontSize: "12px",
+          fontSize: "0.85rem",
           fontFamily: "var(--font-sans)",
         }}
       >
@@ -69,7 +69,7 @@ export const SessionTree = memo(function SessionTree() {
           }}
         />
         <p>{t("session.noHistory")}</p>
-        <p style={{ fontSize: "11px", marginTop: "4px" }}>
+        <p style={{ fontSize: "0.8rem", marginTop: "4px" }}>
           {t("session.saveHint")}
         </p>
       </div>
@@ -153,7 +153,7 @@ const SessionItem = memo(function SessionItem({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: "12px",
+            fontSize: "0.85rem",
             fontWeight: 500,
             color: "var(--color-text-primary)",
             overflow: "hidden",
@@ -169,7 +169,7 @@ const SessionItem = memo(function SessionItem({
             alignItems: "center",
             gap: "8px",
             marginTop: "2px",
-            fontSize: "11px",
+            fontSize: "0.8rem",
             color: "var(--color-text-faint)",
           }}
         >

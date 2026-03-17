@@ -48,7 +48,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   theme: loadString<Theme>(KEY_THEME, "light"),
-  fontSize: loadNumber(KEY_FONT_SIZE, 14),
+  fontSize: loadNumber(KEY_FONT_SIZE, 18),
   isFullscreen: false,
   locale: loadString<Locale>(KEY_LOCALE, detectLocale()),
 

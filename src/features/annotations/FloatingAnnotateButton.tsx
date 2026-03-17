@@ -73,7 +73,7 @@ export const FloatingAnnotateButton = memo(function FloatingAnnotateButton() {
           borderRadius: "var(--radius-md)",
           backgroundColor: "var(--color-accent)",
           color: "#fff",
-          fontSize: "12px",
+          fontSize: "0.85rem",
           fontWeight: 500,
           fontFamily: "var(--font-sans)",
           border: "none",
@@ -90,7 +90,7 @@ export const FloatingAnnotateButton = memo(function FloatingAnnotateButton() {
             padding: "1px 4px",
             borderRadius: "3px",
             backgroundColor: "rgba(255,255,255,0.2)",
-            fontSize: "10px",
+            fontSize: "0.75rem",
             fontWeight: 400,
             fontFamily: "var(--font-sans)",
           }}

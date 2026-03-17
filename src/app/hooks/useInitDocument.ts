@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { useDocumentStore } from "@/stores";
+import { useDocumentStore, useUIStore } from "@/stores";
 import { useAnnotationStore } from "@/stores";
-import { DEMO_CONTENT } from "@/app/demoContent";
+import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
 
 // Check if running inside Tauri
 const isTauri =
@@ -48,6 +48,7 @@ function buildExtractionPlan(
  */
 export function useInitDocument() {
   const { setDocument, setLoading, setError } = useDocumentStore();
+  const locale = useUIStore((s) => s.locale);
 
   useEffect(() => {
     async function init() {
@@ -103,14 +104,15 @@ export function useInitDocument() {
         }
       } else {
         // Browser dev mode: use demo content
-        setDocument({ reply: DEMO_CONTENT, documentId: "demo" });
+        const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
+        setDocument({ reply: demoContent, documentId: "demo" });
       }
 
       setLoading(false);
     }
 
     init();
-  }, [setDocument, setLoading, setError]);
+  }, [setDocument, setLoading, setError, locale]);
 }
 
 /**
@@ -124,20 +126,27 @@ export function openFileFromTauri(
   return async () => {
     if (isTauri) {
       try {
+        const { open } = await import("@tauri-apps/plugin-dialog");
         const { invoke } = await import("@tauri-apps/api/core");
-        const selected = await invoke<string | null>("open_file_dialog");
-        if (selected) {
+        
+        const selected = await open({
+          multiple: false,
+          filters: [{ name: "Markdown", extensions: ["md", "markdown", "txt"] }],
+        });
+        
+        if (selected && typeof selected === "string") {
           const content = await invoke<string>("read_file", {
             path: selected,
           });
           setDocument({
             reply: content,
             replyPath: selected,
-            documentId: selected.split("/").pop() ?? "file",
+            documentId: selected.split("/").pop() ?? selected.split("\\").pop() ?? "file",
           });
           useAnnotationStore.getState().clearAnnotations();
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to open file via Tauri dialog:", err);
         // Tauri command may not exist yet — fallback to browser file input
         fileInputRef.current?.click();
       }

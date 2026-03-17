@@ -215,7 +215,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               style={{
                 padding: "3px 8px",
                 borderRadius: "var(--radius-sm)",
-                fontSize: "11px",
+                fontSize: "0.8rem",
                 fontWeight: 500,
                 fontFamily: "var(--font-sans)",
                 cursor: "pointer",
@@ -251,7 +251,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               border: "1px solid var(--color-border-subtle)",
               backgroundColor: "var(--color-surface-card)",
               padding: "8px 10px",
-              fontSize: "13px",
+              fontSize: "0.95rem",
               lineHeight: 1.5,
               fontFamily: "var(--font-sans)",
               color: "var(--color-text-primary)",
@@ -281,7 +281,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
         >
           <span
             style={{
-              fontSize: "10px",
+              fontSize: "0.75rem",
               color: "var(--color-text-faint)",
             }}
           >
@@ -294,7 +294,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               style={{
                 padding: "4px 10px",
                 borderRadius: "var(--radius-sm)",
-                fontSize: "12px",
+                fontSize: "0.85rem",
                 fontFamily: "var(--font-sans)",
                 color: "var(--color-text-muted)",
                 backgroundColor: "transparent",
@@ -315,7 +315,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               style={{
                 padding: "4px 12px",
                 borderRadius: "var(--radius-sm)",
-                fontSize: "12px",
+                fontSize: "0.85rem",
                 fontWeight: 500,
                 fontFamily: "var(--font-sans)",
                 color: "#fff",

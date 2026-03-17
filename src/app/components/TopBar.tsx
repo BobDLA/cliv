@@ -39,9 +39,9 @@ export function TopBar({
           <BookOpen className="h-5 w-5 text-accent" />
         </button>
         <span className="text-sm font-bold tracking-tight text-text-strong">
-          Open Reviewer
+          cliV
         </span>
-        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent/80">
+        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[0.7rem] font-medium text-accent/80">
           v0.2
         </span>
       </div>

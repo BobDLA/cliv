@@ -65,23 +65,24 @@ export function DocumentArea({
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center h-full min-h-[60vh]">
-                <div className="max-w-md space-y-4 text-center">
-                  <div className="text-4xl">📖</div>
-                  <h2 className="text-lg font-semibold text-text-strong">
+                <div className="flex max-w-lg flex-col items-center justify-center gap-6 text-center transform -translate-y-12">
+                  <div className="text-5xl opacity-80 mb-2">📖</div>
+                  <h2 className="text-3xl font-bold text-text-strong tracking-tight">
                     cliV v0.2
                   </h2>
-                  <p className="text-sm text-text-muted">
+                  <p className="text-base text-text-muted leading-relaxed">
                     {t("docarea.hintUse")}{" "}
-                    <code className="bg-surface-card px-1 rounded text-xs">
+                    <code className="bg-surface-card px-1.5 py-0.5 rounded-md text-sm font-mono text-text-primary border border-border-subtle mx-1">
                       cliv &lt;file.md&gt;
                     </code>{" "}
+                    <br className="hidden sm:block" />
                     {t("docarea.hint")}
                   </p>
                   <button
                     onClick={onOpenFile}
-                    className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent/90 hover:shadow-xl active:scale-95"
+                    className="mt-4 inline-flex items-center gap-2.5 rounded-xl bg-accent px-6 py-3 text-base font-semibold text-white shadow-lg shadow-accent/20 transition-all hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-xl active:scale-95"
                   >
-                    <FolderOpen className="h-4 w-4" />
+                    <FolderOpen className="h-5 w-5" />
                     {t("docarea.openMarkdown")}
                   </button>
                 </div>

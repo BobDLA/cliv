@@ -43,7 +43,7 @@ export const AnnotationCard = memo(function AnnotationCard({
         ...style,
         borderLeft: `3px solid ${kindColor}`,
         padding: "8px 10px",
-        fontSize: "13px",
+        fontSize: "0.95rem",
         fontFamily: "var(--font-sans)",
         transition: "background 0.15s, box-shadow 0.15s",
         backgroundColor: isHovered
@@ -60,7 +60,7 @@ export const AnnotationCard = memo(function AnnotationCard({
       <p
         style={{
           margin: 0,
-          fontSize: "13px",
+          fontSize: "0.95rem",
           lineHeight: 1.5,
           color: "var(--color-text-primary)",
           whiteSpace: "pre-wrap",
@@ -81,7 +81,7 @@ export const AnnotationCard = memo(function AnnotationCard({
       >
         <span
           style={{
-            fontSize: "11px",
+            fontSize: "0.8rem",
             color: "var(--color-text-secondary)",
           }}
         >
@@ -102,7 +102,7 @@ export const AnnotationCard = memo(function AnnotationCard({
               backgroundColor: "transparent",
               color: "var(--color-text-secondary)",
               cursor: "pointer",
-              fontSize: "11px",
+              fontSize: "0.8rem",
               fontFamily: "var(--font-sans)",
               transition: "all 0.15s",
             }}
@@ -132,7 +132,7 @@ export const AnnotationCard = memo(function AnnotationCard({
               backgroundColor: "transparent",
               color: "var(--color-text-secondary)",
               cursor: "pointer",
-              fontSize: "11px",
+              fontSize: "0.8rem",
               fontFamily: "var(--font-sans)",
               transition: "all 0.15s",
             }}
