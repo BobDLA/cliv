@@ -58,6 +58,18 @@ graph LR
 
 *这段斜体* 测试排版。
 
+## 图片测试
+
+点击图片可全屏查看：
+
+![风景示例](https://picsum.photos/id/10/800/400)
+
+并排小图：
+
+| 图片 A | 图片 B |
+|---|---|
+| ![样例A](https://picsum.photos/id/20/300/200) | ![样例B](https://picsum.photos/id/30/300/200) |
+
 ---
 
 ### 列表测试
@@ -140,6 +152,18 @@ This text uses the \`--text-primary\` color.
 **Bold text** uses the \`--text-strong\` color.
 
 *This italic text* tests typography.
+
+## Image Tests
+
+Click any image to view fullscreen:
+
+![Landscape example](https://picsum.photos/id/10/800/400)
+
+Side-by-side thumbnails:
+
+| Image A | Image B |
+|---|---|
+| ![Sample A](https://picsum.photos/id/20/300/200) | ![Sample B](https://picsum.photos/id/30/300/200) |
 
 ---
 

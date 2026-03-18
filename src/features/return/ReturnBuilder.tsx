@@ -234,6 +234,19 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     }
   }, [finalOutput, composePath, hasContent]);
 
+  // ── Ctrl+Enter global shortcut for submit ──
+  useEffect(() => {
+    if (collapsed) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [collapsed, handleSubmit]);
+
   return (
     <div
       style={{
@@ -678,9 +691,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             }}
           >
             {composePath && isTauri ? (
-              <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}</>
+              <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
             ) : (
-              <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}</>
+              <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
             )}
           </button>
         </div>

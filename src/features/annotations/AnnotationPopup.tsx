@@ -64,6 +64,31 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
     if (!isVisible) setComment("");
   }, [isVisible]);
 
+  // Clamp popup within parent container to prevent edge overflow
+  useEffect(() => {
+    if (!isVisible) return;
+    const popup = popupRef.current;
+    if (!popup) return;
+
+    // Wait for layout to settle
+    const raf = requestAnimationFrame(() => {
+      const parent = popup.offsetParent as HTMLElement | null;
+      if (!parent) return;
+
+      const parentWidth = parent.clientWidth;
+      const popupWidth = popup.offsetWidth;
+      const currentLeft = popup.offsetLeft;
+
+      // If popup overflows right edge, shift it left
+      if (currentLeft + popupWidth > parentWidth) {
+        const clampedLeft = Math.max(0, parentWidth - popupWidth - 8);
+        popup.style.left = `${clampedLeft}px`;
+      }
+    });
+
+    return () => cancelAnimationFrame(raf);
+  });
+
   // Click-outside to close
   useEffect(() => {
     if (!isVisible) return;
@@ -183,7 +208,9 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
       style={{
         top: `${posTop}px`,
         left: `${posLeft}px`,
-        width: "340px",
+        minWidth: "340px",
+        maxWidth: "90vw",
+        width: "max-content",
         fontFamily: "var(--font-sans)",
       }}
       onKeyDown={handleKeyDown}
@@ -202,6 +229,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
         <div
           style={{
             display: "flex",
+            flexWrap: "nowrap",
             gap: "2px",
             padding: "6px 10px",
             borderBottom: "1px solid var(--color-border-subtle)",
@@ -220,6 +248,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 fontFamily: "var(--font-sans)",
                 cursor: "pointer",
                 border: "none",
+                whiteSpace: "nowrap",
                 transition: "all 0.15s",
                 backgroundColor:
                   popupKind === k.value
@@ -300,6 +329,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 backgroundColor: "transparent",
                 border: "none",
                 cursor: "pointer",
+                whiteSpace: "nowrap" as const,
               }}
             >
               {t("annPopup.cancel")}
@@ -319,6 +349,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 fontWeight: 500,
                 fontFamily: "var(--font-sans)",
                 color: "#fff",
+                whiteSpace: "nowrap" as const,
                 backgroundColor: comment.trim()
                   ? "var(--color-accent)"
                   : "var(--color-text-faint)",

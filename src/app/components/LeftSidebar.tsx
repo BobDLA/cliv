@@ -35,7 +35,7 @@ export function LeftSidebar({
         <div className="flex items-center border-b border-border-subtle/50">
           <button
             onClick={() => setSidebarTab("outline")}
-            className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
+            className={`flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
               sidebarTab === "outline"
                 ? "text-accent border-b-2 border-accent"
                 : "text-text-subtle hover:text-text-primary"
@@ -45,7 +45,7 @@ export function LeftSidebar({
           </button>
           <button
             onClick={() => setSidebarTab("history")}
-            className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
+            className={`flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
               sidebarTab === "history"
                 ? "text-accent border-b-2 border-accent"
                 : "text-text-subtle hover:text-text-primary"

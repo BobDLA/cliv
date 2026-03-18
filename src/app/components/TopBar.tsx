@@ -28,7 +28,7 @@ export function TopBar({
   const t = useT();
 
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border-subtle/50 px-4">
+    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border-subtle/50 px-5">
       {/* Left: brand */}
       <div className="flex items-center gap-3">
         <button

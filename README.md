@@ -2,8 +2,8 @@
 
 **[中文版](README.zh-CN.md)**
 
-**cliV** — A GUI reviewer for AI agent replies, triggered from your CLI.
-Read, annotate, and return structured feedback to the current thread.
+**cliV** — A desktop reviewer launched from the CLI, for reading long AI agent replies and Markdown drafts.
+Read, annotate, then write back when there's a compose target; copy the result when there isn't.
 
 <!-- TODO: Add hero screenshot -->
 <!-- ![cliV screenshot](docs/media/hero.png) -->
@@ -12,19 +12,22 @@ Read, annotate, and return structured feedback to the current thread.
 
 AI coding agents (Codex, Claude Code, Gemini CLI) produce long, structured replies — but you're reading them in a terminal. That's fine for 20 lines, painful for 500.
 
-**cliV** gives you a real GUI when you press `Ctrl+G`:
+When your agent invokes `$EDITOR` (commonly `Ctrl+G`, but depends on agent and config), **cliV** opens a desktop GUI better suited for review:
 
-- **Review** long AI replies with full Markdown + Mermaid rendering
-- **Annotate** exact passages instead of writing vague follow-ups
-- **Return** structured feedback to the current thread with one click
+- **Review** — full Markdown + Mermaid diagram rendering, no more plain text
+- **Annotate** — select exact passages to add comments instead of writing vague follow-ups
+- **Write back** — write back to the active compose target when available, fall back to clipboard otherwise
+- **Open** — also open local Markdown files for standalone review
 
-## Works With
+## Supported Agents
 
 | Agent | Integration | Hook Command |
 |---|---|---|
 | [Codex](https://github.com/openai/codex) | `notify` hook | `cliv cache-codex` |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `Stop` hook | `cliv cache-claude` |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `AfterAgent` hook | `cliv cache-gemini` |
+
+`cache-codex` receives JSON via CLI arguments; `cache-claude` and `cache-gemini` read JSON from stdin. Gemini also relies on `GEMINI_SESSION_ID`.
 
 ## Install
 
@@ -66,19 +69,27 @@ Then configure your agent hooks — see [docs/integrations.md](docs/integrations
 
 1. Start your AI agent (Codex, Claude Code, or Gemini CLI)
 2. Have a conversation that generates a long reply
-3. Press `Ctrl+G`
+3. Trigger the agent's `$EDITOR` flow (commonly `Ctrl+G`, but depends on agent / config)
 4. cliV opens with the agent's latest reply rendered as rich Markdown
-5. Select text → annotate → aggregate → return feedback to the thread
+5. Select text → annotate → aggregate → write back or copy the result
 
 ## Features
 
 - 📖 **Rich Markdown rendering** — headings, code blocks, tables, Mermaid diagrams
-- ✏️ **Selection-based annotations** — highlight passages and add comments
-- 📋 **Structured feedback** — aggregate annotations into a prompt, return to the agent
-- 🔄 **Multi-agent support** — auto-detects Codex / Claude / Gemini
-- 📂 **Session history** — local persistence of past reviews
-- 🌙 **Theme switching** — light / dark mode
+- ✏️ **Selection-based annotations** — highlight passages and add comments (in-text highlights rely on CSS Highlight API)
+- 📋 **Write-back flow** — aggregate annotations into a prompt, then write back or copy
+- 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
+- 📂 **Open local Markdown** — review cached replies or open `.md` files directly
+- 🗂️ **Save sessions** — persist review snapshots and annotations locally (local-only for now)
+- 🌙 **Theme switching** — dark / muted / light
 - 🔍 **Font scaling** — adjust reading comfort
+
+## Notes
+
+- **Write-back behavior** — when running in Tauri with a compose target, cliV writes back directly; otherwise falls back to clipboard.
+- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
+- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`.
+- **Logging** — on non-Windows systems, cliV may write diagnostic logs to `/tmp/cliv.log`.
 
 ## Tech Stack
 
@@ -90,9 +101,12 @@ Then configure your agent hooks — see [docs/integrations.md](docs/integrations
 
 - [ ] Virtual scrolling for large documents
 - [ ] Diff / suggestion mode
-- [ ] Standalone review mode (open any `.md` file)
-- [ ] Cross-platform builds (macOS, Windows)
+- [ ] Standalone review polish (`cliv <file.md>` with a smoother agent-free flow)
+- [x] Cross-platform builds (macOS, Windows)
 - [ ] Plugin system for custom agents
+- [ ] Review history
+- [ ] Favorites
+- [ ] Iterative editing mode
 
 ## License
 

@@ -123,7 +123,7 @@ export function App() {
         >
           <Minimize2 className="h-4 w-4" />
         </button>
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-4xl px-8 py-6">
           <MarkdownViewer content={replyContent} />
         </div>
       </div>
