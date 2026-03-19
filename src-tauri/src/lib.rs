@@ -2,6 +2,7 @@ mod cli;
 pub mod cache;
 mod commands;
 pub mod extract;
+pub mod logging;
 
 pub use cli::{CliArgs, CliMode, CliParsed};
 

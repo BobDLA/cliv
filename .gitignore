@@ -16,3 +16,7 @@ Thumbs.db
 docs/doc/*
 docs/doc
 handoffs/*
+.codex/
+.agent/
+.claude/
+.github/

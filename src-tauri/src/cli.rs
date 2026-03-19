@@ -1,30 +1,5 @@
+use crate::logging;
 use serde::Serialize;
-use std::fs::OpenOptions;
-use std::io::Write;
-
-/// Cross-platform log file path
-fn log_file_path() -> String {
-    #[cfg(windows)]
-    {
-        let tmp = std::env::var("TEMP").unwrap_or_else(|_| r"C:\TEMP".to_string());
-        format!(r"{}\cliv.log", tmp)
-    }
-    #[cfg(not(windows))]
-    {
-        "/tmp/cliv.log".to_string()
-    }
-}
-
-/// Append a line to cliv.log (best-effort, never panics).
-fn log(msg: &str) {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(log_file_path()) {
-        let _ = writeln!(f, "[{}] {}", ts, msg);
-    }
-}
 
 /// How cliV was invoked.
 #[derive(Debug, Clone)]
@@ -40,7 +15,7 @@ pub enum CliMode {
 }
 
 /// CLI arguments parsed from `std::env::args()` and environment variables.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliArgs {
     pub compose_path: Option<String>,
@@ -61,22 +36,22 @@ impl CliParsed {
     pub fn from_env() -> Self {
         let argv: Vec<String> = std::env::args().collect();
 
-        log("═══════════════════════════════════════════════════");
-        log(&format!("cliV started  PID={}", std::process::id()));
-        log(&format!("  argv={:?}", argv));
-        log(&format!("  CWD={}", std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default()));
-        log(&format!("  CLIV_AGENT={}", std::env::var("CLIV_AGENT").unwrap_or_default()));
-        log(&format!("  CODEX_THREAD_ID={}", std::env::var("CODEX_THREAD_ID").unwrap_or_default()));
-        log(&format!("  CODEX_HOME={}", std::env::var("CODEX_HOME").unwrap_or_default()));
-        log(&format!("  CLAUDE_SESSION_ID={}", std::env::var("CLAUDE_SESSION_ID").unwrap_or_default()));
-        log(&format!("  GEMINI_SESSION_ID={}", std::env::var("GEMINI_SESSION_ID").unwrap_or_default()));
+        logging::log("═══════════════════════════════════════════════════");
+        logging::log(&format!("cliV started  PID={}", std::process::id()));
+        logging::log(&format!("  argv={:?}", argv));
+        logging::debug(&format!("  CWD={}", std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default()));
+        logging::debug(&format!("  CLIV_AGENT={}", std::env::var("CLIV_AGENT").unwrap_or_default()));
+        logging::debug(&format!("  CODEX_THREAD_ID={}", std::env::var("CODEX_THREAD_ID").unwrap_or_default()));
+        logging::debug(&format!("  CODEX_HOME={}", std::env::var("CODEX_HOME").unwrap_or_default()));
+        logging::debug(&format!("  CLAUDE_SESSION_ID={}", std::env::var("CLAUDE_SESSION_ID").unwrap_or_default()));
+        logging::debug(&format!("  GEMINI_SESSION_ID={}", std::env::var("GEMINI_SESSION_ID").unwrap_or_default()));
 
         // Check for subcommand first
         if argv.len() >= 2 {
             match argv[1].as_str() {
                 "cache-codex" => {
                     let json = argv.get(2).cloned().unwrap_or_default();
-                    log(&format!("  mode=cache-codex  json_len={}", json.len()));
+                    logging::log(&format!("  mode=cache-codex  json_len={}", json.len()));
                     return CliParsed {
                         mode: CliMode::CacheCodex(json),
                         args: CliArgs {
@@ -88,7 +63,7 @@ impl CliParsed {
                     };
                 }
                 "cache-claude" => {
-                    log("  mode=cache-claude (stdin)");
+                    logging::log("  mode=cache-claude (stdin)");
                     return CliParsed {
                         mode: CliMode::CacheClaude,
                         args: CliArgs {
@@ -100,7 +75,7 @@ impl CliParsed {
                     };
                 }
                 "cache-gemini" => {
-                    log("  mode=cache-gemini (stdin)");
+                    logging::log("  mode=cache-gemini (stdin)");
                     return CliParsed {
                         mode: CliMode::CacheGemini,
                         args: CliArgs {
@@ -117,57 +92,65 @@ impl CliParsed {
 
         // GUI mode: parse args + auto-detect agent
         let agent = detect_agent();
-        log(&format!("  mode=gui  detected_agent={:?}", agent));
+        logging::log(&format!("  mode=gui  detected_agent={:?}", agent));
 
-        let mut args = CliArgs {
-            compose_path: None,
-            metadata_path: None,
-            file_path: None,
-            agent,
-        };
+        let args = parse_gui_args(&argv[1..], agent);
 
-        let mut i = 1;
-        while i < argv.len() {
-            match argv[i].as_str() {
-                "--metadata" => {
-                    if i + 1 < argv.len() {
-                        args.metadata_path = Some(argv[i + 1].clone());
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                }
-                "--compose" => {
-                    if i + 1 < argv.len() {
-                        args.compose_path = Some(argv[i + 1].clone());
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                }
-                arg if !arg.starts_with('-') => {
-                    if args.file_path.is_none() {
-                        args.file_path = Some(arg.to_string());
-                        if args.compose_path.is_none() {
-                            args.compose_path = Some(arg.to_string());
-                        }
-                    }
-                    i += 1;
-                }
-                _ => {
-                    i += 1;
-                }
-            }
-        }
-
-        log(&format!("  compose_path={:?}  file_path={:?}", args.compose_path, args.file_path));
-        log(&format!("  CODEX_THREAD_ID (after detect)={}", std::env::var("CODEX_THREAD_ID").unwrap_or_default()));
+        logging::log(&format!("  compose_path={:?}  file_path={:?}", args.compose_path, args.file_path));
+        logging::debug(&format!("  CODEX_THREAD_ID (after detect)={}", std::env::var("CODEX_THREAD_ID").unwrap_or_default()));
 
         CliParsed {
             mode: CliMode::Gui,
             args,
         }
     }
+}
+
+/// Parse GUI-mode arguments from an argv slice (excluding the binary name).
+fn parse_gui_args(argv: &[String], agent: Option<String>) -> CliArgs {
+    let mut args = CliArgs {
+        compose_path: None,
+        metadata_path: None,
+        file_path: None,
+        agent,
+    };
+
+    let mut i = 0;
+    while i < argv.len() {
+        match argv[i].as_str() {
+            "--metadata" => {
+                if i + 1 < argv.len() {
+                    args.metadata_path = Some(argv[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--compose" => {
+                if i + 1 < argv.len() {
+                    args.compose_path = Some(argv[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            // Skip known subcommands and flags that might be passed
+            arg if arg.starts_with('-') => {
+                i += 1;
+            }
+            arg => {
+                if args.file_path.is_none() {
+                    args.file_path = Some(arg.to_string());
+                    if args.compose_path.is_none() {
+                        args.compose_path = Some(arg.to_string());
+                    }
+                }
+                i += 1;
+            }
+        }
+    }
+
+    args
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -180,36 +163,36 @@ fn detect_agent() -> Option<String> {
     // Explicit override
     if let Ok(agent) = std::env::var("CLIV_AGENT") {
         if !agent.is_empty() {
-            log(&format!("  detect: CLIV_AGENT={} → using override", agent));
+            logging::log(&format!("  detect: CLIV_AGENT={} → using override", agent));
             return Some(agent);
         }
     }
 
     // Check explicit session env vars first
     if std::env::var("CODEX_THREAD_ID").ok().filter(|s| !s.is_empty()).is_some() {
-        log("  detect: CODEX_THREAD_ID set → codex");
+        logging::log("  detect: CODEX_THREAD_ID set → codex");
         return Some("codex".to_string());
     }
 
     if std::env::var("CLAUDE_SESSION_ID").ok().filter(|s| !s.is_empty()).is_some() {
-        log("  detect: CLAUDE_SESSION_ID set → claude");
+        logging::log("  detect: CLAUDE_SESSION_ID set → claude");
         return Some("claude".to_string());
     }
 
     if std::env::var("GEMINI_SESSION_ID").ok().filter(|s| !s.is_empty()).is_some() {
-        log("  detect: GEMINI_SESSION_ID set → gemini");
+        logging::log("  detect: GEMINI_SESSION_ID set → gemini");
         return Some("gemini".to_string());
     }
 
-    log("  detect: no session env vars found, trying parent process...");
+    logging::debug("  detect: no session env vars found, trying parent process...");
 
     // Process tree heuristic: check parent process chain.
     if let Some(agent) = detect_agent_from_parent_process() {
-        log(&format!("  detect: parent process → {}", agent));
+        logging::log(&format!("  detect: parent process → {} (source=pid)", agent));
         return Some(agent);
     }
 
-    log("  detect: no agent detected");
+    logging::log("  detect: no agent detected");
     None
 }
 
@@ -224,10 +207,10 @@ fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<
         _ => return None,
     };
 
-    log(&format!("  walk[{}]: matched {} at pid={}", level, agent, agent_pid));
+    logging::log(&format!("  walk[{}]: matched {} at pid={}", level, agent, agent_pid));
 
     if std::env::var(env_var).ok().filter(|s| !s.is_empty()).is_none() {
-        log(&format!("  walk[{}]: set {}={}", level, env_var, pid_str));
+        logging::log(&format!("  walk[{}]: set {}={} (source=parent_process_pid)", level, env_var, pid_str));
         std::env::set_var(env_var, &pid_str);
     }
 
@@ -257,7 +240,7 @@ fn detect_agent_from_parent_process() -> Option<String> {
 
     for level in 0..5 {
         if pid <= 1 {
-            log(&format!("  walk[{}]: pid={} (init), stopping", level, pid));
+            logging::debug(&format!("  walk[{}]: pid={} (init), stopping", level, pid));
             break;
         }
 
@@ -265,12 +248,12 @@ fn detect_agent_from_parent_process() -> Option<String> {
         let comm = match std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
             Ok(s) => s.trim().to_lowercase(),
             Err(e) => {
-                log(&format!("  walk[{}]: pid={} read comm failed: {}", level, pid, e));
+                logging::debug(&format!("  walk[{}]: pid={} read comm failed: {}", level, pid, e));
                 break;
             }
         };
 
-        log(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
 
         if let Some(agent) = match_agent_name(&comm) {
             return handle_agent_match(agent, pid, level);
@@ -280,7 +263,7 @@ fn detect_agent_from_parent_process() -> Option<String> {
         let stat = match std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
             Ok(s) => s,
             Err(e) => {
-                log(&format!("  walk[{}]: pid={} read stat failed: {}", level, pid, e));
+                logging::debug(&format!("  walk[{}]: pid={} read stat failed: {}", level, pid, e));
                 break;
             }
         };
@@ -314,19 +297,19 @@ fn detect_agent_from_parent_process() -> Option<String> {
 
     for level in 0..5 {
         if pid <= 1 {
-            log(&format!("  walk[{}]: pid={} (init/launchd), stopping", level, pid));
+            logging::debug(&format!("  walk[{}]: pid={} (init/launchd), stopping", level, pid));
             break;
         }
 
         let comm = match macos_proc_name(pid) {
             Some(name) => name.to_lowercase(),
             None => {
-                log(&format!("  walk[{}]: pid={} proc_name failed", level, pid));
+                logging::debug(&format!("  walk[{}]: pid={} proc_name failed", level, pid));
                 break;
             }
         };
 
-        log(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
 
         if let Some(agent) = match_agent_name(&comm) {
             return handle_agent_match(agent, pid, level);
@@ -336,7 +319,7 @@ fn detect_agent_from_parent_process() -> Option<String> {
         pid = match macos_ppid(pid) {
             Some(ppid) => ppid,
             None => {
-                log(&format!("  walk[{}]: pid={} cannot get ppid", level, pid));
+                logging::debug(&format!("  walk[{}]: pid={} cannot get ppid", level, pid));
                 break;
             }
         };
@@ -382,7 +365,7 @@ fn detect_agent_from_parent_process() -> Option<String> {
     let process_map = match win_build_process_map() {
         Some(m) => m,
         None => {
-            log("  walk: failed to build process map");
+            logging::log("  walk: failed to build process map");
             return None;
         }
     };
@@ -396,20 +379,20 @@ fn detect_agent_from_parent_process() -> Option<String> {
 
     for level in 0..5 {
         if pid == 0 {
-            log(&format!("  walk[{}]: pid=0 (System), stopping", level, ));
+            logging::debug(&format!("  walk[{}]: pid=0 (System), stopping", level));
             break;
         }
 
         let (name, ppid) = match process_map.get(&pid) {
             Some(entry) => entry.clone(),
             None => {
-                log(&format!("  walk[{}]: pid={} not in snapshot", level, pid));
+                logging::debug(&format!("  walk[{}]: pid={} not in snapshot", level, pid));
                 break;
             }
         };
 
         let comm = name.to_lowercase();
-        log(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
 
         if let Some(agent) = match_agent_name(&comm) {
             return handle_agent_match(agent, pid, level);
@@ -478,7 +461,6 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 
     unsafe { CloseHandle(snapshot) };
 
-    log(&format!("  win: built process map with {} entries", map.len()));
+    logging::debug(&format!("  win: built process map with {} entries", map.len()));
     Some(map)
 }
-

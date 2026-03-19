@@ -113,18 +113,24 @@ pub fn load_files(compose_path: Option<String>, metadata_path: Option<String>) -
         }
     }
 
-    // Fallback: treat compose as reply for standalone viewing
-    if result.reply.is_none() && result.compose.is_none() {
+    // Fallback: when no metadata is provided, treat a standalone markdown-like
+    // file as the reply document we want to review.
+    if result.reply.is_none() && metadata_path.is_none() {
         if let Some(ref cp) = compose_path {
             let path = PathBuf::from(cp);
-            if path.extension().map_or(false, |ext| ext == "md") {
-                match fs::read_to_string(&path) {
-                    Ok(content) => {
-                        result.reply = Some(content);
-                        result.reply_path = Some(cp.clone());
-                    }
-                    Err(e) => {
-                        result.error = Some(format!("File not found: {}", e));
+            if is_standalone_view_path(&path) {
+                if let Some(content) = result.compose.clone() {
+                    result.reply = Some(content);
+                    result.reply_path = Some(cp.clone());
+                } else {
+                    match fs::read_to_string(&path) {
+                        Ok(content) => {
+                            result.reply = Some(content);
+                            result.reply_path = Some(cp.clone());
+                        }
+                        Err(e) => {
+                            result.error = Some(format!("File not found: {}", e));
+                        }
                     }
                 }
             }
@@ -132,6 +138,14 @@ pub fn load_files(compose_path: Option<String>, metadata_path: Option<String>) -
     }
 
     result
+}
+
+fn is_standalone_view_path(path: &PathBuf) -> bool {
+    path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| matches!(ext, "md" | "markdown" | "txt"))
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -154,4 +168,52 @@ pub fn write_back(path: String, content: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_files;
+
+    #[test]
+    fn standalone_markdown_file_is_loaded_as_reply() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("note.md");
+        std::fs::write(&file, "# hello\n\nworld\n").unwrap();
+
+        let result = load_files(Some(file.display().to_string()), None);
+
+        assert_eq!(result.reply.as_deref(), Some("# hello\n\nworld\n"));
+        assert_eq!(
+            result.reply_path.as_deref(),
+            Some(file.to_string_lossy().as_ref())
+        );
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn metadata_mode_does_not_fallback_to_compose_as_reply() {
+        let dir = tempfile::tempdir().unwrap();
+        let compose = dir.path().join("compose.md");
+        let metadata = dir.path().join("meta.json");
+        std::fs::write(&compose, "compose only").unwrap();
+        std::fs::write(
+            &metadata,
+            r#"{
+              "version":"1",
+              "session":{"id":"s1","name":"s1"},
+              "turn":{"id":"t1","agent":"codex","created_at":"now"},
+              "reply":{"path":"/tmp/does-not-exist.md"},
+              "target":{"mode":"compose","compose_path":"compose.md"}
+            }"#,
+        )
+        .unwrap();
+
+        let result = load_files(
+            Some(compose.display().to_string()),
+            Some(metadata.display().to_string()),
+        );
+
+        assert!(result.reply.is_none());
+        assert!(result.error.is_some());
+    }
 }
