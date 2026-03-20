@@ -55,6 +55,7 @@ export const FloatingAnnotateButton = memo(function FloatingAnnotateButton() {
         left: `${selection.rect.left + selection.rect.width / 2}px`,
         transform: "translateX(-50%)",
       }}
+      data-testid="floating-annotate-anchor"
     >
       <button
         type="button"
@@ -65,6 +66,7 @@ export const FloatingAnnotateButton = memo(function FloatingAnnotateButton() {
           openPopup();
         }}
         onMouseDown={(e) => e.stopPropagation()}
+        data-testid="floating-annotate-button"
         style={{
           display: "flex",
           alignItems: "center",

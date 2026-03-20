@@ -2,6 +2,14 @@ import { memo, useEffect, useRef, useCallback } from "react";
 import { useAnnotationStore } from "@/stores";
 import type { Annotation } from "@/types";
 
+type DocumentWithCaretApis = Document & {
+  caretPositionFromPoint?: (
+    x: number,
+    y: number,
+  ) => { offsetNode: Node | null; offset: number } | null;
+  caretRangeFromPoint?: (x: number, y: number) => Range | null;
+};
+
 /**
  * AnnotationOverlay — CSS Highlight API non-destructive highlight layer.
  * Also detects mousemove to find which annotation is under the cursor,
@@ -109,12 +117,11 @@ export const AnnotationOverlay = memo(function AnnotationOverlay({
       // Use caretPositionFromPoint or caretRangeFromPoint
       let charOffset: number | null = null;
 
-      if ("caretPositionFromPoint" in document) {
+      const doc = document as DocumentWithCaretApis;
+
+      if (typeof doc.caretPositionFromPoint === "function") {
         // Firefox + modern browsers
-        const pos = (document as any).caretPositionFromPoint(
-          e.clientX,
-          e.clientY,
-        );
+        const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
         if (pos?.offsetNode) {
           const textNodes = textNodesCache.current;
           for (const tn of textNodes) {
@@ -124,9 +131,9 @@ export const AnnotationOverlay = memo(function AnnotationOverlay({
             }
           }
         }
-      } else if ("caretRangeFromPoint" in document) {
+      } else if (typeof doc.caretRangeFromPoint === "function") {
         // Chrome/Safari fallback
-        const range = (document as any).caretRangeFromPoint(e.clientX, e.clientY);
+        const range = doc.caretRangeFromPoint(e.clientX, e.clientY);
         if (range) {
           const textNodes = textNodesCache.current;
           for (const tn of textNodes) {

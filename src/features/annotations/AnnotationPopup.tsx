@@ -215,6 +215,8 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
       }}
       onKeyDown={handleKeyDown}
       onMouseDown={(e) => e.stopPropagation()}
+      data-testid="annotation-popup"
+      data-mode={isEditMode ? "edit" : "create"}
     >
       <div
         style={{
@@ -240,6 +242,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               key={k.value}
               type="button"
               onClick={() => setPopupKind(k.value)}
+              data-testid={`annotation-popup-kind-${k.value}`}
               style={{
                 padding: "3px 8px",
                 borderRadius: "var(--radius-sm)",
@@ -273,6 +276,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
             onChange={(e) => setComment(e.target.value)}
             placeholder={isEditMode ? t("annPopup.editPlaceholder") : t("annPopup.addPlaceholder")}
             rows={3}
+            data-testid="annotation-popup-textarea"
             style={{
               width: "100%",
               resize: "none",
@@ -320,6 +324,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
             <button
               type="button"
               onClick={handleClose}
+              data-testid="annotation-popup-cancel"
               style={{
                 padding: "4px 10px",
                 borderRadius: "var(--radius-sm)",
@@ -342,6 +347,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 handleSubmit();
               }}
               disabled={!comment.trim()}
+              data-testid="annotation-popup-submit"
               style={{
                 padding: "4px 12px",
                 borderRadius: "var(--radius-sm)",
@@ -369,6 +375,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
       <button
         type="button"
         onClick={handleClose}
+        data-testid="annotation-popup-close"
         style={{
           position: "absolute",
           top: "-8px",

@@ -37,6 +37,7 @@ export const AnnotationCard = memo(function AnnotationCard({
   return (
     <div
       data-annotation-id={annotation.id}
+      data-testid="annotation-card"
       onMouseEnter={() => setHoveredAnnotation(annotation.id)}
       onMouseLeave={() => setHoveredAnnotation(null)}
       style={{
@@ -92,6 +93,7 @@ export const AnnotationCard = memo(function AnnotationCard({
             type="button"
             onClick={() => setEditingAnnotation(annotation.id)}
             title={t("ann.editTitle")}
+            data-testid="annotation-card-edit"
             style={{
               display: "flex",
               alignItems: "center",
@@ -122,6 +124,7 @@ export const AnnotationCard = memo(function AnnotationCard({
             type="button"
             onClick={() => removeAnnotation(annotation.id)}
             title={t("ann.deleteTitle")}
+            data-testid="annotation-card-delete"
             style={{
               display: "flex",
               alignItems: "center",

@@ -74,7 +74,7 @@ export function App() {
       // Reset input so same file can be reopened
       e.target.value = "";
     },
-    [setDocument, setError],
+    [setDocument, setError, t],
   );
 
   // ─── Error State ────────────────────────────────────────
@@ -120,6 +120,7 @@ export function App() {
           onClick={toggleFullscreen}
           className="fixed right-4 top-4 z-50 rounded-lg border border-border-subtle bg-surface-popover p-2 text-text-muted shadow-lg hover:text-text-primary transition-colors"
           title={t("app.exitFullscreen")}
+          data-testid="fullscreen-exit"
         >
           <Minimize2 className="h-4 w-4" />
         </button>
@@ -143,6 +144,7 @@ export function App() {
         accept=".md,.markdown,.txt"
         onChange={handleFileInputChange}
         className="hidden"
+        data-testid="browser-file-input"
       />
 
       <TopBar

@@ -59,6 +59,7 @@ export const SessionTree = memo(function SessionTree() {
           fontSize: "0.85rem",
           fontFamily: "var(--font-sans)",
         }}
+        data-testid="session-tree-empty"
       >
         <Clock
           style={{
@@ -85,6 +86,7 @@ export const SessionTree = memo(function SessionTree() {
         padding: "4px",
         fontFamily: "var(--font-sans)",
       }}
+      data-testid="session-tree"
     >
       {sessions.map((s) => (
         <SessionItem
@@ -116,6 +118,8 @@ const SessionItem = memo(function SessionItem({
   return (
     <div
       onClick={() => onOpen(session.id)}
+      data-testid="session-item"
+      data-session-id={session.id}
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -186,6 +190,7 @@ const SessionItem = memo(function SessionItem({
         type="button"
         onClick={(e) => onDelete(e, session.id)}
         title={t("session.deleteTitle")}
+        data-testid="session-delete"
         style={{
           padding: "2px",
           border: "none",

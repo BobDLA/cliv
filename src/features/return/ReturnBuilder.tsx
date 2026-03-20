@@ -232,7 +232,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     } catch (e) {
       setWriteError(e instanceof Error ? e.message : t("return.writeFail"));
     }
-  }, [finalOutput, composePath, hasContent]);
+  }, [finalOutput, composePath, hasContent, t]);
 
   // ── Ctrl+Enter global shortcut for submit ──
   useEffect(() => {
@@ -256,6 +256,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
         flexDirection: "column",
         flexShrink: 0,
       }}
+      data-testid="return-builder"
     >
       {/* ── Vertical resize handle (top border) ── */}
       <div
@@ -294,6 +295,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           cursor: "pointer",
         }}
         onClick={() => setCollapsed(!collapsed)}
+        data-testid="return-builder-header"
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Send
@@ -339,6 +341,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 type="button"
                 onClick={() => handleSetTemplate(mode)}
                 title={t(TEMPLATE_LABELS[mode].descKey)}
+                data-testid={`return-template-${mode}`}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -371,23 +374,25 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               </button>
             ))}
           </div>
-          {collapsed ? (
-            <ChevronUp
-              style={{
-                width: "14px",
-                height: "14px",
-                color: "var(--color-text-faint)",
-              }}
-            />
-          ) : (
-            <ChevronDown
-              style={{
-                width: "14px",
-                height: "14px",
-                color: "var(--color-text-faint)",
-              }}
-            />
-          )}
+          <span data-testid="return-builder-collapse-indicator" data-collapsed={collapsed ? "true" : "false"}>
+            {collapsed ? (
+              <ChevronUp
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  color: "var(--color-text-faint)",
+                }}
+              />
+            ) : (
+              <ChevronDown
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  color: "var(--color-text-faint)",
+                }}
+              />
+            )}
+          </span>
         </div>
       </div>
 
@@ -401,6 +406,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             height: `${panelHeight}px`,
             overflow: "hidden",
           }}
+          data-testid="return-builder-body"
         >
           {/* LEFT: user custom editor */}
           <div
@@ -428,6 +434,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               value={userText}
               onChange={(e) => setUserText(e.target.value)}
               placeholder={t("return.freeEditPlaceholder")}
+              data-testid="return-free-edit"
               style={{
                 flex: 1,
                 border: "none",
@@ -466,6 +473,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               flexDirection: "column",
               minWidth: 0,
             }}
+            data-testid="return-aggregate-panel"
           >
             <div
               style={{
@@ -485,6 +493,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 <button
                   type="button"
                   onClick={handleToggleAll}
+                  data-testid="return-select-all"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -529,6 +538,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   overflowY: "auto",
                   padding: "4px 6px",
                 }}
+                data-testid="return-annotation-list"
               >
                 {[...annotations]
                   .sort(
@@ -541,6 +551,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                     return (
                       <label
                         key={ann.id}
+                        data-testid="return-annotation-row"
+                        data-annotation-id={ann.id}
                         style={{
                           display: "flex",
                           gap: "6px",
@@ -568,6 +580,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(ann.id)}
+                          data-testid="return-annotation-checkbox"
                           style={{
                             accentColor: "var(--color-accent)",
                             marginTop: "2px",
@@ -636,7 +649,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             }}
           >
             {writeError && (
-              <span style={{ fontSize: "0.85rem", color: "#ef4444" }}>
+              <span style={{ fontSize: "0.85rem", color: "#ef4444" }} data-testid="return-status-error">
                 {writeError}
               </span>
             )}
@@ -649,6 +662,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   alignItems: "center",
                   gap: "4px",
                 }}
+                data-testid="return-status-success"
               >
                 <Check style={{ width: "12px", height: "12px" }} />
                 {t("return.copied")}
@@ -671,6 +685,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             type="button"
             disabled={!hasContent}
             onClick={handleSubmit}
+            data-testid="return-submit"
             style={{
               display: "flex",
               alignItems: "center",

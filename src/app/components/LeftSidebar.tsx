@@ -31,6 +31,7 @@ export function LeftSidebar({
       <aside
         style={{ width: `${width}px` }}
         className="flex shrink-0 flex-col bg-surface-sidebar"
+        data-testid="left-sidebar"
       >
         <div className="flex items-center border-b border-border-subtle/50">
           <button
@@ -40,6 +41,7 @@ export function LeftSidebar({
                 ? "text-accent border-b-2 border-accent"
                 : "text-text-subtle hover:text-text-primary"
             }`}
+            data-testid="sidebar-tab-outline"
           >
             {t("sidebar.outline")}
           </button>
@@ -50,6 +52,7 @@ export function LeftSidebar({
                 ? "text-accent border-b-2 border-accent"
                 : "text-text-subtle hover:text-text-primary"
             }`}
+            data-testid="sidebar-tab-history"
           >
             {t("sidebar.history")}
           </button>
@@ -63,7 +66,7 @@ export function LeftSidebar({
         </div>
         {/* Save session button */}
         {sidebarTab === "history" && annotations.length > 0 && (
-          <div className="border-t border-border-subtle/50 p-2">
+          <div className="border-t border-border-subtle/50 p-2" data-testid="sidebar-history-actions">
             <button
               onClick={() => {
                 if (currentSessionId) {
@@ -74,6 +77,7 @@ export function LeftSidebar({
                 }
               }}
               className="w-full flex items-center justify-center gap-2 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
+              data-testid="sidebar-save-session"
             >
               <Save className="h-3.5 w-3.5" />
               {currentSessionId ? t("sidebar.save") : t("sidebar.saveSession")}
