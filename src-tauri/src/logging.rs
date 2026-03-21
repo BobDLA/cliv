@@ -51,18 +51,28 @@ fn log_path() -> PathBuf {
     }
 }
 
+fn truncate_content(content: &str) -> String {
+    let mut keep_from = content.len() / 2;
+    while keep_from < content.len() && !content.is_char_boundary(keep_from) {
+        keep_from += 1;
+    }
+
+    let trimmed = if let Some(newline_pos) = content[keep_from..].find('\n') {
+        &content[keep_from + newline_pos + 1..]
+    } else {
+        &content[keep_from..]
+    };
+
+    format!("[...truncated...]\n{}", trimmed)
+}
+
 /// Truncate the log file if it exceeds MAX_LOG_SIZE.
 fn maybe_truncate(path: &PathBuf) {
     if let Ok(meta) = fs::metadata(path) {
         if meta.len() > MAX_LOG_SIZE {
             // Keep the last ~half of the file
             if let Ok(content) = fs::read_to_string(path) {
-                let keep_from = content.len() / 2;
-                // Find the next newline after the midpoint to avoid splitting a line
-                if let Some(newline_pos) = content[keep_from..].find('\n') {
-                    let trimmed = &content[keep_from + newline_pos + 1..];
-                    let _ = fs::write(path, format!("[...truncated...]\n{}", trimmed));
-                }
+                let _ = fs::write(path, truncate_content(&content));
             }
         }
     }
@@ -90,4 +100,20 @@ pub fn debug(msg: &str) {
 /// Write a timing log line with elapsed time since app start.
 pub fn timing(label: &str) {
     log(&format!("⏱ {} at +{}ms", label, elapsed_ms()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_content;
+
+    #[test]
+    fn truncate_content_handles_utf8_midpoint() {
+        let content = format!("header\n{}\nsecond line\n", "═".repeat(10_000));
+
+        let truncated = truncate_content(&content);
+
+        assert!(truncated.starts_with("[...truncated...]\n"));
+        assert!(truncated.is_char_boundary(truncated.len()));
+        assert!(truncated.contains("second line"));
+    }
 }
