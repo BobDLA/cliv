@@ -15,7 +15,6 @@ const zh = {
   "app.errorHint": "请检查文件路径或使用",
   "app.errorHintOpen": "打开",
   "app.readFileFail": "读取文件失败",
-  "app.exitFullscreen": "退出全屏 (Esc)",
 
   // ── TopBar ──
   "topbar.collapseSidebar": "收起侧栏",
@@ -23,7 +22,6 @@ const zh = {
   "topbar.openFile": "打开文件 (Ctrl+O)",
   "topbar.zoomOut": "缩小 (Ctrl+-)",
   "topbar.zoomIn": "放大 (Ctrl+=)",
-  "topbar.fullscreen": "全屏预览",
 
   // ── LeftSidebar ──
   "sidebar.outline": "大纲",
@@ -136,7 +134,6 @@ const en: Record<keyof typeof zh, string> = {
   "app.errorHint": "Check the file path or use",
   "app.errorHintOpen": "to open",
   "app.readFileFail": "Failed to read file",
-  "app.exitFullscreen": "Exit fullscreen (Esc)",
 
   // ── TopBar ──
   "topbar.collapseSidebar": "Collapse sidebar",
@@ -144,7 +141,6 @@ const en: Record<keyof typeof zh, string> = {
   "topbar.openFile": "Open file (Ctrl+O)",
   "topbar.zoomOut": "Zoom out (Ctrl+-)",
   "topbar.zoomIn": "Zoom in (Ctrl+=)",
-  "topbar.fullscreen": "Fullscreen preview",
 
   // ── LeftSidebar ──
   "sidebar.outline": "Outline",
