@@ -356,8 +356,8 @@ fn atomic_write_cache(path: &PathBuf, content: &str) {
 ```
 ~/.codex/
 └── reply_cache/
-    ├── <thread_id>.md        # Indexed by Codex thread ID
-    └── <agent_pid>.md        # Indexed by process PID
+    ├── <agent_pid>.md        # Indexed by process PID
+    └── <agent_pid>.meta.json # Stores the real Codex thread ID
 
 ~/.claude/
 └── reply_cache/
@@ -370,25 +370,28 @@ fn atomic_write_cache(path: &PathBuf, content: &str) {
     └── <agent_pid>.md        # Indexed by process PID
 ```
 
-### Dual-Key Write Strategy
+### Codex PID-Key Cache Strategy
 
-Every cached reply is written under **two keys** for maximum lookup reliability:
+Codex writes reply content under a single pid-keyed cache file and stores the real thread ID in the sidecar metadata file:
 
 ```mermaid
 graph TD
-    REPLY["Agent Reply"] --> DUAL["Dual-Key Write"]
+    REPLY["Codex Reply"] --> PID["Keyed by Agent PID"]
+    REPLY --> META["Sidecar Metadata"]
 
-    DUAL --> KEY_ID["Key 1: Session/Thread ID<br/>(agent-provided identifier)"]
-    DUAL --> KEY_PID["Key 2: Agent PID<br/>(process-tree detected)"]
+    PID --> CACHE["reply_cache/&lt;agent_pid&gt;.md"]
+    META --> METAJSON["reply_cache/&lt;agent_pid&gt;.meta.json<br/>real_session_id = thread-id"]
 
-    KEY_ID --> LOOKUP1["GUI reads by ID<br/>(when env var is set)"]
-    KEY_PID --> LOOKUP2["GUI reads by PID<br/>(anti-crosstalk fallback)"]
+    CACHE --> LOOKUP1["GUI reads by pid cache key<br/>(when available)"]
+    METAJSON --> LOOKUP2["GUI maps thread-id → newest pid cache"]
 
-    style KEY_ID fill:#e3f2fd
-    style KEY_PID fill:#fff3e0
+    style PID fill:#fff3e0
+    style META fill:#e3f2fd
 ```
 
-> **Why dual keys?** If multiple agent instances run concurrently, session IDs may collide or not propagate correctly through the environment. The PID-based key provides a deterministic, collision-free fallback.
+Claude and Gemini still keep both session-id and pid-keyed cache files.
+
+> **Why pid + metadata for Codex?** The pid-keyed cache gives cliV a deterministic lookup key during GUI launch, while the sidecar metadata preserves the real thread ID for SQLite-based recovery.
 
 ---
 
@@ -1128,7 +1131,7 @@ graph TB
 |:---|:---|:---|
 | `EDITOR` | Set cliV as default editor | `export EDITOR="cliv"` |
 | `CLIV_AGENT` | Force agent detection | `codex`, `claude`, `gemini` |
-| `CODEX_THREAD_ID` | Codex session identifier | *(auto-set by Codex)* |
+| `CODEX_THREAD_ID` | Active Codex cache key (compat name; usually the agent PID) | *(set by cliV or caller)* |
 | `CODEX_HOME` | Codex config directory | `~/.codex` |
 | `CLAUDE_SESSION_ID` | Claude session identifier | *(auto-set by Claude)* |
 | `GEMINI_SESSION_ID` | Gemini session identifier | *(auto-set by Gemini)* |

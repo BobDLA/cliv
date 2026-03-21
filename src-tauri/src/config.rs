@@ -87,7 +87,10 @@ impl AppConfig {
 
         Self {
             launch: LaunchConfig {
-                scan_depth: launch.scan_depth.unwrap_or(defaults.launch.scan_depth).max(1),
+                scan_depth: launch
+                    .scan_depth
+                    .unwrap_or(defaults.launch.scan_depth)
+                    .max(1),
                 trusted_callers: launch
                     .trusted_callers
                     .map(normalize_patterns)
@@ -110,11 +113,7 @@ impl AppConfig {
 
 pub fn canonicalize_process_name(name: &str) -> String {
     let trimmed = name.trim();
-    let basename = trimmed
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(trimmed)
-        .trim();
+    let basename = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed).trim();
     let lowercase = basename.to_lowercase();
     lowercase
         .strip_suffix(".exe")
@@ -131,7 +130,9 @@ fn normalize_patterns(items: Vec<String>) -> Vec<String> {
 }
 
 fn normalize_text(value: Option<String>) -> Option<String> {
-    value.map(|item| item.trim().to_string()).filter(|item| !item.is_empty())
+    value
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
 }
 
 pub fn config_path() -> PathBuf {
@@ -173,16 +174,21 @@ pub fn load() -> AppConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonicalize_process_name, AppConfig, FileAppConfig, FileLaunchConfig,
-        FilePromptConfig,
+        canonicalize_process_name, AppConfig, FileAppConfig, FileLaunchConfig, FilePromptConfig,
     };
 
     #[test]
     fn defaults_include_known_trusted_callers() {
         let config = AppConfig::default();
         assert!(config.launch.trusted_callers.contains(&"codex".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"claude".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"gemini".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"claude".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"gemini".to_string()));
     }
 
     #[test]
@@ -204,7 +210,10 @@ mod tests {
         assert_eq!(config.launch.scan_depth, 7);
         assert_eq!(config.launch.trusted_callers, vec!["mycli"]);
         assert_eq!(config.launch.ignored_callers, vec!["wrapper"]);
-        assert_eq!(config.prompts.reply_header_zh.as_deref(), Some("自定义回复"));
+        assert_eq!(
+            config.prompts.reply_header_zh.as_deref(),
+            Some("自定义回复")
+        );
         assert_eq!(
             config.prompts.iterate_header_en.as_deref(),
             Some("custom iterate")
@@ -223,8 +232,14 @@ mod tests {
         });
 
         assert!(config.launch.trusted_callers.contains(&"codex".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"claude".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"gemini".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"claude".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"gemini".to_string()));
     }
 
     #[test]
@@ -245,7 +260,10 @@ mod tests {
 
         assert_eq!(config.launch.scan_depth, 1);
         assert_eq!(config.prompts.reply_header_zh, None);
-        assert_eq!(config.prompts.reply_header_en.as_deref(), Some("Custom reply"));
+        assert_eq!(
+            config.prompts.reply_header_en.as_deref(),
+            Some("Custom reply")
+        );
         assert_eq!(config.prompts.iterate_header_zh, None);
     }
 

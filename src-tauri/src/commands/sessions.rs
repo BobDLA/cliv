@@ -23,8 +23,7 @@ pub fn tmp_path(target: &PathBuf) -> PathBuf {
 fn atomic_write(path: &PathBuf, data: &str) -> Result<(), String> {
     let tmp = tmp_path(path);
 
-    fs::write(&tmp, data)
-        .map_err(|e| format!("Failed to write: {}", e))?;
+    fs::write(&tmp, data).map_err(|e| format!("Failed to write: {}", e))?;
 
     if let Err(e) = fs::rename(&tmp, path) {
         let _ = fs::remove_file(&tmp);
@@ -42,8 +41,7 @@ pub fn save_session(session_id: String, turn_id: String, data: String) -> Result
         .join("turns")
         .join(&turn_id);
 
-    fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create session dir: {}", e))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create session dir: {}", e))?;
 
     let path = dir.join("annotations.json");
     atomic_write(&path, &data)
@@ -57,8 +55,7 @@ pub fn save_return_record(session_id: String, turn_id: String, data: String) -> 
         .join("turns")
         .join(&turn_id);
 
-    fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create session dir: {}", e))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create session dir: {}", e))?;
 
     let path = dir.join("returns.json");
     atomic_write(&path, &data)
@@ -73,8 +70,7 @@ pub fn load_session_data(session_id: String, turn_id: String) -> Result<String, 
         .join(&turn_id)
         .join("annotations.json");
 
-    fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read session data: {}", e))
+    fs::read_to_string(&path).map_err(|e| format!("Failed to read session data: {}", e))
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -95,16 +91,12 @@ pub fn list_sessions() -> Vec<SessionListItem> {
             if entry.path().is_dir() {
                 let id = entry.file_name().to_string_lossy().to_string();
                 let turns_dir = entry.path().join("turns");
-                let turn_count = fs::read_dir(&turns_dir)
-                    .map(|e| e.count())
-                    .unwrap_or(0);
+                let turn_count = fs::read_dir(&turns_dir).map(|e| e.count()).unwrap_or(0);
                 let modified_at = entry
                     .metadata()
                     .and_then(|m| m.modified())
                     .map(|t| {
-                        let duration = t
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default();
+                        let duration = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
                         format!("{}", duration.as_secs())
                     })
                     .unwrap_or_default();

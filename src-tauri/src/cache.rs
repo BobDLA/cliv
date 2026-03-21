@@ -20,13 +20,13 @@ fn now_iso8601() -> String {
 /// Metadata written alongside each .md cache file.
 #[derive(Debug, Serialize)]
 struct CacheMeta {
-    source: String,       // "real_id" or "pid"
-    key: String,          // the actual filename key (thread-id, session-id, or pid)
-    agent: String,        // "codex", "claude", "gemini"
+    source: String,                  // "real_id" or "pid"
+    key: String,                     // the actual filename key (thread-id, session-id, or pid)
+    agent: String,                   // "codex", "claude", "gemini"
     real_session_id: Option<String>, // the real thread/session ID (if different from key)
-    pid: Option<u32>,     // ancestor agent PID (if found)
-    cached_at: String,    // timestamp
-    size_bytes: usize,    // content size
+    pid: Option<u32>,                // ancestor agent PID (if found)
+    cached_at: String,               // timestamp
+    size_bytes: usize,               // content size
 }
 
 /// Atomic write: write to .tmp then rename.
@@ -39,7 +39,11 @@ fn atomic_write_cache(path: &PathBuf, content: &str) {
 
     if fs::write(&tmp, content).is_ok() {
         if fs::rename(&tmp, path).is_ok() {
-            logging::debug(&format!("  cache: wrote {} bytes → {}", content.len(), path.display()));
+            logging::debug(&format!(
+                "  cache: wrote {} bytes → {}",
+                content.len(),
+                path.display()
+            ));
         } else {
             logging::log(&format!("  cache: rename failed for {}", path.display()));
             let _ = fs::remove_file(&tmp);
@@ -55,7 +59,11 @@ fn write_cache_meta(md_path: &PathBuf, meta: &CacheMeta) {
     match serde_json::to_string_pretty(meta) {
         Ok(json) => {
             if let Err(e) = fs::write(&meta_path, json) {
-                logging::log(&format!("  cache-meta: write failed for {}: {}", meta_path.display(), e));
+                logging::log(&format!(
+                    "  cache-meta: write failed for {}: {}",
+                    meta_path.display(),
+                    e
+                ));
             } else {
                 logging::debug(&format!("  cache-meta: wrote {}", meta_path.display()));
             }
@@ -66,10 +74,20 @@ fn write_cache_meta(md_path: &PathBuf, meta: &CacheMeta) {
     }
 }
 
+fn remove_cache_artifacts(md_path: &PathBuf) {
+    let meta_path = md_path.with_extension("meta.json");
+    let _ = fs::remove_file(md_path);
+    let _ = fs::remove_file(meta_path);
+}
+
 fn read_stdin() -> Option<String> {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf).ok()?;
-    if buf.is_empty() { None } else { Some(buf) }
+    if buf.is_empty() {
+        None
+    } else {
+        Some(buf)
+    }
 }
 
 /// Walk PPID chain to find the ancestor agent process PID.
@@ -86,10 +104,16 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             Err(_) => break,
         };
 
-        logging::debug(&format!("  ancestor[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!(
+            "  ancestor[{}]: pid={} comm='{}'",
+            level, pid, comm
+        ));
 
         if comm.contains(agent_name) {
-            logging::debug(&format!("  ancestor: matched {} at pid={}", agent_name, pid));
+            logging::debug(&format!(
+                "  ancestor: matched {} at pid={}",
+                agent_name, pid
+            ));
             return Some(pid);
         }
 
@@ -102,13 +126,20 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             Some(pos) => &stat[pos + 2..],
             None => break,
         };
-        pid = match after_name.split_whitespace().nth(1).and_then(|s| s.parse().ok()) {
+        pid = match after_name
+            .split_whitespace()
+            .nth(1)
+            .and_then(|s| s.parse().ok())
+        {
             Some(p) => p,
             None => break,
         };
     }
 
-    logging::debug(&format!("  ancestor: {} not found in process chain", agent_name));
+    logging::debug(&format!(
+        "  ancestor: {} not found in process chain",
+        agent_name
+    ));
     None
 }
 
@@ -125,15 +156,23 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             .args(["-o", "comm=", "-p", &pid.to_string()])
             .output()
             .ok()?;
-        let comm = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+        let comm = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .to_lowercase();
         if comm.is_empty() {
             break;
         }
 
-        logging::debug(&format!("  ancestor[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!(
+            "  ancestor[{}]: pid={} comm='{}'",
+            level, pid, comm
+        ));
 
         if comm.contains(agent_name) {
-            logging::debug(&format!("  ancestor: matched {} at pid={}", agent_name, pid));
+            logging::debug(&format!(
+                "  ancestor: matched {} at pid={}",
+                agent_name, pid
+            ));
             return Some(pid);
         }
 
@@ -146,7 +185,10 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
         pid = ppid_str.parse::<u32>().ok()?;
     }
 
-    logging::debug(&format!("  ancestor: {} not found in process chain", agent_name));
+    logging::debug(&format!(
+        "  ancestor: {} not found in process chain",
+        agent_name
+    ));
     None
 }
 
@@ -160,7 +202,14 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             break;
         }
         let output = std::process::Command::new("wmic")
-            .args(["process", "where", &format!("ProcessId={}", pid), "get", "Name,ParentProcessId", "/format:csv"])
+            .args([
+                "process",
+                "where",
+                &format!("ProcessId={}", pid),
+                "get",
+                "Name,ParentProcessId",
+                "/format:csv",
+            ])
             .output()
             .ok()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -173,9 +222,15 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
                 let ppid: u32 = parts[2].trim().parse().unwrap_or(0);
 
                 if level > 0 || pid != own_pid {
-                    logging::debug(&format!("  ancestor[{}]: pid={} comm='{}'", level, pid, name));
+                    logging::debug(&format!(
+                        "  ancestor[{}]: pid={} comm='{}'",
+                        level, pid, name
+                    ));
                     if name.contains(agent_name) {
-                        logging::debug(&format!("  ancestor: matched {} at pid={}", agent_name, pid));
+                        logging::debug(&format!(
+                            "  ancestor: matched {} at pid={}",
+                            agent_name, pid
+                        ));
                         return Some(pid);
                     }
                 }
@@ -189,13 +244,24 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
         }
     }
 
-    logging::debug(&format!("  ancestor: {} not found in process chain", agent_name));
+    logging::debug(&format!(
+        "  ancestor: {} not found in process chain",
+        agent_name
+    ));
     None
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn find_ancestor_agent_pid(_agent_name: &str) -> Option<u32> {
     None
+}
+
+fn resolve_codex_cache_pid() -> Option<u32> {
+    find_ancestor_agent_pid("codex").or_else(|| {
+        std::env::var("CODEX_THREAD_ID")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+    })
 }
 
 // ─── Codex ────────────────────────────────────────────────
@@ -205,7 +271,10 @@ pub fn cache_codex(json_arg: &str) {
 
     let data: Value = match serde_json::from_str(json_arg) {
         Ok(v) => v,
-        Err(e) => { logging::log(&format!("cache-codex: JSON parse error: {}", e)); return; }
+        Err(e) => {
+            logging::log(&format!("cache-codex: JSON parse error: {}", e));
+            return;
+        }
     };
 
     let event_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -217,49 +286,58 @@ pub fn cache_codex(json_arg: &str) {
 
     let thread_id = match data.get("thread-id").and_then(|v| v.as_str()) {
         Some(id) if !id.is_empty() => id,
-        _ => { logging::log("cache-codex: no thread-id"); return; }
+        _ => {
+            logging::log("cache-codex: no thread-id");
+            return;
+        }
     };
 
     let message = match data.get("last-assistant-message").and_then(|v| v.as_str()) {
         Some(m) if !m.is_empty() => m,
-        _ => { logging::log("cache-codex: no last-assistant-message"); return; }
+        _ => {
+            logging::log("cache-codex: no last-assistant-message");
+            return;
+        }
     };
 
-    logging::log(&format!("cache-codex: thread_id={}  msg_len={}", thread_id, message.len()));
+    logging::log(&format!(
+        "cache-codex: thread_id={}  msg_len={}",
+        thread_id,
+        message.len()
+    ));
 
     let codex_home = std::env::var("CODEX_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| home_dir().join(".codex"));
 
     let cache_dir = codex_home.join("reply_cache");
-    let codex_pid = find_ancestor_agent_pid("codex");
+    let codex_pid = match resolve_codex_cache_pid() {
+        Some(pid) => pid,
+        None => {
+            logging::log("cache-codex: no cache pid resolved; skip cache write");
+            return;
+        }
+    };
 
-    // Write by thread_id (Codex provides it, so we use it directly)
-    let cache_path = cache_dir.join(format!("{}.md", thread_id));
+    let cache_path = cache_dir.join(format!("{}.md", codex_pid));
     atomic_write_cache(&cache_path, message);
-    write_cache_meta(&cache_path, &CacheMeta {
-        source: "real_id".to_string(),
-        key: thread_id.to_string(),
-        agent: "codex".to_string(),
-        real_session_id: Some(thread_id.to_string()),
-        pid: codex_pid,
-        cached_at: now_iso8601(),
-        size_bytes: message.len(),
-    });
-
-    // Also write by agent PID for anti-crosstalk
-    if let Some(pid) = codex_pid {
-        let pid_path = cache_dir.join(format!("{}.md", pid));
-        atomic_write_cache(&pid_path, message);
-        write_cache_meta(&pid_path, &CacheMeta {
+    write_cache_meta(
+        &cache_path,
+        &CacheMeta {
             source: "pid".to_string(),
-            key: pid.to_string(),
+            key: codex_pid.to_string(),
             agent: "codex".to_string(),
             real_session_id: Some(thread_id.to_string()),
-            pid: Some(pid),
+            pid: Some(codex_pid),
             cached_at: now_iso8601(),
             size_bytes: message.len(),
-        });
+        },
+    );
+
+    // Clean up legacy thread-id keyed artifacts now that Codex caches are pid-keyed.
+    let legacy_path = cache_dir.join(format!("{}.md", thread_id));
+    if legacy_path != cache_path {
+        remove_cache_artifacts(&legacy_path);
     }
 }
 
@@ -269,16 +347,28 @@ pub fn cache_claude() {
     logging::log("cache-claude: reading stdin...");
 
     let input = match read_stdin() {
-        Some(s) => { logging::debug(&format!("cache-claude: stdin_len={}", s.len())); s }
-        None => { logging::log("cache-claude: empty stdin"); return; }
+        Some(s) => {
+            logging::debug(&format!("cache-claude: stdin_len={}", s.len()));
+            s
+        }
+        None => {
+            logging::log("cache-claude: empty stdin");
+            return;
+        }
     };
 
     let data: Value = match serde_json::from_str(&input) {
         Ok(v) => v,
-        Err(e) => { logging::log(&format!("cache-claude: JSON parse error: {}", e)); return; }
+        Err(e) => {
+            logging::log(&format!("cache-claude: JSON parse error: {}", e));
+            return;
+        }
     };
 
-    let event = data.get("hook_event_name").and_then(|v| v.as_str()).unwrap_or("");
+    let event = data
+        .get("hook_event_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     logging::debug(&format!("cache-claude: hook_event_name={}", event));
     if event != "Stop" {
         logging::debug("cache-claude: not Stop event, skip");
@@ -287,15 +377,25 @@ pub fn cache_claude() {
 
     let session_id = match data.get("session_id").and_then(|v| v.as_str()) {
         Some(id) if !id.is_empty() => id,
-        _ => { logging::log("cache-claude: no session_id"); return; }
+        _ => {
+            logging::log("cache-claude: no session_id");
+            return;
+        }
     };
 
     let message = match data.get("last_assistant_message").and_then(|v| v.as_str()) {
         Some(m) if !m.is_empty() => m,
-        _ => { logging::log("cache-claude: no last_assistant_message"); return; }
+        _ => {
+            logging::log("cache-claude: no last_assistant_message");
+            return;
+        }
     };
 
-    logging::log(&format!("cache-claude: session_id={}  msg_len={}", session_id, message.len()));
+    logging::log(&format!(
+        "cache-claude: session_id={}  msg_len={}",
+        session_id,
+        message.len()
+    ));
 
     let cache_dir = home_dir().join(".claude").join("reply_cache");
     let claude_pid = find_ancestor_agent_pid("claude");
@@ -304,53 +404,77 @@ pub fn cache_claude() {
     if let Some(pid) = claude_pid {
         let pid_path = cache_dir.join(format!("{}.md", pid));
         atomic_write_cache(&pid_path, message);
-        write_cache_meta(&pid_path, &CacheMeta {
-            source: "pid".to_string(),
-            key: pid.to_string(),
-            agent: "claude".to_string(),
-            real_session_id: Some(session_id.to_string()),
-            pid: Some(pid),
-            cached_at: now_iso8601(),
-            size_bytes: message.len(),
-        });
+        write_cache_meta(
+            &pid_path,
+            &CacheMeta {
+                source: "pid".to_string(),
+                key: pid.to_string(),
+                agent: "claude".to_string(),
+                real_session_id: Some(session_id.to_string()),
+                pid: Some(pid),
+                cached_at: now_iso8601(),
+                size_bytes: message.len(),
+            },
+        );
     }
 
     // Also write by session_id as fallback
     let cache_path = cache_dir.join(format!("{}.md", session_id));
     atomic_write_cache(&cache_path, message);
-    write_cache_meta(&cache_path, &CacheMeta {
-        source: "real_id".to_string(),
-        key: session_id.to_string(),
-        agent: "claude".to_string(),
-        real_session_id: Some(session_id.to_string()),
-        pid: claude_pid,
-        cached_at: now_iso8601(),
-        size_bytes: message.len(),
-    });
+    write_cache_meta(
+        &cache_path,
+        &CacheMeta {
+            source: "real_id".to_string(),
+            key: session_id.to_string(),
+            agent: "claude".to_string(),
+            real_session_id: Some(session_id.to_string()),
+            pid: claude_pid,
+            cached_at: now_iso8601(),
+            size_bytes: message.len(),
+        },
+    );
 }
 
 // ─── Gemini ───────────────────────────────────────────────
 
 pub fn cache_gemini() {
     let session_id = match std::env::var("GEMINI_SESSION_ID") {
-        Ok(id) if !id.is_empty() => { logging::log(&format!("cache-gemini: session_id={}", id)); id }
-        _ => { logging::log("cache-gemini: no GEMINI_SESSION_ID"); return; }
+        Ok(id) if !id.is_empty() => {
+            logging::log(&format!("cache-gemini: session_id={}", id));
+            id
+        }
+        _ => {
+            logging::log("cache-gemini: no GEMINI_SESSION_ID");
+            return;
+        }
     };
 
     logging::debug("cache-gemini: reading stdin...");
     let input = match read_stdin() {
-        Some(s) => { logging::debug(&format!("cache-gemini: stdin_len={}", s.len())); s }
-        None => { logging::log("cache-gemini: empty stdin"); return; }
+        Some(s) => {
+            logging::debug(&format!("cache-gemini: stdin_len={}", s.len()));
+            s
+        }
+        None => {
+            logging::log("cache-gemini: empty stdin");
+            return;
+        }
     };
 
     let data: Value = match serde_json::from_str(&input) {
         Ok(v) => v,
-        Err(e) => { logging::log(&format!("cache-gemini: JSON parse error: {}", e)); return; }
+        Err(e) => {
+            logging::log(&format!("cache-gemini: JSON parse error: {}", e));
+            return;
+        }
     };
 
     let message = match data.get("prompt_response").and_then(|v| v.as_str()) {
         Some(m) if !m.is_empty() => m,
-        _ => { logging::log("cache-gemini: no prompt_response"); return; }
+        _ => {
+            logging::log("cache-gemini: no prompt_response");
+            return;
+        }
     };
 
     logging::log(&format!("cache-gemini: msg_len={}", message.len()));
@@ -362,27 +486,33 @@ pub fn cache_gemini() {
     if let Some(pid) = gemini_pid {
         let pid_path = cache_dir.join(format!("{}.md", pid));
         atomic_write_cache(&pid_path, message);
-        write_cache_meta(&pid_path, &CacheMeta {
-            source: "pid".to_string(),
-            key: pid.to_string(),
-            agent: "gemini".to_string(),
-            real_session_id: Some(session_id.clone()),
-            pid: Some(pid),
-            cached_at: now_iso8601(),
-            size_bytes: message.len(),
-        });
+        write_cache_meta(
+            &pid_path,
+            &CacheMeta {
+                source: "pid".to_string(),
+                key: pid.to_string(),
+                agent: "gemini".to_string(),
+                real_session_id: Some(session_id.clone()),
+                pid: Some(pid),
+                cached_at: now_iso8601(),
+                size_bytes: message.len(),
+            },
+        );
     }
 
     // Also write by session_id as fallback
     let cache_path = cache_dir.join(format!("{}.md", session_id));
     atomic_write_cache(&cache_path, message);
-    write_cache_meta(&cache_path, &CacheMeta {
-        source: "real_id".to_string(),
-        key: session_id.clone(),
-        agent: "gemini".to_string(),
-        real_session_id: Some(session_id),
-        pid: gemini_pid,
-        cached_at: now_iso8601(),
-        size_bytes: message.len(),
-    });
+    write_cache_meta(
+        &cache_path,
+        &CacheMeta {
+            source: "real_id".to_string(),
+            key: session_id.clone(),
+            agent: "gemini".to_string(),
+            real_session_id: Some(session_id),
+            pid: gemini_pid,
+            cached_at: now_iso8601(),
+            size_bytes: message.len(),
+        },
+    );
 }

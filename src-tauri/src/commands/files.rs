@@ -139,8 +139,7 @@ pub fn load_files(
 }
 
 fn is_standalone_view_path(path: &PathBuf) -> bool {
-    path
-        .extension()
+    path.extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| matches!(ext, "md" | "markdown" | "txt"))
         .unwrap_or(false)
@@ -157,8 +156,7 @@ pub fn write_back(path: String, content: String) -> Result<(), String> {
     let target = PathBuf::from(&path);
     let tmp_path = crate::commands::sessions::tmp_path(&target);
 
-    fs::write(&tmp_path, &content)
-        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+    fs::write(&tmp_path, &content).map_err(|e| format!("Failed to write temp file: {}", e))?;
 
     if let Err(e) = fs::rename(&tmp_path, &target) {
         let _ = fs::remove_file(&tmp_path);
@@ -211,7 +209,11 @@ mod tests {
         )
         .unwrap();
 
-        let result = load_files(None, Some(target.display().to_string()), Some(metadata.display().to_string()));
+        let result = load_files(
+            None,
+            Some(target.display().to_string()),
+            Some(metadata.display().to_string()),
+        );
 
         assert!(result.reply.is_none());
         assert_eq!(result.target.as_deref(), Some("compose only"));

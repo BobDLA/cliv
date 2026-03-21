@@ -166,8 +166,11 @@ fn parse_gui_args(
         }
     }
 
-    let (review_path, target_path) =
-        resolve_launch_paths(positional_path.clone(), explicit_target, trusted_caller.clone());
+    let (review_path, target_path) = resolve_launch_paths(
+        positional_path.clone(),
+        explicit_target,
+        trusted_caller.clone(),
+    );
 
     CliArgs {
         review_path,
@@ -270,8 +273,8 @@ fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) ->
     None
 }
 
-/// Given a matched agent and its PID, set the appropriate session env var.
-/// All agents use PID as their cache key — simple, deterministic, cross-platform.
+/// Given a matched agent and its PID, set the appropriate lookup env var.
+/// The env value is used as the active reply-cache key during GUI extraction.
 fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<String> {
     let pid_str = agent_pid.to_string();
     let (env_var, agent) = match agent_name {
@@ -550,10 +553,7 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
             .unwrap_or(MAX_PATH);
         let name = String::from_utf16_lossy(&entry.sz_exe_file[..name_len]);
 
-        map.insert(
-            entry.th32_process_id,
-            (name, entry.th32_parent_process_id),
-        );
+        map.insert(entry.th32_process_id, (name, entry.th32_parent_process_id));
 
         entry.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
         ok = unsafe { Process32NextW(snapshot, &mut entry) };
@@ -561,7 +561,10 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 
     unsafe { CloseHandle(snapshot) };
 
-    logging::debug(&format!("  win: built process map with {} entries", map.len()));
+    logging::debug(&format!(
+        "  win: built process map with {} entries",
+        map.len()
+    ));
     Some(map)
 }
 
@@ -631,7 +634,11 @@ mod tests {
 
     #[test]
     fn short_target_alias_sets_target_path() {
-        let argv = vec!["-t".to_string(), "draft.md".to_string(), "review.md".to_string()];
+        let argv = vec![
+            "-t".to_string(),
+            "draft.md".to_string(),
+            "review.md".to_string(),
+        ];
         let args = parse_gui_args(&argv, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
@@ -640,8 +647,7 @@ mod tests {
 
     #[test]
     fn standalone_lone_positional_stays_review_only() {
-        let (review_path, target_path) =
-            resolve_launch_paths(Some("note.md".into()), None, None);
+        let (review_path, target_path) = resolve_launch_paths(Some("note.md".into()), None, None);
 
         assert_eq!(review_path.as_deref(), Some("note.md"));
         assert_eq!(target_path, None);

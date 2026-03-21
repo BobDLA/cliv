@@ -1,5 +1,5 @@
-mod cli;
 pub mod cache;
+mod cli;
 mod commands;
 pub mod config;
 pub mod extract;

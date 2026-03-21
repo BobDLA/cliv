@@ -32,10 +32,7 @@ fn is_debug() -> bool {
 }
 
 fn elapsed_ms() -> u64 {
-    APP_START
-        .get_or_init(Instant::now)
-        .elapsed()
-        .as_millis() as u64
+    APP_START.get_or_init(Instant::now).elapsed().as_millis() as u64
 }
 
 fn log_path() -> PathBuf {

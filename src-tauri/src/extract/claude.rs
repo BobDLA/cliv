@@ -14,20 +14,29 @@ pub fn extract_claude_reply(session_id: Option<String>) -> Result<String, String
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".claude");
 
-    let param_source = if session_id.is_some() { "parameter" } else { "none" };
+    let param_source = if session_id.is_some() {
+        "parameter"
+    } else {
+        "none"
+    };
 
-    let resolved_session_id = session_id
-        .or_else(|| {
-            let env_val = std::env::var("CLAUDE_SESSION_ID").ok().filter(|s| !s.is_empty());
-            if env_val.is_some() {
-                logging::log("  extract claude: resolved key from CLAUDE_SESSION_ID env var");
-            }
-            env_val
-        });
+    let resolved_session_id = session_id.or_else(|| {
+        let env_val = std::env::var("CLAUDE_SESSION_ID")
+            .ok()
+            .filter(|s| !s.is_empty());
+        if env_val.is_some() {
+            logging::log("  extract claude: resolved key from CLAUDE_SESSION_ID env var");
+        }
+        env_val
+    });
 
-    let source = if param_source == "parameter" { "parameter" }
-        else if resolved_session_id.is_some() { "env_var" }
-        else { "none" };
+    let source = if param_source == "parameter" {
+        "parameter"
+    } else if resolved_session_id.is_some() {
+        "env_var"
+    } else {
+        "none"
+    };
 
     logging::log(&format!(
         "  extract claude: resolved_key={:?} source={}",
@@ -51,8 +60,13 @@ pub fn extract_claude_reply_from(
         ),
     };
 
-    let cache_path = claude_home.join("reply_cache").join(format!("{}.md", session_id));
-    logging::log(&format!("  extract claude: trying cache path={}", cache_path.display()));
+    let cache_path = claude_home
+        .join("reply_cache")
+        .join(format!("{}.md", session_id));
+    logging::log(&format!(
+        "  extract claude: trying cache path={}",
+        cache_path.display()
+    ));
     if cache_path.exists() {
         logging::log(&format!(
             "  extract claude: HIT cache file={} size={}",
