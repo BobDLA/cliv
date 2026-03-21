@@ -85,6 +85,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const documentId = useDocumentStore((s) => s.documentId);
   const targetPath = useDocumentStore((s) => s.targetPath);
   const targetContent = useDocumentStore((s) => s.targetContent);
+  const replyContent = useDocumentStore((s) => s.replyContent);
   const t = useT();
   const uiLocale = useUIStore((s) => s.locale);
 
@@ -200,8 +201,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
       const kind = tl(contentLocale, kindKey);
       
       let linesInfo = "";
-      if (targetContent && ann.range) {
-        const lines = getLineRange(targetContent, ann.range.startOffset, ann.range.endOffset);
+      if (replyContent && ann.range) {
+        const lines = getLineRange(replyContent, ann.range.startOffset, ann.range.endOffset);
         if (lines) {
           if (lines[0] === lines[1]) {
             linesInfo = tl(contentLocale, "prompt.lineNumber", lines[0]);
@@ -226,7 +227,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
       ].join("\n");
     });
     return items.join("\n\n---\n\n");
-  }, [selectedAnns, contentLocale, targetContent]);
+  }, [selectedAnns, contentLocale, replyContent]);
 
   // Final combined output = user text + annotations
   const finalOutput = useMemo(() => {
