@@ -22,6 +22,7 @@ import { writeBack, closeWindow } from "@/services/writeBack";
 import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
 import { resolvePromptHeader } from "@/lib/promptTemplates";
+import type { PromptConfig } from "@/types";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -55,6 +56,21 @@ function getLineRange(text: string, startOffset?: number, endOffset?: number): [
   return [startLine, startLine + lineCount];
 }
 
+function resolveUserTextSeed(
+  locale: Locale,
+  mode: TemplateMode,
+  promptConfig: PromptConfig | null,
+  targetContent?: string | null,
+): string {
+  const header = resolvePromptHeader(locale, mode, promptConfig).trim();
+  const existingTargetText = targetContent?.trim();
+
+  if (!existingTargetText) return header;
+  if (existingTargetText.startsWith(header)) return existingTargetText;
+
+  return `${header}\n\n${existingTargetText}`;
+}
+
 /**
  * ReturnBuilder — bottom split panel.
  * Left: user custom editing area (global comments, free-form text).
@@ -66,6 +82,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const promptConfig = useConfigStore((s) => s.promptConfig);
   const { selectedAnnotationIds, selectAll, deselectAll, toggleSelect } =
     useReturnStore();
+  const documentId = useDocumentStore((s) => s.documentId);
   const targetPath = useDocumentStore((s) => s.targetPath);
   const targetContent = useDocumentStore((s) => s.targetContent);
   const t = useT();
@@ -78,29 +95,37 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     return detectContentLocale(combinedText);
   }, [annotations, uiLocale]);
 
-  const [userText, setUserText] = useState(
-    resolvePromptHeader(contentLocale, "reply", promptConfig),
-  );
   const [templateMode, setTemplateMode] = useState<TemplateMode>("reply");
+  const userTextSeed = useMemo(
+    () => resolveUserTextSeed(contentLocale, templateMode, promptConfig, targetContent),
+    [contentLocale, promptConfig, targetContent, templateMode],
+  );
+  const [userText, setUserText] = useState(userTextSeed);
+  const previousDocumentIdRef = useRef(documentId);
+  const previousUserTextSeedRef = useRef(userTextSeed);
 
-  // Update default text automatically when contentLocale changes, 
-  // if the user hasn't modified the default text manually.
+  // Keep the editor seeded from the current target on first load or document switch.
+  // Locale/template updates only apply automatically while the user is still on the seed text.
   useEffect(() => {
+    const documentChanged = previousDocumentIdRef.current !== documentId;
+    const previousSeed = previousUserTextSeedRef.current;
+
+    previousDocumentIdRef.current = documentId;
+    previousUserTextSeedRef.current = userTextSeed;
+
     setUserText((prev) => {
-      const enText = resolvePromptHeader("en", templateMode, promptConfig);
-      const zhText = resolvePromptHeader("zh", templateMode, promptConfig);
-      if (prev === enText || prev === zhText) {
-        return resolvePromptHeader(contentLocale, templateMode, promptConfig);
+      if (documentChanged || prev === previousSeed) {
+        return userTextSeed;
       }
       return prev;
     });
-  }, [contentLocale, promptConfig, templateMode]);
+  }, [documentId, userTextSeed]);
 
-  // Switch template → insert default text into editor (based on contentLocale)
+  // Switch template → reseed editor from the current target content
   const handleSetTemplate = useCallback((mode: TemplateMode) => {
     setTemplateMode(mode);
-    setUserText(resolvePromptHeader(contentLocale, mode, promptConfig));
-  }, [contentLocale, promptConfig]);
+    setUserText(resolveUserTextSeed(contentLocale, mode, promptConfig, targetContent));
+  }, [contentLocale, promptConfig, targetContent]);
 
   // Auto-select all annotations on mount and when annotations change
   useEffect(() => {
