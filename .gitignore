@@ -25,3 +25,4 @@ handoffs/*
 .github/*
 !.github/workflows/
 !.github/workflows/*.yml
+/temp/
