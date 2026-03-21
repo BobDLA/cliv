@@ -14,10 +14,12 @@ import {
 import {
   useAnnotationStore,
   useConfigStore,
+  useHistoryStore,
   useReturnStore,
   useDocumentStore,
   useUIStore,
 } from "@/stores";
+import { saveReviewArchive } from "@/services/historyService";
 import { writeBack, closeWindow } from "@/services/writeBack";
 import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
@@ -86,6 +88,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const targetPath = useDocumentStore((s) => s.targetPath);
   const targetContent = useDocumentStore((s) => s.targetContent);
   const replyContent = useDocumentStore((s) => s.replyContent);
+  const reviewPath = useDocumentStore((s) => s.reviewPath);
+  const replyPath = useDocumentStore((s) => s.replyPath);
+  const workspacePath = useDocumentStore((s) => s.workspacePath);
   const t = useT();
   const uiLocale = useUIStore((s) => s.locale);
 
@@ -241,6 +246,11 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     annotations.length > 0 &&
     annotations.every((a) => selectedAnnotationIds.has(a.id));
   const hasContent = finalOutput.trim().length > 0;
+  const freeInputAddsItem =
+    userText.trim().length > 0 && userText.trim() !== userTextSeed.trim();
+  const itemCount = hasContent
+    ? Math.max(selectedAnns.length + (freeInputAddsItem ? 1 : 0), 1)
+    : 0;
 
   const handleToggleAll = useCallback(() => {
     if (allSelected) deselectAll();
@@ -251,7 +261,30 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     if (!hasContent) return;
     try {
       setWriteError(null);
+      const createdAt = new Date().toISOString();
       const method = await writeBack(finalOutput, targetPath);
+      if (workspacePath && replyContent) {
+        await saveReviewArchive({
+          workspacePath,
+          agent: null,
+          reviewPath,
+          replyPath,
+          targetPath,
+          replyContent,
+          annotations: selectedAnns,
+          submission: {
+            createdAt,
+            method,
+            templateMode,
+            userText,
+            finalOutput,
+          },
+          targetBefore: targetContent,
+          itemCount,
+        });
+        void useHistoryStore.getState().refreshHistory();
+      }
+
       if (method === "written") {
         setCopySuccess(true);
         // Auto-close window after successful file write-back (Codex flow)
@@ -263,7 +296,21 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     } catch (e) {
       setWriteError(e instanceof Error ? e.message : t("return.writeFail"));
     }
-  }, [finalOutput, hasContent, t, targetPath]);
+  }, [
+    finalOutput,
+    hasContent,
+    itemCount,
+    replyContent,
+    replyPath,
+    reviewPath,
+    selectedAnns,
+    t,
+    targetContent,
+    targetPath,
+    templateMode,
+    userText,
+    workspacePath,
+  ]);
 
   // ── Ctrl+Enter global shortcut for submit ──
   useEffect(() => {

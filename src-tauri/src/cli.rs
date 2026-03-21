@@ -23,6 +23,7 @@ pub struct CliArgs {
     pub target_path: Option<String>,
     pub metadata_path: Option<String>,
     pub file_path: Option<String>,
+    pub workspace_path: Option<String>,
     /// Which agent triggered the launch: "codex", "claude", "gemini", or "unknown".
     /// Auto-detected from environment variables.
     pub agent: Option<String>,
@@ -111,7 +112,12 @@ impl CliParsed {
             agent, trusted_caller
         ));
 
-        let args = parse_gui_args(&argv[1..], agent, trusted_caller);
+        let workspace_path = std::env::current_dir()
+            .ok()
+            .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
+            .map(|path| path.to_string_lossy().to_string());
+
+        let args = parse_gui_args(&argv[1..], workspace_path, agent, trusted_caller);
 
         logging::log(&format!(
             "  review_path={:?} target_path={:?} file_path={:?}",
@@ -128,6 +134,7 @@ impl CliParsed {
 /// Parse GUI-mode arguments from an argv slice (excluding the binary name).
 fn parse_gui_args(
     argv: &[String],
+    workspace_path: Option<String>,
     agent: Option<String>,
     trusted_caller: Option<String>,
 ) -> CliArgs {
@@ -177,6 +184,7 @@ fn parse_gui_args(
         target_path,
         metadata_path,
         file_path: positional_path,
+        workspace_path,
         agent,
         trusted_caller,
     }
@@ -591,7 +599,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, None);
+        let args = parse_gui_args(&argv, None, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -600,7 +608,7 @@ mod tests {
     #[test]
     fn trusted_caller_turns_lone_positional_into_target() {
         let argv = vec!["draft.md".to_string()];
-        let args = parse_gui_args(&argv, None, Some("codex".to_string()));
+        let args = parse_gui_args(&argv, None, None, Some("codex".to_string()));
 
         assert_eq!(args.review_path, None);
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -613,7 +621,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, Some("codex".to_string()));
+        let args = parse_gui_args(&argv, None, None, Some("codex".to_string()));
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -626,7 +634,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, None);
+        let args = parse_gui_args(&argv, None, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -639,7 +647,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, None);
+        let args = parse_gui_args(&argv, None, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));

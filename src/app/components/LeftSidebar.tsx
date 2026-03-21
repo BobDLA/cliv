@@ -1,29 +1,25 @@
 import { useState } from "react";
-import { Save } from "lucide-react";
-import { useSessionStore, useAnnotationStore } from "@/stores";
+import { useDocumentStore } from "@/stores";
 import { DocumentOutline, type HeadingInfo } from "@/features/documents";
-import { SessionTree } from "@/features/sessions";
+import { HistoryTree } from "@/features/history";
 import { ResizeHandle } from "./ResizeHandle";
 import { useT } from "@/lib/useT";
 
 interface LeftSidebarProps {
   width: number;
   headings: HeadingInfo[];
-  reviewPath: string | null;
   onDragStart: (e: React.MouseEvent) => void;
 }
 
 export function LeftSidebar({
   width,
   headings,
-  reviewPath,
   onDragStart,
 }: LeftSidebarProps) {
   const [sidebarTab, setSidebarTab] = useState<"outline" | "history">(
     "outline",
   );
-  const { createNewSession, autoSave, currentSessionId } = useSessionStore();
-  const annotations = useAnnotationStore((s) => s.annotations);
+  const isReadOnly = useDocumentStore((s) => s.isReadOnly);
   const t = useT();
 
   return (
@@ -61,29 +57,14 @@ export function LeftSidebar({
           {sidebarTab === "outline" ? (
             <DocumentOutline headings={headings} />
           ) : (
-            <SessionTree />
+            <HistoryTree />
           )}
         </div>
-        {/* Save session button */}
-        {sidebarTab === "history" && annotations.length > 0 && (
-          <div className="border-t border-border-subtle/50 p-2" data-testid="sidebar-history-actions">
-            <button
-              onClick={() => {
-                if (currentSessionId) {
-                  autoSave();
-                } else {
-                  const name = `Session ${new Date().toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
-                  createNewSession(name, reviewPath);
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
-              data-testid="sidebar-save-session"
-            >
-              <Save className="h-3.5 w-3.5" />
-              {currentSessionId ? t("sidebar.save") : t("sidebar.saveSession")}
-            </button>
+        {sidebarTab === "history" && isReadOnly ? (
+          <div className="border-t border-border-subtle/50 px-3 py-2 text-[0.75rem] text-text-subtle">
+            {t("history.readOnlyBadge")}
           </div>
-        )}
+        ) : null}
       </aside>
       {/* Sidebar resize handle */}
       <ResizeHandle onDragStart={onDragStart} />

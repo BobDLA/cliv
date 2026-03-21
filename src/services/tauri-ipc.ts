@@ -2,7 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfig,
   CliArgs,
+  HistoryWorkspaceGroup,
   LoadResult,
+  ReviewArchiveData,
+  SaveReviewArchiveInput,
   SessionListItem,
 } from "@/types";
 
@@ -40,6 +43,26 @@ export async function writeBack(
   content: string,
 ): Promise<void> {
   return invoke<void>("write_back", { path, content });
+}
+
+export async function saveReviewArchive(
+  input: SaveReviewArchiveInput,
+): Promise<void> {
+  await invoke("save_review_archive", { input });
+}
+
+export async function listReviewHistory(): Promise<HistoryWorkspaceGroup[]> {
+  return invoke<HistoryWorkspaceGroup[]>("list_review_history");
+}
+
+export async function loadReviewArchive(
+  workspaceKey: string,
+  archiveId: string,
+): Promise<ReviewArchiveData> {
+  return invoke<ReviewArchiveData>("load_review_archive", {
+    workspaceKey,
+    archiveId,
+  });
 }
 
 export async function saveSession(

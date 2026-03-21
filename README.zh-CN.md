@@ -124,7 +124,7 @@ iterate_header_en = "Please make incremental revisions based on the following an
 - [x] 独立审阅完善（`cliv <file.md>` 默认只读审阅，支持安全回退）
 - [x] 跨平台构建（macOS、Windows）
 - [ ] 自定义 Agent 插件系统
-- [ ] 审阅历史
+- [x] 审阅历史（按项目分组归档，并支持只读回放）
 - [ ] 收藏夹
 - [ ] 迭代编辑模式
 
