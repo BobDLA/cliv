@@ -54,6 +54,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Testing docs linkage
+        run: pnpm test:docs
+
       - name: Unit tests
         run: pnpm test
 

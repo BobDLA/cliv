@@ -16,6 +16,7 @@
     "test:e2e:desktop:standalone": "CLIV_DESKTOP_SCENARIO=standalone wdio run e2e/desktop/wdio.conf.js",
     "test:e2e:desktop:metadata": "CLIV_DESKTOP_SCENARIO=metadata wdio run e2e/desktop/wdio.conf.js",
     "test:e2e:desktop:missing-reply": "CLIV_DESKTOP_SCENARIO=missing-reply wdio run e2e/desktop/wdio.conf.js",
+    "test:docs": "python3 scripts/validate_testing_docs.py",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
