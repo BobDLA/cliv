@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useUIStore, useSelectionStore } from "@/stores";
+import { useDocumentStore, useUIStore, useSelectionStore } from "@/stores";
 
 /**
  * Hook: register global keyboard shortcuts and Ctrl+Wheel zoom.
@@ -40,6 +40,9 @@ export function useKeyboardShortcuts(handleOpenFile: () => void) {
         } else if (e.key === "m" && e.altKey) {
           // Ctrl+Alt+M → trigger comment
           e.preventDefault();
+          if (useDocumentStore.getState().isReadOnly) {
+            return;
+          }
           const sel = useSelectionStore.getState().selection;
           if (sel) {
             useSelectionStore.getState().openPopup();

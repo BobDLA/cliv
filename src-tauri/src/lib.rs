@@ -26,6 +26,10 @@ pub fn run_gui(cli_args: CliArgs, app_config: AppConfig) {
             commands::files::read_file,
             commands::files::write_back,
             commands::files::get_cli_args,
+            // Review history
+            commands::history::save_review_archive,
+            commands::history::list_review_history,
+            commands::history::load_review_archive,
             // Session persistence
             commands::sessions::save_session,
             commands::sessions::save_return_record,

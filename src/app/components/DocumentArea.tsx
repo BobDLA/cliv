@@ -1,4 +1,5 @@
 import { FolderOpen } from "lucide-react";
+import { useDocumentStore } from "@/stores";
 import {
   MarkdownViewer,
   type HeadingInfo,
@@ -35,6 +36,7 @@ export function DocumentArea({
   onOpenFile,
 }: DocumentAreaProps) {
   const t = useT();
+  const isReadOnly = useDocumentStore((s) => s.isReadOnly);
 
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
@@ -55,11 +57,15 @@ export function DocumentArea({
                 />
 
                 {/* M2: Annotation floating elements */}
-                <SelectionCatcher containerRef={viewerRef} />
+                {!isReadOnly ? <SelectionCatcher containerRef={viewerRef} /> : null}
                 <AnnotationOverlay containerRef={viewerRef} />
-                <AnnotationHoverActions containerRef={viewerRef} />
-                <ParagraphBubble containerRef={viewerRef} />
-                <AnnotationPopup />
+                {!isReadOnly ? (
+                  <>
+                    <AnnotationHoverActions containerRef={viewerRef} />
+                    <ParagraphBubble containerRef={viewerRef} />
+                    <AnnotationPopup />
+                  </>
+                ) : null}
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center h-full min-h-[60vh]">
@@ -105,18 +111,20 @@ export function DocumentArea({
       </div>
 
       {/* M3: ReturnBuilder — bottom panel, aligned to document column only */}
-      <div style={{ display: "flex", flexShrink: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <ReturnBuilder />
+      {!isReadOnly ? (
+        <div style={{ display: "flex", flexShrink: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <ReturnBuilder />
+          </div>
+          <div
+            style={{
+              width: `${marginWidth + 6}px`,
+              borderLeft: "1px solid var(--color-border-subtle)",
+            }}
+            className="shrink-0"
+          />
         </div>
-        <div
-          style={{
-            width: `${marginWidth + 6}px`,
-            borderLeft: "1px solid var(--color-border-subtle)",
-          }}
-          className="shrink-0"
-        />
-      </div>
+      ) : null}
     </main>
   );
 }

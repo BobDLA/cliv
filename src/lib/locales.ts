@@ -30,6 +30,14 @@ const zh = {
   "sidebar.history": "历史",
   "sidebar.save": "保存",
   "sidebar.saveSession": "保存会话",
+  "history.searchPlaceholder": "搜索历史...",
+  "history.noHistory": "暂无历史归档",
+  "history.emptyHint": "提交反馈后会在此处按项目分组显示",
+  "history.noMatch": "没有匹配结果",
+  "history.noMatchHint": "换个关键词试试",
+  "history.charsSuffix": "字",
+  "history.itemsSuffix": "条",
+  "history.readOnlyBadge": "当前正在查看只读历史归档",
 
   // ── DocumentArea ──
   "docarea.hint": "或点击下方按钮打开文件。",
@@ -151,6 +159,14 @@ const en: Record<keyof typeof zh, string> = {
   "sidebar.history": "History",
   "sidebar.save": "Save",
   "sidebar.saveSession": "Save session",
+  "history.searchPlaceholder": "Search history...",
+  "history.noHistory": "No archived reviews yet",
+  "history.emptyHint": "Submitted feedback will appear here grouped by workspace",
+  "history.noMatch": "No matching history",
+  "history.noMatchHint": "Try a different keyword",
+  "history.charsSuffix": " chars",
+  "history.itemsSuffix": " items",
+  "history.readOnlyBadge": "Viewing read-only archived review",
 
   // ── DocumentArea ──
   "docarea.hint": "or click the button below to open a file.",

@@ -124,7 +124,7 @@ iterate_header_en = "Please make incremental revisions based on the following an
 - [x] Standalone review polish (`cliv <file.md>` now stays review-only by default)
 - [x] Cross-platform builds (macOS, Windows)
 - [ ] Plugin system for custom agents
-- [ ] Review history
+- [x] Review history (project-grouped archives with read-only replay)
 - [ ] Favorites
 - [ ] Iterative editing mode
 
