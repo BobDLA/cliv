@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useDocumentStore } from "@/stores";
+import { useDocumentStore, useUIStore } from "@/stores";
 import { DocumentOutline, type HeadingInfo } from "@/features/documents";
 import { HistoryTree } from "@/features/history";
 import { ResizeHandle } from "./ResizeHandle";
@@ -16,11 +15,23 @@ export function LeftSidebar({
   headings,
   onDragStart,
 }: LeftSidebarProps) {
-  const [sidebarTab, setSidebarTab] = useState<"outline" | "history">(
-    "outline",
-  );
-  const isReadOnly = useDocumentStore((s) => s.isReadOnly);
+  const sidebarTab = useUIStore((state) => state.sidebarTab);
+  const setSidebarTab = useUIStore((state) => state.setSidebarTab);
+  const isReadOnly = useDocumentStore((state) => state.isReadOnly);
   const t = useT();
+
+  const outlineTabClass = [
+    "flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors",
+    sidebarTab === "outline"
+      ? "border-b-2 border-accent text-accent"
+      : "text-text-subtle hover:text-text-primary",
+  ].join(" ");
+  const historyTabClass = [
+    "flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors",
+    sidebarTab === "history"
+      ? "border-b-2 border-accent text-accent"
+      : "text-text-subtle hover:text-text-primary",
+  ].join(" ");
 
   return (
     <>
@@ -32,22 +43,14 @@ export function LeftSidebar({
         <div className="flex items-center border-b border-border-subtle/50">
           <button
             onClick={() => setSidebarTab("outline")}
-            className={`flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
-              sidebarTab === "outline"
-                ? "text-accent border-b-2 border-accent"
-                : "text-text-subtle hover:text-text-primary"
-            }`}
+            className={outlineTabClass}
             data-testid="sidebar-tab-outline"
           >
             {t("sidebar.outline")}
           </button>
           <button
             onClick={() => setSidebarTab("history")}
-            className={`flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
-              sidebarTab === "history"
-                ? "text-accent border-b-2 border-accent"
-                : "text-text-subtle hover:text-text-primary"
-            }`}
+            className={historyTabClass}
             data-testid="sidebar-tab-history"
           >
             {t("sidebar.history")}
@@ -66,7 +69,6 @@ export function LeftSidebar({
           </div>
         ) : null}
       </aside>
-      {/* Sidebar resize handle */}
       <ResizeHandle onDragStart={onDragStart} />
     </>
   );

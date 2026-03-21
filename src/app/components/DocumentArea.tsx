@@ -1,9 +1,6 @@
 import { FolderOpen } from "lucide-react";
 import { useDocumentStore } from "@/stores";
-import {
-  MarkdownViewer,
-  type HeadingInfo,
-} from "@/features/documents";
+import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
 import {
   SelectionCatcher,
   AnnotationPopup,
@@ -36,17 +33,20 @@ export function DocumentArea({
   onOpenFile,
 }: DocumentAreaProps) {
   const t = useT();
-  const isReadOnly = useDocumentStore((s) => s.isReadOnly);
+  const isReadOnly = useDocumentStore((state) => state.isReadOnly);
 
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <div className="flex">
-          {/* Document column */}
-          <div className="flex-1 min-w-0" style={{ padding: "0 24px" }}>
+          <div
+            className="flex-1 min-w-0"
+            style={{ padding: "0 var(--content-shell-padding, 24px)" }}
+          >
             {replyContent ? (
               <div
-                className="relative mx-auto max-w-4xl"
+                className="relative mx-auto"
+                style={{ maxWidth: "var(--content-max-width, 56rem)" }}
                 ref={viewerRef}
                 data-viewer-root
               >
@@ -56,7 +56,6 @@ export function DocumentArea({
                   onHeadingsChange={onHeadingsChange}
                 />
 
-                {/* M2: Annotation floating elements */}
                 {!isReadOnly ? <SelectionCatcher containerRef={viewerRef} /> : null}
                 <AnnotationOverlay containerRef={viewerRef} />
                 {!isReadOnly ? (
@@ -68,15 +67,15 @@ export function DocumentArea({
                 ) : null}
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center h-full min-h-[60vh]">
-                <div className="flex max-w-lg flex-col items-center justify-center gap-6 text-center transform -translate-y-12">
-                  <div className="text-5xl opacity-80 mb-2">📖</div>
-                  <h2 className="text-3xl font-bold text-text-strong tracking-tight">
+              <div className="flex h-full min-h-[60vh] flex-1 items-center justify-center">
+                <div className="flex max-w-lg -translate-y-12 transform flex-col items-center justify-center gap-6 text-center">
+                  <div className="mb-2 text-5xl opacity-80">📖</div>
+                  <h2 className="text-3xl font-bold tracking-tight text-text-strong">
                     cliV v0.2
                   </h2>
-                  <p className="text-base text-text-muted leading-relaxed">
+                  <p className="text-base leading-relaxed text-text-muted">
                     {t("docarea.hintUse")}{" "}
-                    <code className="bg-surface-card px-1.5 py-0.5 rounded-md text-sm font-mono text-text-primary border border-border-subtle mx-1">
+                    <code className="mx-1 rounded-md border border-border-subtle bg-surface-card px-1.5 py-0.5 text-sm font-mono text-text-primary">
                       cliv &lt;file.md&gt;
                     </code>{" "}
                     <br className="hidden sm:block" />
@@ -94,13 +93,11 @@ export function DocumentArea({
             )}
           </div>
 
-          {/* Annotation margin resize handle */}
           <ResizeHandle onDragStart={onMarginDragStart} />
 
-          {/* Annotation margin — inside the same scroll container */}
           <div
             style={{ width: `${marginWidth}px` }}
-            className="shrink-0 relative"
+            className="relative shrink-0"
           >
             <AnnotationList
               viewerRef={viewerRef}
@@ -110,7 +107,6 @@ export function DocumentArea({
         </div>
       </div>
 
-      {/* M3: ReturnBuilder — bottom panel, aligned to document column only */}
       {!isReadOnly ? (
         <div style={{ display: "flex", flexShrink: 0 }}>
           <div style={{ flex: 1, minWidth: 0 }}>

@@ -38,8 +38,7 @@ AI coding agents like **Codex**, **Claude Code**, and **Gemini CLI** produce lon
 | 📋 Write-back | Aggregate annotations → write back or copy |
 | 🔄 Multi-agent | Auto-detect Codex / Claude / Gemini |
 | 🗂️ Sessions | Persist review snapshots locally |
-| 🌙 Themes | Dark / muted / light switching |
-| 🔍 Font Scaling | Adjustable reading comfort |
+| 🎛️ Reading Settings | One surface for theme, font size, layout memory, and reading presets |
 
 ### Design Philosophy
 

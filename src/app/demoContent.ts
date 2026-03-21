@@ -17,6 +17,7 @@ cliV 把这段最别扭的流程接走：你在终端里继续写代码，在需
 | 选区批注 | 直接对具体段落加意见 |
 | 多批注聚合 | 自动整理成结构化 Prompt |
 | 写回或复制 | 有 compose target 就写回，没有就复制 |
+| 阅读设置 | 统一调整主题、字号、布局和高亮预设 |
 | 提交返回 | \`Ctrl+Enter\` 提交结果 |
 
 ## 工作流
@@ -222,6 +223,7 @@ cliV takes over the most uncomfortable part of that loop: you keep coding in the
 | Selection-based annotation | Comment directly on specific passages |
 | Multi-annotation aggregation | Turns annotations into a structured prompt |
 | Write-back or copy | Writes back when a compose target exists, otherwise copies |
+| Reading settings | One surface for theme, font size, layout memory, and reading presets |
 | Submit return | \`Ctrl+Enter\` submits the result |
 
 ## Workflow

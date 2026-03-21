@@ -85,8 +85,7 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
 - 🗂️ **Save sessions** — persist review snapshots and annotations locally (local-only for now)
-- 🌙 **Theme switching** — dark / muted / light
-- 🔍 **Font scaling** — adjust reading comfort
+- 🎛️ **Reading settings** — one settings surface for theme, font size, locale, layout memory, and reading presets
 
 ## Notes
 
