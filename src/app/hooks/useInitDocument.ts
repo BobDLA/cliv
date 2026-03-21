@@ -82,7 +82,7 @@ export function useInitDocument() {
         if (!replyContent || replyContent.trim() === "") {
           const plan = buildExtractionPlan(
             args.agent,
-            () => extractCodexReply(null, null),
+            () => extractCodexReply(null, args.workspacePath),
             () => extractClaudeReply(null),
             () => extractGeminiReply(null),
           );
@@ -105,11 +105,13 @@ export function useInitDocument() {
           targetPath: result.targetPath,
           reviewPath: result.reviewPath ?? args.reviewPath,
           replyPath: result.replyPath,
+          workspacePath: args.workspacePath,
           documentId:
             result.metadata?.turn?.id ??
             result.reviewPath ??
             result.replyPath ??
             "default",
+          isReadOnly: false,
         });
       } catch (e) {
         setError(
@@ -119,7 +121,7 @@ export function useInitDocument() {
     } else {
       // Browser dev mode: use demo content
       const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
-      setDocument({ reply: demoContent, documentId: "demo" });
+      setDocument({ reply: demoContent, documentId: "demo", isReadOnly: false });
     }
 
     setLoading(false);
@@ -160,6 +162,7 @@ export function openFileFromTauri(
             reviewPath: selected,
             replyPath: selected,
             documentId: selected.split("/").pop() ?? selected.split("\\").pop() ?? "file",
+            isReadOnly: false,
           });
           useAnnotationStore.getState().clearAnnotations();
         }

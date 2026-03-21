@@ -1,7 +1,6 @@
 use crate::logging;
 use serde::Deserialize;
 use std::fs;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
@@ -14,11 +13,11 @@ struct CacheMetaRecord {
 
 /// Read the cached Codex reply for a given cache key or thread-id.
 /// The cache is populated by `cliv cache-codex` (called from Codex notify hook).
-/// Returns an explicit error if no lookup key is available or cache/JSONL is missing.
+/// Returns an explicit error if no lookup key is available or cache is missing.
 #[tauri::command]
 pub fn extract_codex_reply(
     thread_id: Option<String>,
-    cwd: Option<String>,
+    _cwd: Option<String>,
 ) -> Result<String, String> {
     logging::timing("extract_codex_reply: start");
 
@@ -45,19 +44,12 @@ pub fn extract_codex_reply(
                 logging::log("  extract codex: resolved key from CODEX_THREAD_ID env var");
             }
             env_val
-        })
-        .or_else(|| {
-            let sqlite_val = resolve_thread_id_from_sqlite(&codex_home, cwd.as_deref());
-            if sqlite_val.is_some() {
-                logging::log("  extract codex: resolved key from SQLite");
-            }
-            sqlite_val
         });
 
     let source = if param_source == "parameter" {
         "parameter"
     } else if resolved_thread_id.is_some() {
-        "env_or_sqlite"
+        "env"
     } else {
         "none"
     };
@@ -116,17 +108,8 @@ pub fn extract_codex_reply_from(
         return reply;
     }
 
-    // Strategy 4: Parse JSONL via SQLite-resolved path (deterministic, no guessing)
-    if let Some(jsonl_path) = resolve_jsonl_from_sqlite(codex_home, &lookup_key) {
-        logging::log(&format!(
-            "  extract codex: trying JSONL path={}",
-            jsonl_path.display()
-        ));
-        return extract_last_reply_from_jsonl(&jsonl_path);
-    }
-
     Err(format!(
-        "Codex reply not found for key '{}'. Neither cache file, metadata match, nor JSONL found.",
+        "Codex reply not found for key '{}'. Neither cache file nor metadata match found.",
         lookup_key
     ))
 }
@@ -218,95 +201,77 @@ fn parse_cached_at(value: &str) -> Option<u64> {
     value.trim_end_matches('Z').parse::<u64>().ok()
 }
 
-fn resolve_thread_id_from_sqlite(codex_home: &Path, cwd: Option<&str>) -> Option<String> {
-    let cwd = cwd?;
-    let db_path = codex_home.join("state_5.sqlite");
-    if !db_path.exists() {
-        return None;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn setup_temp_home() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        fs::create_dir_all(dir.path().join("reply_cache"))
+            .expect("failed to create reply_cache dir");
+        dir
     }
 
-    let output = std::process::Command::new("sqlite3")
-        .arg(db_path.to_string_lossy().as_ref())
-        .arg(format!(
-            "SELECT id FROM threads WHERE cwd='{}' AND archived=0 ORDER BY updated_at DESC LIMIT 1;",
-            cwd.replace('\'', "''")
-        ))
-        .output()
-        .ok()?;
-
-    let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if id.is_empty() {
-        None
-    } else {
-        Some(id)
-    }
-}
-
-fn resolve_jsonl_from_sqlite(codex_home: &Path, thread_id: &str) -> Option<PathBuf> {
-    let db_path = codex_home.join("state_5.sqlite");
-    if !db_path.exists() {
-        return None;
+    #[test]
+    fn no_lookup_key_returns_error() {
+        let home = setup_temp_home();
+        let result = extract_codex_reply_from(home.path(), None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No Codex cache key found"));
     }
 
-    let output = std::process::Command::new("sqlite3")
-        .arg(db_path.to_string_lossy().as_ref())
-        .arg(format!(
-            "SELECT rollout_path FROM threads WHERE id='{}';",
-            thread_id.replace('\'', "''")
-        ))
-        .output()
-        .ok()?;
+    #[test]
+    fn pid_cache_hit() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("12345.md");
+        fs::write(&cache_path, "Hello from Codex").unwrap();
 
-    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path_str.is_empty() {
-        return None;
-    }
-    let path = PathBuf::from(&path_str);
-    if path.exists() {
-        Some(path)
-    } else {
-        None
-    }
-}
-
-fn extract_last_reply_from_jsonl(path: &PathBuf) -> Result<String, String> {
-    let file = fs::File::open(path).map_err(|e| format!("Failed to open JSONL: {}", e))?;
-    let reader = BufReader::new(file);
-
-    let mut last_reply: Option<String> = None;
-
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-
-        // Quick pre-filter to avoid parsing every line
-        if !line.contains("output_text") {
-            continue;
-        }
-
-        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(&line) {
-            if entry.get("type").and_then(|v| v.as_str()) == Some("response_item") {
-                if let Some(payload) = entry.get("payload") {
-                    if payload.get("role").and_then(|v| v.as_str()) == Some("assistant") {
-                        if let Some(content) = payload.get("content").and_then(|v| v.as_array()) {
-                            let texts: Vec<&str> = content
-                                .iter()
-                                .filter(|c| {
-                                    c.get("type").and_then(|v| v.as_str()) == Some("output_text")
-                                })
-                                .filter_map(|c| c.get("text").and_then(|v| v.as_str()))
-                                .collect();
-                            if !texts.is_empty() {
-                                last_reply = Some(texts.join("\n\n"));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let result = extract_codex_reply_from(home.path(), Some("12345".into()));
+        assert_eq!(result.unwrap(), "Hello from Codex");
     }
 
-    last_reply.ok_or_else(|| "No assistant reply found in JSONL".to_string())
+    #[test]
+    fn meta_match_hit() {
+        let home = setup_temp_home();
+        let cache_dir = home.path().join("reply_cache");
+
+        // Write the .md file keyed by PID
+        fs::write(cache_dir.join("99999.md"), "Meta matched reply").unwrap();
+
+        // Write the .meta.json that links thread-id → PID file
+        let meta = serde_json::json!({
+            "agent": "codex",
+            "key": "99999",
+            "real_session_id": "thread_abc123",
+            "cached_at": "1700000000Z"
+        });
+        fs::write(
+            cache_dir.join("99999.meta.json"),
+            serde_json::to_string(&meta).unwrap(),
+        )
+        .unwrap();
+
+        // Look up by thread-id — should resolve via metadata
+        let result = extract_codex_reply_from(home.path(), Some("thread_abc123".into()));
+        assert_eq!(result.unwrap(), "Meta matched reply");
+    }
+
+    #[test]
+    fn legacy_cache_hit() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("thread-old-style.md");
+        fs::write(&cache_path, "Legacy reply").unwrap();
+
+        let result = extract_codex_reply_from(home.path(), Some("thread-old-style".into()));
+        assert_eq!(result.unwrap(), "Legacy reply");
+    }
+
+    #[test]
+    fn no_cache_file_returns_error() {
+        let home = setup_temp_home();
+        let result = extract_codex_reply_from(home.path(), Some("nonexistent-key".into()));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found for key"));
+    }
 }

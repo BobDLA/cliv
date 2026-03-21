@@ -97,9 +97,8 @@ notify = ["cliv", "cache-codex"]
 ### Extraction fallback chain
 
 1. **PID cache hit**: `CODEX_THREAD_ID` (compatibility env name for the active Codex cache key, usually the agent PID) → `~/.codex/reply_cache/{pid}.md`
-2. **SQLite query**: Match CWD in `~/.codex/state_5.sqlite` to resolve the current thread ID
-3. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `real_session_id` matches that thread ID
-4. **JSONL scan**: Read the rollout path recorded in SQLite
+2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `real_session_id` matches the lookup key
+3. **Legacy cache hit**: Direct file match `~/.codex/reply_cache/{thread-id}.md`
 
 ---
 

@@ -97,9 +97,8 @@ notify = ["cliv", "cache-codex"]
 ### 提取回退链
 
 1. **PID 缓存命中**：`CODEX_THREAD_ID`（保留的兼容变量名，实际通常承载当前 Codex 的 PID 缓存键）→ `~/.codex/reply_cache/{pid}.md`
-2. **SQLite 查询**：在 `~/.codex/state_5.sqlite` 中按 CWD 解析当前 thread ID
-3. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `real_session_id` 等于该 thread ID 的最新记录
-4. **JSONL 扫描**：读取 SQLite 中记录的 rollout 路径
+2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `real_session_id` 等于查找键的最新记录
+3. **传统缓存命中**：直接匹配 `~/.codex/reply_cache/{thread-id}.md`
 
 ---
 
