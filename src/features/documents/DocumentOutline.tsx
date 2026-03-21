@@ -50,6 +50,8 @@ export const DocumentOutline = memo(function DocumentOutline({
           className="group flex w-full items-start rounded-md px-2 py-1.5 text-left text-[0.85em] leading-[1.4] transition-colors hover:bg-surface-hover"
           style={{ paddingLeft: `${(heading.level - minLevel) * 16 + 8}px` }}
           title={heading.text}
+          data-testid="outline-item"
+          data-heading-id={heading.id}
         >
           <span className="truncate text-text-muted group-hover:text-text-primary transition-colors">
             {heading.text}

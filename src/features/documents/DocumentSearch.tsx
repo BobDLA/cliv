@@ -21,6 +21,15 @@ export const DocumentSearch = memo(function DocumentSearch({
   const [currentMatch, setCurrentMatch] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const clearHighlights = useCallback(() => {
+    if (typeof CSS !== "undefined" && CSS.highlights) {
+      CSS.highlights.delete("search-results");
+      CSS.highlights.delete("search-current");
+    }
+    setMatchCount(0);
+    setCurrentMatch(0);
+  }, []);
+
   // Toggle search with Ctrl+F
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -43,7 +52,7 @@ export const DocumentSearch = memo(function DocumentSearch({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
+  }, [clearHighlights, isOpen]);
 
   // Focus input when opened
   useEffect(() => {
@@ -51,15 +60,6 @@ export const DocumentSearch = memo(function DocumentSearch({
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [isOpen]);
-
-  const clearHighlights = useCallback(() => {
-    if (typeof CSS !== "undefined" && CSS.highlights) {
-      CSS.highlights.delete("search-results");
-      CSS.highlights.delete("search-current");
-    }
-    setMatchCount(0);
-    setCurrentMatch(0);
-  }, []);
 
   const search = useCallback(
     (searchQuery: string) => {

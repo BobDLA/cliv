@@ -1,6 +1,10 @@
-import { useEffect } from "react";
-import { useDocumentStore, useUIStore } from "@/stores";
-import { useAnnotationStore } from "@/stores";
+import { useEffect, useCallback } from "react";
+import {
+  useAnnotationStore,
+  useConfigStore,
+  useDocumentStore,
+  useUIStore,
+} from "@/stores";
 import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
 
 // Check if running inside Tauri
@@ -39,80 +43,91 @@ function buildExtractionPlan(
 
 /**
  * Hook: initialize document from CLI args (Tauri) or demo content (browser dev).
- *
- * Agent reply extraction priority is determined by CLIV_AGENT:
- *   - codex:   Codex → Claude → Gemini
- *   - claude:  Claude → Gemini → Codex
- *   - gemini:  Gemini → Claude → Codex
- *   - unknown: Claude → Gemini → Codex (original default)
  */
 export function useInitDocument() {
   const { setDocument, setLoading, setError } = useDocumentStore();
+  const setAppConfig = useConfigStore((s) => s.setAppConfig);
   const locale = useUIStore((s) => s.locale);
 
-  useEffect(() => {
-    async function init() {
-      setLoading(true);
+  const loadDocument = useCallback(async () => {
+    setLoading(true);
 
-      if (isTauri) {
-        try {
-          const {
-            getCliArgs,
-            loadFiles,
-            extractCodexReply,
-            extractClaudeReply,
-            extractGeminiReply,
-          } = await import("@/services/tauri-ipc");
-          const args = await getCliArgs();
-          const result = await loadFiles(args.composePath, args.metadataPath);
+    if (isTauri) {
+      try {
+        const {
+          getAppConfig,
+          getCliArgs,
+          loadFiles,
+          extractCodexReply,
+          extractClaudeReply,
+          extractGeminiReply,
+        } = await import("@/services/tauri-ipc");
+        const appConfig = await getAppConfig();
+        setAppConfig(appConfig);
+        const args = await getCliArgs();
+        const result = await loadFiles(
+          args.reviewPath,
+          args.targetPath,
+          args.metadataPath,
+        );
 
-          if (result.error && !result.reply) {
-            setError(result.error);
-            return;
-          }
+        if (result.error && !result.reply) {
+          setError(result.error);
+          setLoading(false);
+          return;
+        }
 
-          // Try to extract the last reply using cached hooks
-          let replyContent = result.reply;
-          if (!replyContent || replyContent.trim() === "") {
-            const plan = buildExtractionPlan(
-              args.agent,
-              () => extractCodexReply(null, null),
-              () => extractClaudeReply(null),
-              () => extractGeminiReply(null),
-            );
+        // Try to extract the last reply using cached hooks
+        let replyContent = result.reply;
+        if (!replyContent || replyContent.trim() === "") {
+          const plan = buildExtractionPlan(
+            args.agent,
+            () => extractCodexReply(null, null),
+            () => extractClaudeReply(null),
+            () => extractGeminiReply(null),
+          );
 
-            for (const attempt of plan) {
-              const reply = await attempt();
-              if (reply) {
-                replyContent = reply;
-                break;
-              }
+          for (const attempt of plan) {
+            const reply = await attempt();
+            if (reply) {
+              replyContent = reply;
+              break;
             }
           }
-
-          setDocument({
-            reply: replyContent,
-            compose: result.compose,
-            composePath: result.composePath,
-            replyPath: result.replyPath,
-            documentId: result.metadata?.turn?.id ?? "default",
-          });
-        } catch (e) {
-          setError(
-            `加载失败: ${e instanceof Error ? e.message : String(e)}`,
-          );
         }
-      } else {
-        // Browser dev mode: use demo content
-        const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
-        setDocument({ reply: demoContent, documentId: "demo" });
-      }
 
-      setLoading(false);
+        // Clear previous annotations on reload
+        useAnnotationStore.getState().clearAnnotations();
+
+        setDocument({
+          reply: replyContent,
+          target: result.target,
+          targetPath: result.targetPath,
+          reviewPath: result.reviewPath ?? args.reviewPath,
+          replyPath: result.replyPath,
+          documentId:
+            result.metadata?.turn?.id ??
+            result.reviewPath ??
+            result.replyPath ??
+            "default",
+        });
+      } catch (e) {
+        setError(
+          `加载失败: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    } else {
+      // Browser dev mode: use demo content
+      const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
+      setDocument({ reply: demoContent, documentId: "demo" });
     }
 
-    init();
-  }, [setDocument, setLoading, setError, locale]);
+    setLoading(false);
+  }, [setAppConfig, setDocument, setLoading, setError, locale]);
+
+  useEffect(() => {
+    loadDocument();
+  }, [loadDocument]);
 }
 
 /**
@@ -140,6 +155,9 @@ export function openFileFromTauri(
           });
           setDocument({
             reply: content,
+            target: null,
+            targetPath: null,
+            reviewPath: selected,
             replyPath: selected,
             documentId: selected.split("/").pop() ?? selected.split("\\").pop() ?? "file",
           });

@@ -17,7 +17,7 @@ import { DocumentArea } from "./components/DocumentArea";
  */
 export function App() {
   const { theme, isFullscreen, toggleFullscreen } = useUIStore();
-  const { replyContent, composePath, isLoading, error, setDocument, setError } =
+  const { replyContent, reviewPath, isLoading, error, setDocument, setError } =
     useDocumentStore();
   const t = useT();
 
@@ -61,6 +61,9 @@ export function App() {
         if (content) {
           setDocument({
             reply: content,
+            target: null,
+            targetPath: null,
+            reviewPath: file.name,
             replyPath: file.name,
             documentId: file.name,
           });
@@ -74,7 +77,7 @@ export function App() {
       // Reset input so same file can be reopened
       e.target.value = "";
     },
-    [setDocument, setError],
+    [setDocument, setError, t],
   );
 
   // ─── Error State ────────────────────────────────────────
@@ -120,10 +123,11 @@ export function App() {
           onClick={toggleFullscreen}
           className="fixed right-4 top-4 z-50 rounded-lg border border-border-subtle bg-surface-popover p-2 text-text-muted shadow-lg hover:text-text-primary transition-colors"
           title={t("app.exitFullscreen")}
+          data-testid="fullscreen-exit"
         >
           <Minimize2 className="h-4 w-4" />
         </button>
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-4xl px-8 py-6">
           <MarkdownViewer content={replyContent} />
         </div>
       </div>
@@ -143,6 +147,7 @@ export function App() {
         accept=".md,.markdown,.txt"
         onChange={handleFileInputChange}
         className="hidden"
+        data-testid="browser-file-input"
       />
 
       <TopBar
@@ -158,7 +163,7 @@ export function App() {
           <LeftSidebar
             width={sidebarWidth}
             headings={headings}
-            composePath={composePath}
+            reviewPath={reviewPath}
             onDragStart={onSidebarDragStart}
           />
         )}

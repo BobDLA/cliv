@@ -1,3 +1,4 @@
+use crate::logging;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -7,6 +8,8 @@ use std::path::{Path, PathBuf};
 /// Returns an explicit error if no thread ID is available or cache/JSONL is missing.
 #[tauri::command]
 pub fn extract_codex_reply(thread_id: Option<String>, cwd: Option<String>) -> Result<String, String> {
+    logging::timing("extract_codex_reply: start");
+
     let codex_home = std::env::var("CODEX_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
@@ -15,11 +18,36 @@ pub fn extract_codex_reply(thread_id: Option<String>, cwd: Option<String>) -> Re
                 .join(".codex")
         });
 
-    let resolved_thread_id = thread_id
-        .or_else(|| std::env::var("CODEX_THREAD_ID").ok().filter(|s| !s.is_empty()))
-        .or_else(|| resolve_thread_id_from_sqlite(&codex_home, cwd.as_deref()));
+    let param_source = if thread_id.is_some() { "parameter" } else { "none" };
 
-    extract_codex_reply_from(&codex_home, resolved_thread_id)
+    let resolved_thread_id = thread_id
+        .or_else(|| {
+            let env_val = std::env::var("CODEX_THREAD_ID").ok().filter(|s| !s.is_empty());
+            if env_val.is_some() {
+                logging::log("  extract codex: resolved key from CODEX_THREAD_ID env var");
+            }
+            env_val
+        })
+        .or_else(|| {
+            let sqlite_val = resolve_thread_id_from_sqlite(&codex_home, cwd.as_deref());
+            if sqlite_val.is_some() {
+                logging::log("  extract codex: resolved key from SQLite");
+            }
+            sqlite_val
+        });
+
+    let source = if param_source == "parameter" { "parameter" }
+        else if resolved_thread_id.is_some() { "env_or_sqlite" }
+        else { "none" };
+
+    logging::log(&format!(
+        "  extract codex: resolved_key={:?} source={}",
+        resolved_thread_id, source
+    ));
+
+    let result = extract_codex_reply_from(&codex_home, resolved_thread_id);
+    logging::timing("extract_codex_reply: done");
+    result
 }
 
 /// Testable inner function: reads Codex reply cache from a given home directory.
@@ -30,7 +58,13 @@ pub fn extract_codex_reply_from(
     // Strategy 1: Read from notify hook cache
     if let Some(ref tid) = thread_id {
         let cache_path = codex_home.join("reply_cache").join(format!("{}.md", tid));
+        logging::log(&format!("  extract codex: trying cache path={}", cache_path.display()));
         if cache_path.exists() {
+            logging::log(&format!(
+                "  extract codex: HIT cache file={} size={}",
+                cache_path.display(),
+                fs::metadata(&cache_path).map(|m| m.len()).unwrap_or(0)
+            ));
             return fs::read_to_string(&cache_path)
                 .map_err(|e| format!("Failed to read reply cache: {}", e));
         }
@@ -39,6 +73,7 @@ pub fn extract_codex_reply_from(
     // Strategy 2: Parse JSONL via SQLite-resolved path (deterministic, no guessing)
     if let Some(ref tid) = thread_id {
         if let Some(jsonl_path) = resolve_jsonl_from_sqlite(codex_home, tid) {
+            logging::log(&format!("  extract codex: trying JSONL path={}", jsonl_path.display()));
             return extract_last_reply_from_jsonl(&jsonl_path);
         }
     }

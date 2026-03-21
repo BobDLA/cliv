@@ -1,30 +1,6 @@
+use crate::config::{canonicalize_process_name, AppConfig};
+use crate::logging;
 use serde::Serialize;
-use std::fs::OpenOptions;
-use std::io::Write;
-
-/// Cross-platform log file path
-fn log_file_path() -> String {
-    #[cfg(windows)]
-    {
-        let tmp = std::env::var("TEMP").unwrap_or_else(|_| r"C:\TEMP".to_string());
-        format!(r"{}\cliv.log", tmp)
-    }
-    #[cfg(not(windows))]
-    {
-        "/tmp/cliv.log".to_string()
-    }
-}
-
-/// Append a line to cliv.log (best-effort, never panics).
-fn log(msg: &str) {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(log_file_path()) {
-        let _ = writeln!(f, "[{}] {}", ts, msg);
-    }
-}
 
 /// How cliV was invoked.
 #[derive(Debug, Clone)]
@@ -40,15 +16,18 @@ pub enum CliMode {
 }
 
 /// CLI arguments parsed from `std::env::args()` and environment variables.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliArgs {
-    pub compose_path: Option<String>,
+    pub review_path: Option<String>,
+    pub target_path: Option<String>,
     pub metadata_path: Option<String>,
     pub file_path: Option<String>,
     /// Which agent triggered the launch: "codex", "claude", "gemini", or "unknown".
     /// Auto-detected from environment variables.
     pub agent: Option<String>,
+    /// Which trusted caller matched the parent process chain, if any.
+    pub trusted_caller: Option<String>,
 }
 
 /// Full CLI parse result containing both mode and GUI args.
@@ -57,111 +36,87 @@ pub struct CliParsed {
     pub args: CliArgs,
 }
 
+#[derive(Debug, Clone)]
+struct ParentProcess {
+    pid: u32,
+    name: String,
+    level: usize,
+}
+
 impl CliParsed {
-    pub fn from_env() -> Self {
+    pub fn from_env(config: &AppConfig) -> Self {
         let argv: Vec<String> = std::env::args().collect();
 
-        log("═══════════════════════════════════════════════════");
-        log(&format!("cliV started  PID={}", std::process::id()));
-        log(&format!("  argv={:?}", argv));
-        log(&format!("  CWD={}", std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default()));
-        log(&format!("  CLIV_AGENT={}", std::env::var("CLIV_AGENT").unwrap_or_default()));
-        log(&format!("  CODEX_THREAD_ID={}", std::env::var("CODEX_THREAD_ID").unwrap_or_default()));
-        log(&format!("  CODEX_HOME={}", std::env::var("CODEX_HOME").unwrap_or_default()));
-        log(&format!("  CLAUDE_SESSION_ID={}", std::env::var("CLAUDE_SESSION_ID").unwrap_or_default()));
-        log(&format!("  GEMINI_SESSION_ID={}", std::env::var("GEMINI_SESSION_ID").unwrap_or_default()));
+        logging::log("═══════════════════════════════════════════════════");
+        logging::log(&format!("cliV started  PID={}", std::process::id()));
+        logging::log(&format!("  argv={:?}", argv));
+        logging::debug(&format!(
+            "  CWD={}",
+            std::env::current_dir()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default()
+        ));
+        logging::debug(&format!(
+            "  CLIV_AGENT={}",
+            std::env::var("CLIV_AGENT").unwrap_or_default()
+        ));
+        logging::debug(&format!(
+            "  CODEX_THREAD_ID={}",
+            std::env::var("CODEX_THREAD_ID").unwrap_or_default()
+        ));
+        logging::debug(&format!(
+            "  CLAUDE_SESSION_ID={}",
+            std::env::var("CLAUDE_SESSION_ID").unwrap_or_default()
+        ));
+        logging::debug(&format!(
+            "  GEMINI_SESSION_ID={}",
+            std::env::var("GEMINI_SESSION_ID").unwrap_or_default()
+        ));
 
         // Check for subcommand first
         if argv.len() >= 2 {
             match argv[1].as_str() {
                 "cache-codex" => {
                     let json = argv.get(2).cloned().unwrap_or_default();
-                    log(&format!("  mode=cache-codex  json_len={}", json.len()));
+                    logging::log(&format!("  mode=cache-codex  json_len={}", json.len()));
                     return CliParsed {
                         mode: CliMode::CacheCodex(json),
-                        args: CliArgs {
-                            compose_path: None,
-                            metadata_path: None,
-                            file_path: None,
-                            agent: None,
-                        },
+                        args: CliArgs::default(),
                     };
                 }
                 "cache-claude" => {
-                    log("  mode=cache-claude (stdin)");
+                    logging::log("  mode=cache-claude (stdin)");
                     return CliParsed {
                         mode: CliMode::CacheClaude,
-                        args: CliArgs {
-                            compose_path: None,
-                            metadata_path: None,
-                            file_path: None,
-                            agent: None,
-                        },
+                        args: CliArgs::default(),
                     };
                 }
                 "cache-gemini" => {
-                    log("  mode=cache-gemini (stdin)");
+                    logging::log("  mode=cache-gemini (stdin)");
                     return CliParsed {
                         mode: CliMode::CacheGemini,
-                        args: CliArgs {
-                            compose_path: None,
-                            metadata_path: None,
-                            file_path: None,
-                            agent: None,
-                        },
+                        args: CliArgs::default(),
                     };
                 }
                 _ => {}
             }
         }
 
-        // GUI mode: parse args + auto-detect agent
-        let agent = detect_agent();
-        log(&format!("  mode=gui  detected_agent={:?}", agent));
+        let process_chain = collect_parent_processes(config.launch.scan_depth);
+        let agent = detect_agent(&process_chain);
+        let trusted_caller = detect_trusted_caller(config, &process_chain);
 
-        let mut args = CliArgs {
-            compose_path: None,
-            metadata_path: None,
-            file_path: None,
-            agent,
-        };
+        logging::log(&format!(
+            "  mode=gui  detected_agent={:?} trusted_caller={:?}",
+            agent, trusted_caller
+        ));
 
-        let mut i = 1;
-        while i < argv.len() {
-            match argv[i].as_str() {
-                "--metadata" => {
-                    if i + 1 < argv.len() {
-                        args.metadata_path = Some(argv[i + 1].clone());
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                }
-                "--compose" => {
-                    if i + 1 < argv.len() {
-                        args.compose_path = Some(argv[i + 1].clone());
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                }
-                arg if !arg.starts_with('-') => {
-                    if args.file_path.is_none() {
-                        args.file_path = Some(arg.to_string());
-                        if args.compose_path.is_none() {
-                            args.compose_path = Some(arg.to_string());
-                        }
-                    }
-                    i += 1;
-                }
-                _ => {
-                    i += 1;
-                }
-            }
-        }
+        let args = parse_gui_args(&argv[1..], agent, trusted_caller);
 
-        log(&format!("  compose_path={:?}  file_path={:?}", args.compose_path, args.file_path));
-        log(&format!("  CODEX_THREAD_ID (after detect)={}", std::env::var("CODEX_THREAD_ID").unwrap_or_default()));
+        logging::log(&format!(
+            "  review_path={:?} target_path={:?} file_path={:?}",
+            args.review_path, args.target_path, args.file_path
+        ));
 
         CliParsed {
             mode: CliMode::Gui,
@@ -170,46 +125,148 @@ impl CliParsed {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
-// Agent detection (shared logic)
-// ═══════════════════════════════════════════════════════════
+/// Parse GUI-mode arguments from an argv slice (excluding the binary name).
+fn parse_gui_args(
+    argv: &[String],
+    agent: Option<String>,
+    trusted_caller: Option<String>,
+) -> CliArgs {
+    let mut metadata_path = None;
+    let mut explicit_target = None;
+    let mut positional_path = None;
 
-/// Auto-detect which agent triggered the launch from environment variables
-/// and process tree inspection (anti-crosstalk for Codex).
-fn detect_agent() -> Option<String> {
-    // Explicit override
+    let mut i = 0;
+    while i < argv.len() {
+        match argv[i].as_str() {
+            "--metadata" => {
+                if i + 1 < argv.len() {
+                    metadata_path = Some(argv[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--compose" | "--target" | "-t" => {
+                if i + 1 < argv.len() {
+                    explicit_target = Some(argv[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            arg if arg.starts_with('-') => {
+                i += 1;
+            }
+            arg => {
+                if positional_path.is_none() {
+                    positional_path = Some(arg.to_string());
+                }
+                i += 1;
+            }
+        }
+    }
+
+    let (review_path, target_path) =
+        resolve_launch_paths(positional_path.clone(), explicit_target, trusted_caller.clone());
+
+    CliArgs {
+        review_path,
+        target_path,
+        metadata_path,
+        file_path: positional_path,
+        agent,
+        trusted_caller,
+    }
+}
+
+fn resolve_launch_paths(
+    positional_path: Option<String>,
+    explicit_target: Option<String>,
+    trusted_caller: Option<String>,
+) -> (Option<String>, Option<String>) {
+    match (positional_path, explicit_target, trusted_caller) {
+        (review_path, Some(target_path), _) => (review_path, Some(target_path)),
+        (Some(target_path), None, Some(_)) => (None, Some(target_path)),
+        (Some(review_path), None, None) => (Some(review_path), None),
+        (None, None, _) => (None, None),
+    }
+}
+
+fn detect_agent(process_chain: &[ParentProcess]) -> Option<String> {
     if let Ok(agent) = std::env::var("CLIV_AGENT") {
         if !agent.is_empty() {
-            log(&format!("  detect: CLIV_AGENT={} → using override", agent));
+            logging::log(&format!("  detect: CLIV_AGENT={} → using override", agent));
             return Some(agent);
         }
     }
 
-    // Check explicit session env vars first
-    if std::env::var("CODEX_THREAD_ID").ok().filter(|s| !s.is_empty()).is_some() {
-        log("  detect: CODEX_THREAD_ID set → codex");
+    if std::env::var("CODEX_THREAD_ID")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        logging::log("  detect: CODEX_THREAD_ID set → codex");
         return Some("codex".to_string());
     }
 
-    if std::env::var("CLAUDE_SESSION_ID").ok().filter(|s| !s.is_empty()).is_some() {
-        log("  detect: CLAUDE_SESSION_ID set → claude");
+    if std::env::var("CLAUDE_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        logging::log("  detect: CLAUDE_SESSION_ID set → claude");
         return Some("claude".to_string());
     }
 
-    if std::env::var("GEMINI_SESSION_ID").ok().filter(|s| !s.is_empty()).is_some() {
-        log("  detect: GEMINI_SESSION_ID set → gemini");
+    if std::env::var("GEMINI_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        logging::log("  detect: GEMINI_SESSION_ID set → gemini");
         return Some("gemini".to_string());
     }
 
-    log("  detect: no session env vars found, trying parent process...");
+    logging::debug("  detect: no session env vars found, trying parent process...");
 
-    // Process tree heuristic: check parent process chain.
-    if let Some(agent) = detect_agent_from_parent_process() {
-        log(&format!("  detect: parent process → {}", agent));
-        return Some(agent);
+    for process in process_chain {
+        if let Some(agent) = match_agent_name(&process.name) {
+            return handle_agent_match(agent, process.pid, process.level);
+        }
     }
 
-    log("  detect: no agent detected");
+    logging::log("  detect: no agent detected");
+    None
+}
+
+fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) -> Option<String> {
+    for process in process_chain {
+        let canonical_name = canonicalize_process_name(&process.name);
+
+        if matches_any(&canonical_name, &config.launch.ignored_callers) {
+            logging::debug(&format!(
+                "  trust[{}]: skipping ignored caller '{}' (canonical='{}')",
+                process.level, process.name, canonical_name
+            ));
+            continue;
+        }
+
+        if matches_any(&canonical_name, &config.launch.trusted_callers) {
+            logging::log(&format!(
+                "  trust[{}]: matched trusted caller '{}' (canonical='{}') at pid={}",
+                process.level, process.name, canonical_name, process.pid
+            ));
+            return Some(canonical_name);
+        }
+
+        logging::debug(&format!(
+            "  trust[{}]: first non-wrapper caller '{}' (canonical='{}') is not trusted",
+            process.level, process.name, canonical_name
+        ));
+        return None;
+    }
+
+    logging::debug("  trust: no trusted caller matched");
     None
 }
 
@@ -218,20 +275,34 @@ fn detect_agent() -> Option<String> {
 fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<String> {
     let pid_str = agent_pid.to_string();
     let (env_var, agent) = match agent_name {
-        "codex"  => ("CODEX_THREAD_ID", "codex"),
+        "codex" => ("CODEX_THREAD_ID", "codex"),
         "claude" => ("CLAUDE_SESSION_ID", "claude"),
         "gemini" => ("GEMINI_SESSION_ID", "gemini"),
         _ => return None,
     };
 
-    log(&format!("  walk[{}]: matched {} at pid={}", level, agent, agent_pid));
+    logging::log(&format!(
+        "  walk[{}]: matched {} at pid={}",
+        level, agent, agent_pid
+    ));
 
-    if std::env::var(env_var).ok().filter(|s| !s.is_empty()).is_none() {
-        log(&format!("  walk[{}]: set {}={}", level, env_var, pid_str));
+    if std::env::var(env_var)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .is_none()
+    {
+        logging::log(&format!(
+            "  walk[{}]: set {}={} (source=parent_process_pid)",
+            level, env_var, pid_str
+        ));
         std::env::set_var(env_var, &pid_str);
     }
 
     Some(agent.to_string())
+}
+
+fn matches_any(name: &str, patterns: &[String]) -> bool {
+    patterns.iter().any(|pattern| name == pattern)
 }
 
 /// Check if a process name matches a known agent.
@@ -252,39 +323,45 @@ fn match_agent_name(comm: &str) -> Option<&'static str> {
 // ═══════════════════════════════════════════════════════════
 
 #[cfg(target_os = "linux")]
-fn detect_agent_from_parent_process() -> Option<String> {
+fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> {
+    let mut processes = Vec::new();
     let mut pid = std::os::unix::process::parent_id();
 
-    for level in 0..5 {
+    for level in 0..scan_depth {
         if pid <= 1 {
-            log(&format!("  walk[{}]: pid={} (init), stopping", level, pid));
+            logging::debug(&format!("  walk[{}]: pid={} (init), stopping", level, pid));
             break;
         }
 
-        // Read process name from /proc/PID/comm
         let comm = match std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
             Ok(s) => s.trim().to_lowercase(),
             Err(e) => {
-                log(&format!("  walk[{}]: pid={} read comm failed: {}", level, pid, e));
+                logging::debug(&format!(
+                    "  walk[{}]: pid={} read comm failed: {}",
+                    level, pid, e
+                ));
                 break;
             }
         };
 
-        log(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        processes.push(ParentProcess {
+            pid,
+            name: comm,
+            level,
+        });
 
-        if let Some(agent) = match_agent_name(&comm) {
-            return handle_agent_match(agent, pid, level);
-        }
-
-        // Walk up: read PPID from /proc/PID/stat
         let stat = match std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
             Ok(s) => s,
             Err(e) => {
-                log(&format!("  walk[{}]: pid={} read stat failed: {}", level, pid, e));
+                logging::debug(&format!(
+                    "  walk[{}]: pid={} read stat failed: {}",
+                    level, pid, e
+                ));
                 break;
             }
         };
-        // Format: "PID (name) S PPID ..." — find last ')' to skip process name
+
         let after_name = match stat.rfind(')') {
             Some(pos) => &stat[pos + 2..],
             None => break,
@@ -294,64 +371,66 @@ fn detect_agent_from_parent_process() -> Option<String> {
             None => break,
         };
         pid = match ppid_str.parse::<u32>() {
-            Ok(p) => p,
+            Ok(ppid) => ppid,
             Err(_) => break,
         };
     }
 
-    None
+    processes
 }
-
-
 
 // ═══════════════════════════════════════════════════════════
 // macOS implementation — uses libproc / sysctl
 // ═══════════════════════════════════════════════════════════
 
 #[cfg(target_os = "macos")]
-fn detect_agent_from_parent_process() -> Option<String> {
+fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> {
+    let mut processes = Vec::new();
     let mut pid = std::os::unix::process::parent_id();
 
-    for level in 0..5 {
+    for level in 0..scan_depth {
         if pid <= 1 {
-            log(&format!("  walk[{}]: pid={} (init/launchd), stopping", level, pid));
+            logging::debug(&format!(
+                "  walk[{}]: pid={} (init/launchd), stopping",
+                level, pid
+            ));
             break;
         }
 
         let comm = match macos_proc_name(pid) {
             Some(name) => name.to_lowercase(),
             None => {
-                log(&format!("  walk[{}]: pid={} proc_name failed", level, pid));
+                logging::debug(&format!("  walk[{}]: pid={} proc_name failed", level, pid));
                 break;
             }
         };
 
-        log(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        processes.push(ParentProcess {
+            pid,
+            name: comm,
+            level,
+        });
 
-        if let Some(agent) = match_agent_name(&comm) {
-            return handle_agent_match(agent, pid, level);
-        }
-
-        // Walk up: get parent PID via sysctl
         pid = match macos_ppid(pid) {
             Some(ppid) => ppid,
             None => {
-                log(&format!("  walk[{}]: pid={} cannot get ppid", level, pid));
+                logging::debug(&format!("  walk[{}]: pid={} cannot get ppid", level, pid));
                 break;
             }
         };
     }
 
-    None
+    processes
 }
 
 /// Get process name on macOS using proc_name() from libproc.
 #[cfg(target_os = "macos")]
 fn macos_proc_name(pid: u32) -> Option<String> {
-    // proc_name() is available in libproc.h on macOS
     extern "C" {
         fn proc_name(pid: i32, buffer: *mut u8, buffersize: u32) -> i32;
     }
+
     let mut buf = [0u8; 256];
     let len = unsafe { proc_name(pid as i32, buf.as_mut_ptr(), buf.len() as u32) };
     if len > 0 {
@@ -377,48 +456,49 @@ fn macos_ppid(pid: u32) -> Option<u32> {
 // ═══════════════════════════════════════════════════════════
 
 #[cfg(target_os = "windows")]
-fn detect_agent_from_parent_process() -> Option<String> {
-    // Build a PID -> (process_name, parent_pid) map from system snapshot
+fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> {
     let process_map = match win_build_process_map() {
-        Some(m) => m,
+        Some(map) => map,
         None => {
-            log("  walk: failed to build process map");
-            return None;
+            logging::log("  walk: failed to build process map");
+            return Vec::new();
         }
     };
 
-    // Get own PID, then walk parents
     let own_pid = std::process::id();
     let mut pid = match process_map.get(&own_pid) {
         Some((_, ppid)) => *ppid,
-        None => return None,
+        None => return Vec::new(),
     };
 
-    for level in 0..5 {
+    let mut processes = Vec::new();
+
+    for level in 0..scan_depth {
         if pid == 0 {
-            log(&format!("  walk[{}]: pid=0 (System), stopping", level, ));
+            logging::debug(&format!("  walk[{}]: pid=0 (System), stopping", level));
             break;
         }
 
         let (name, ppid) = match process_map.get(&pid) {
             Some(entry) => entry.clone(),
             None => {
-                log(&format!("  walk[{}]: pid={} not in snapshot", level, pid));
+                logging::debug(&format!("  walk[{}]: pid={} not in snapshot", level, pid));
                 break;
             }
         };
 
         let comm = name.to_lowercase();
-        log(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
-
-        if let Some(agent) = match_agent_name(&comm) {
-            return handle_agent_match(agent, pid, level);
-        }
+        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
+        processes.push(ParentProcess {
+            pid,
+            name: comm,
+            level,
+        });
 
         pid = ppid;
     }
 
-    None
+    processes
 }
 
 /// Build a map of PID -> (exe_name, parent_pid) using CreateToolhelp32Snapshot.
@@ -426,7 +506,6 @@ fn detect_agent_from_parent_process() -> Option<String> {
 fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32)>> {
     use std::collections::HashMap;
 
-    // Windows API constants
     const TH32CS_SNAPPROCESS: u32 = 0x00000002;
     const INVALID_HANDLE_VALUE: isize = -1;
     const MAX_PATH: usize = 260;
@@ -464,7 +543,11 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 
     let mut ok = unsafe { Process32FirstW(snapshot, &mut entry) };
     while ok != 0 {
-        let name_len = entry.sz_exe_file.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
+        let name_len = entry
+            .sz_exe_file
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(MAX_PATH);
         let name = String::from_utf16_lossy(&entry.sz_exe_file[..name_len]);
 
         map.insert(
@@ -478,7 +561,178 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 
     unsafe { CloseHandle(snapshot) };
 
-    log(&format!("  win: built process map with {} entries", map.len()));
+    logging::debug(&format!("  win: built process map with {} entries", map.len()));
     Some(map)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{detect_trusted_caller, parse_gui_args, resolve_launch_paths, ParentProcess};
+    use crate::config::{AppConfig, LaunchConfig, PromptConfig};
+
+    fn test_config() -> AppConfig {
+        AppConfig {
+            launch: LaunchConfig {
+                scan_depth: 5,
+                trusted_callers: vec!["codex".into(), "mycli".into()],
+                ignored_callers: vec!["bash".into(), "sh".into()],
+            },
+            prompts: PromptConfig::default(),
+        }
+    }
+
+    #[test]
+    fn explicit_target_keeps_positional_as_review_path() {
+        let argv = vec![
+            "--target".to_string(),
+            "draft.md".to_string(),
+            "review.md".to_string(),
+        ];
+        let args = parse_gui_args(&argv, None, None);
+
+        assert_eq!(args.review_path.as_deref(), Some("review.md"));
+        assert_eq!(args.target_path.as_deref(), Some("draft.md"));
+    }
+
+    #[test]
+    fn trusted_caller_turns_lone_positional_into_target() {
+        let argv = vec!["draft.md".to_string()];
+        let args = parse_gui_args(&argv, None, Some("codex".to_string()));
+
+        assert_eq!(args.review_path, None);
+        assert_eq!(args.target_path.as_deref(), Some("draft.md"));
+    }
+
+    #[test]
+    fn explicit_target_beats_trusted_caller_fallback() {
+        let argv = vec![
+            "--target".to_string(),
+            "draft.md".to_string(),
+            "review.md".to_string(),
+        ];
+        let args = parse_gui_args(&argv, None, Some("codex".to_string()));
+
+        assert_eq!(args.review_path.as_deref(), Some("review.md"));
+        assert_eq!(args.target_path.as_deref(), Some("draft.md"));
+    }
+
+    #[test]
+    fn compose_alias_sets_target_path() {
+        let argv = vec![
+            "--compose".to_string(),
+            "draft.md".to_string(),
+            "review.md".to_string(),
+        ];
+        let args = parse_gui_args(&argv, None, None);
+
+        assert_eq!(args.review_path.as_deref(), Some("review.md"));
+        assert_eq!(args.target_path.as_deref(), Some("draft.md"));
+    }
+
+    #[test]
+    fn short_target_alias_sets_target_path() {
+        let argv = vec!["-t".to_string(), "draft.md".to_string(), "review.md".to_string()];
+        let args = parse_gui_args(&argv, None, None);
+
+        assert_eq!(args.review_path.as_deref(), Some("review.md"));
+        assert_eq!(args.target_path.as_deref(), Some("draft.md"));
+    }
+
+    #[test]
+    fn standalone_lone_positional_stays_review_only() {
+        let (review_path, target_path) =
+            resolve_launch_paths(Some("note.md".into()), None, None);
+
+        assert_eq!(review_path.as_deref(), Some("note.md"));
+        assert_eq!(target_path, None);
+    }
+
+    #[test]
+    fn trusted_caller_skips_ignored_wrappers() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[
+                ParentProcess {
+                    pid: 10,
+                    name: "bash".into(),
+                    level: 0,
+                },
+                ParentProcess {
+                    pid: 11,
+                    name: "codex".into(),
+                    level: 1,
+                },
+            ],
+        );
+
+        assert_eq!(caller.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn trusted_caller_matches_canonical_exact_name_only() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[ParentProcess {
+                pid: 13,
+                name: "/Applications/Codex.exe".into(),
+                level: 0,
+            }],
+        );
+
+        assert_eq!(caller.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn trusted_caller_does_not_match_substrings() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[ParentProcess {
+                pid: 14,
+                name: "my-codex-wrapper".into(),
+                level: 0,
+            }],
+        );
+
+        assert_eq!(caller, None);
+    }
+
+    #[test]
+    fn untrusted_first_non_wrapper_stops_trust_walk() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[
+                ParentProcess {
+                    pid: 15,
+                    name: "bash".into(),
+                    level: 0,
+                },
+                ParentProcess {
+                    pid: 16,
+                    name: "neovim".into(),
+                    level: 1,
+                },
+                ParentProcess {
+                    pid: 17,
+                    name: "codex".into(),
+                    level: 2,
+                },
+            ],
+        );
+
+        assert_eq!(caller, None);
+    }
+
+    #[test]
+    fn untrusted_caller_does_not_enable_target_fallback() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[ParentProcess {
+                pid: 12,
+                name: "neovim".into(),
+                level: 0,
+            }],
+        );
+
+        assert_eq!(caller, None);
+    }
+}

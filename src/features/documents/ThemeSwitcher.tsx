@@ -42,6 +42,7 @@ export const ThemeSwitcher = memo(function ThemeSwitcher() {
             role="radio"
             aria-checked={active}
             title={t(item.titleKey)}
+            data-testid={`theme-option-${item.value}`}
             style={{
               display: "flex",
               alignItems: "center",

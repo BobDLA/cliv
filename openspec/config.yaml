@@ -1,0 +1,37 @@
+schema: spec-driven
+
+context: |
+  项目：`cliV`
+  定位：从命令行启动的桌面 GUI 审阅器，用于阅读长篇 AI Agent 回复和 Markdown 草稿，并支持批注、汇总、写回。
+
+  稳定边界：
+  - 技术栈是 React + Vite + Zustand + TailwindCSS，后端是 Tauri v2 (Rust)
+  - 支持 Codex、Claude Code、Gemini CLI 集成
+  - 核心行为包括 agent reply review、annotations、write-back；没有可写回目标时可回退到 clipboard
+  - OpenSpec 只记录稳定行为、边界和契约，不记录一次性实现细节
+
+  文档约定：
+  - 仓库文档以中文为主；OpenSpec 结构标记、代码、路径、命令名保持 English
+  - 修改公开使用方式时，注意对应中英文文档是否需要同步
+
+rules:
+  proposal:
+    - 只为用户可见行为、集成契约、持久化/文件格式、打包/运行方式变化创建 proposal。
+    - 纯重构、命名整理或局部实现替换，默认不需要 spec 变更。
+    - 写清影响范围：frontend UI、Tauri/Rust backend、CLI/integration contract、docs/package。
+
+  specs:
+    - 只写可观察行为和稳定契约，例如 CLI 行为、env/config、agent detection、write-back/fallback、持久化边界、用户可见 UI 行为。
+    - 不写组件拆分、store 结构、临时日志、内部启发式等实现细节。
+    - 修改现有 requirement 时复制完整 requirement block；说明可用中文，但结构标记保持 English。
+
+  design:
+    - 仅在跨模块、跨边界、难回滚或影响集成契约时编写 design。
+    - design 关注数据流、边界、失败路径和 fallback，不展开琐碎实现步骤。
+    - 涉及平台差异或运行环境差异时，明确适用范围和未覆盖范围。
+
+  tasks:
+    - 按依赖顺序拆分，并覆盖 implementation、tests/verification、docs。
+    - 变更涉及用户可见流程、agent integration 或持久化行为时，必须包含验证工作。
+    - 文档或公开使用方式变化时，明确是否同步对应中英文文档。
+    - bug fix 在可行时补回归保护；若缺少自动化测试，记录可复现的手动验证方式。

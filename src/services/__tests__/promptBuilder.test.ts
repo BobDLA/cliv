@@ -96,5 +96,26 @@ describe("buildPrompt", () => {
     expect(result).toContain("> 有空格");
     expect(result).not.toContain("  有空格  ");
   });
-});
 
+  it("should use configured prompt header overrides when provided", () => {
+    const result = buildPrompt([makeAnnotation()], "zh", {
+      replyHeaderZh: "请按自定义模板回复。",
+      replyHeaderEn: null,
+      iterateHeaderZh: null,
+      iterateHeaderEn: null,
+    });
+
+    expect(result).toContain("# 请按自定义模板回复。");
+  });
+
+  it("should use the english reply header override when provided", () => {
+    const result = buildPrompt([makeAnnotation()], "en", {
+      replyHeaderZh: null,
+      replyHeaderEn: "Use this custom English header.",
+      iterateHeaderZh: null,
+      iterateHeaderEn: null,
+    });
+
+    expect(result).toContain("# Use this custom English header.");
+  });
+});

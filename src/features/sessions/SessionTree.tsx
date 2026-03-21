@@ -4,6 +4,9 @@ import { useSessionStore, useAnnotationStore, useDocumentStore } from "@/stores"
 import type { SessionSummary } from "@/services/sessionService";
 import { useT } from "@/lib/useT";
 
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 /**
  * SessionTree — left sidebar component showing saved sessions.
  * Displays session history sorted by most recent, with session name,
@@ -25,16 +28,38 @@ export const SessionTree = memo(function SessionTree() {
   }, [refreshSessions]);
 
   const handleOpen = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const session = openSession(id);
       if (session) {
         // Restore annotations into the annotation store
         useAnnotationStore.getState().setAnnotations(session.annotations);
-        // Set document path
+
         if (session.documentPath) {
-          useDocumentStore.getState().setDocument({
-            composePath: session.documentPath,
-          });
+          if (isTauri) {
+            try {
+              const { readFile } = await import("@/services/tauri-ipc");
+              const content = await readFile(session.documentPath);
+              useDocumentStore.getState().setDocument({
+                reply: content,
+                reviewPath: session.documentPath,
+                target: null,
+                targetPath: null,
+                replyPath: session.documentPath,
+                documentId:
+                  session.documentPath.split("/").pop() ??
+                  session.documentPath.split("\\").pop() ??
+                  session.documentPath,
+              });
+            } catch {
+              useDocumentStore.getState().setDocument({
+                reviewPath: session.documentPath,
+              });
+            }
+          } else {
+            useDocumentStore.getState().setDocument({
+              reviewPath: session.documentPath,
+            });
+          }
         }
       }
     },
@@ -59,6 +84,7 @@ export const SessionTree = memo(function SessionTree() {
           fontSize: "0.85rem",
           fontFamily: "var(--font-sans)",
         }}
+        data-testid="session-tree-empty"
       >
         <Clock
           style={{
@@ -85,6 +111,7 @@ export const SessionTree = memo(function SessionTree() {
         padding: "4px",
         fontFamily: "var(--font-sans)",
       }}
+      data-testid="session-tree"
     >
       {sessions.map((s) => (
         <SessionItem
@@ -116,6 +143,8 @@ const SessionItem = memo(function SessionItem({
   return (
     <div
       onClick={() => onOpen(session.id)}
+      data-testid="session-item"
+      data-session-id={session.id}
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -186,6 +215,7 @@ const SessionItem = memo(function SessionItem({
         type="button"
         onClick={(e) => onDelete(e, session.id)}
         title={t("session.deleteTitle")}
+        data-testid="session-delete"
         style={{
           padding: "2px",
           border: "none",

@@ -11,8 +11,8 @@
 cliV 是一个单一二进制文件，无需任何外部依赖（不需要 Python、Bash）。
 
 1. **Agent hook** 在每次回复后调用 `cliv cache-xxx` → 缓存到磁盘
-2. **你按下 Ctrl+G** → Agent 调用 `$EDITOR`（即 `cliv`）
-3. **cliV** 自动检测是哪个 Agent 调用的，加载缓存的回复，打开 GUI
+2. **你按下 Ctrl+G** → Agent 调用 `$EDITOR`（通常就是 `cliv`）
+3. **cliV** 自动检测是哪个 Agent 调用的，并结合显式参数或受信调用方规则决定写回目标，再打开 GUI
 
 ```
 Agent 完成一次回复
@@ -22,8 +22,10 @@ Agent 完成一次回复
 
 你按下 Ctrl+G
     ↓ $EDITOR = cliv
-    cliv --compose <file>
+    cliv <file>                 # 兼容旧式调用
+    或 cliv --target <file>     # 调用方支持显式参数时推荐
     ↓ 通过环境变量自动检测 Agent
+    ↓ 通过显式参数或 trusted caller 规则解析写回目标
     ↓ 加载缓存的回复
     cliV GUI 打开
 ```
@@ -45,6 +47,31 @@ cp cliv ~/.local/bin/
 ```bash
 # ~/.bashrc 或 ~/.zshrc
 export EDITOR="cliv"
+```
+
+如果你的调用方支持传额外参数，也可以显式使用：
+
+```bash
+export EDITOR="cliv --target"
+```
+
+如果调用方只能传 `cliv <file>`，cliV 会在命中受信调用方时把这个位置参数当成写回目标；普通独立打开则保持为只读审阅模式。
+
+### 可选：配置 trusted caller 与提示词模板
+
+编辑 `~/.cliv/config.toml`：
+
+```toml
+[launch]
+scan_depth = 5
+trusted_callers = ["codex", "claude", "gemini"]
+ignored_callers = ["bash", "zsh", "fish", "tmux", "launchd", "open"]
+
+[prompts]
+reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
+reply_header_en = "Please respond to each annotation below in Markdown."
+iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
+iterate_header_en = "Please make incremental revisions based on the following annotations."
 ```
 
 ### 第 3 步：配置 Agent Hook
@@ -148,6 +175,13 @@ cliV 是一个单一二进制文件。不需要 Python、Bash、Node.js 或任�
 ### Agent 自动检测
 
 当作为 `$EDITOR` 启动时，cliV 通过环境变量（`CODEX_THREAD_ID`、`CLAUDE_SESSION_ID`、`GEMINI_SESSION_ID`）自动检测调用的 Agent。除非你想手动覆盖，否则不需要设置 `CLIV_AGENT` 环境变量。
+
+### 启动模式
+
+- `cliv file.md`：把 `file.md` 当作审阅内容打开，不直接写回这个文件。
+- `cliv --target draft.md` / `cliv -t draft.md`：把 `draft.md` 作为显式写回目标。
+- `cliv --compose draft.md`：兼容旧调用方式，语义等同于 `--target`。
+- 若命中 `trusted_callers` 且只收到一个位置参数：该参数会被视为写回目标，用于兼容只会调用 `cliv <file>` 的 CLI。
 
 ### 提取优先级
 

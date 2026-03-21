@@ -1,25 +1,16 @@
-import { useEffect, useRef, useState, memo } from "react";
+import { useEffect, useRef, useState, memo, useCallback } from "react";
 import mermaid from "mermaid";
+import { useUIStore } from "@/stores/uiStore";
+import { ImageLightbox } from "@/features/documents/ImageLightbox";
 
 interface MermaidBlockProps {
   chart: string;
 }
 
-// Initialize mermaid once
-let mermaidInitialized = false;
-function ensureMermaidInit() {
-  if (mermaidInitialized) return;
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: "dark",
-    securityLevel: "loose",
-    fontFamily: "var(--font-sans)",
-  });
-  mermaidInitialized = true;
-}
-
 /**
  * MermaidBlock — renders a Mermaid diagram from a code string.
+ * Theme-aware: uses "default" for light, "dark" for dark/dim.
+ * Click-to-zoom: renders SVG to a data URL and opens in lightbox.
  * Falls back to showing the raw code on render failure (silent degradation).
  */
 export const MermaidBlock = memo(function MermaidBlock({
@@ -28,12 +19,24 @@ export const MermaidBlock = memo(function MermaidBlock({
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const theme = useUIStore((s) => s.theme);
+
+  // Re-initialize mermaid when theme changes
+  const mermaidTheme = theme === "light" ? "default" : "dark";
 
   useEffect(() => {
     let cancelled = false;
 
     async function render() {
-      ensureMermaidInit();
+      // Re-initialize with current theme every render
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: mermaidTheme,
+        securityLevel: "loose",
+        fontFamily: "var(--font-sans)",
+      });
+
       const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
       try {
@@ -55,7 +58,28 @@ export const MermaidBlock = memo(function MermaidBlock({
     return () => {
       cancelled = true;
     };
-  }, [chart]);
+  }, [chart, mermaidTheme]);
+
+  // Click-to-zoom: convert SVG to data URL for fullscreen lightbox
+  const handleClick = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const svgEl = container.querySelector("svg");
+    if (!svgEl) return;
+
+    // Serialize SVG to data URL
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    setLightboxSrc(url);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    if (lightboxSrc) {
+      URL.revokeObjectURL(lightboxSrc);
+    }
+    setLightboxSrc(null);
+  }, [lightboxSrc]);
 
   if (error) {
     return (
@@ -71,10 +95,17 @@ export const MermaidBlock = memo(function MermaidBlock({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`my-4 flex justify-center ${rendered ? "" : "min-h-[80px] animate-pulse rounded-lg bg-surface-card"}`}
-      data-testid="mermaid-block"
-    />
+    <>
+      <div
+        ref={containerRef}
+        onClick={handleClick}
+        className={`my-4 flex cursor-zoom-in justify-center ${rendered ? "" : "min-h-[80px] animate-pulse rounded-lg bg-surface-card"}`}
+        data-testid="mermaid-block"
+        title="点击放大"
+      />
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={closeLightbox} />
+      )}
+    </>
   );
 });

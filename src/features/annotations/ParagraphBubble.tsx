@@ -1,11 +1,20 @@
 import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { MessageSquare } from "lucide-react";
+import { MessageSquarePlus } from "lucide-react";
 import { useSelectionStore } from "@/stores";
 
+// Block-level selectors that can be annotated as a "paragraph"
+const BLOCK_SELECTOR =
+  "p, h1, h2, h3, h4, h5, h6, li, blockquote, table, pre";
+
 /**
- * ParagraphBubble — chat-bubble icon at paragraph right edge on hover.
- * Clicking annotates the entire paragraph.
- * Ref: doc/reference/image copy 5.png
+ * ParagraphBubble — floating annotation button that appears when hovering
+ * over a paragraph block in the document.
+ *
+ * Design v2:
+ *   - Positioned as a pill at the LEFT edge of the paragraph
+ *   - Larger hit area (32×32) with visible icon + background
+ *   - Highlights the target paragraph with a left accent border
+ *   - Snaps to nearest block-level element for reliable targeting
  */
 export const ParagraphBubble = memo(function ParagraphBubble({
   containerRef,
@@ -13,9 +22,11 @@ export const ParagraphBubble = memo(function ParagraphBubble({
   containerRef: React.RefObject<HTMLElement | null>;
 }) {
   const { setSelection, openPopup } = useSelectionStore();
-  const [bubble, setBubble] = useState<{
+  const [target, setTarget] = useState<{
     top: number;
-    right: number;
+    height: number;
+    barRightCss: number;
+    buttonRightCss: number;
     element: HTMLElement;
   } | null>(null);
   const hideTimerRef = useRef<number>(0);
@@ -27,38 +38,73 @@ export const ParagraphBubble = memo(function ParagraphBubble({
 
       // Don't show when popup is open
       if (useSelectionStore.getState().showPopup) {
-        setBubble(null);
+        setTarget(null);
         return;
       }
 
       // Don't show when user is selecting text
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) {
-        setBubble(null);
+        setTarget(null);
         return;
       }
 
-      const target = e.target as HTMLElement;
-      const paragraph = target.closest(
-        "p, h1, h2, h3, h4, h5, h6, li, blockquote",
-      ) as HTMLElement | null;
+      const el = e.target as HTMLElement;
 
-      if (!paragraph || !container.contains(paragraph)) {
+      // Find nearest block-level ancestor (skip inline elements like <span>, <code>, <a>)
+      const block = el.closest(BLOCK_SELECTOR) as HTMLElement | null;
+
+      if (!block || !container.contains(block)) {
         clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = window.setTimeout(() => setBubble(null), 200);
+        hideTimerRef.current = window.setTimeout(() => setTarget(null), 300);
+        return;
+      }
+
+      // Skip code blocks inside <pre> — they are not meaningful paragraphs
+      if (block.tagName === "PRE" || block.closest("pre")) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = window.setTimeout(() => setTarget(null), 800);
         return;
       }
 
       clearTimeout(hideTimerRef.current);
 
-      const pRect = paragraph.getBoundingClientRect();
-      const cRect = container.getBoundingClientRect();
+      const blockRect = block.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
 
-      setBubble({
-        top:
-          pRect.top - cRect.top + container.scrollTop + pRect.height / 2 - 12,
-        right: 0, // flush to container right edge
-        element: paragraph,
+      // Zoom correction: getBoundingClientRect returns viewport px,
+      // but CSS properties (right/top) need CSS px. Under page zoom they differ.
+      const zoom = containerRect.width / container.offsetWidth || 1;
+
+      // Vertical positioning in CSS px
+      const topCss =
+        (blockRect.top - containerRect.top) / zoom + container.scrollTop;
+      const heightCss = blockRect.height / zoom;
+
+      // Find the resize-handle divider by querying for its unique cursor style.
+      // We cannot rely on parentElement.nextElementSibling because the containerRef
+      // can be nested several levels deep inside the document column.
+      const scrollRoot = container.closest('.flex');
+      const handleEl = scrollRoot?.querySelector<HTMLElement>('[style*="col-resize"]') ?? null;
+      const handleRect = handleEl?.getBoundingClientRect() ?? null;
+
+      // Distance from container's right edge to the handle's left edge, in CSS px
+      const distCss = handleRect
+        ? (handleRect.left - containerRect.right) / zoom
+        : 24; // fallback: parent padding
+
+      // Button's right edge sits 2px left of the divider
+      const buttonRightCss = -(distCss - 2);
+
+      // Accent bar flush against the divider
+      const barRightCss = -(distCss - 1);
+
+      setTarget({
+        top: topCss,
+        height: heightCss,
+        barRightCss,
+        buttonRightCss,
+        element: block,
       });
     },
     [containerRef],
@@ -66,7 +112,7 @@ export const ParagraphBubble = memo(function ParagraphBubble({
 
   const handleMouseLeave = useCallback(() => {
     clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => setBubble(null), 300);
+    hideTimerRef.current = window.setTimeout(() => setTarget(null), 800);
   }, []);
 
   useEffect(() => {
@@ -83,11 +129,11 @@ export const ParagraphBubble = memo(function ParagraphBubble({
   }, [containerRef, handleMouseMove, handleMouseLeave]);
 
   const handleClick = useCallback(() => {
-    if (!bubble) return;
+    if (!target) return;
     const container = containerRef.current;
     if (!container) return;
 
-    const paragraph = bubble.element;
+    const paragraph = target.element;
     const text = paragraph.textContent?.trim() ?? "";
     if (!text) return;
 
@@ -127,48 +173,68 @@ export const ParagraphBubble = memo(function ParagraphBubble({
     });
 
     openPopup();
-  }, [bubble, containerRef, setSelection, openPopup]);
+  }, [target, containerRef, setSelection, openPopup]);
 
-  if (!bubble) return null;
+  if (!target) return null;
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      onMouseEnter={() => clearTimeout(hideTimerRef.current)}
-      onMouseLeave={handleMouseLeave}
-      title="批注整段"
-      style={{
-        position: "absolute",
-        top: `${bubble.top}px`,
-        right: "-36px",
-        width: "24px",
-        height: "24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: "var(--radius-sm)",
-        backgroundColor: "transparent",
-        color: "var(--color-text-faint)",
-        border: "none",
-        cursor: "pointer",
-        transition: "all 0.15s",
-        opacity: 0.5,
-      }}
-      onMouseOver={(e) => {
-        const el = e.currentTarget;
-        el.style.opacity = "1";
-        el.style.color = "var(--color-accent)";
-        el.style.backgroundColor = "var(--color-accent-glow)";
-      }}
-      onMouseOut={(e) => {
-        const el = e.currentTarget;
-        el.style.opacity = "0.5";
-        el.style.color = "var(--color-text-faint)";
-        el.style.backgroundColor = "transparent";
-      }}
-    >
-      <MessageSquare style={{ width: "14px", height: "14px" }} />
-    </button>
+    <>
+      {/* Left accent bar — shows which paragraph will be annotated */}
+      <div
+        style={{
+          position: "absolute",
+          top: `${target.top}px`,
+          right: `${target.barRightCss}px`,
+          width: "3px",
+          height: `${target.height}px`,
+          borderRadius: "2px",
+          backgroundColor: "var(--color-accent)",
+          opacity: 0.5,
+          transition: "top 0.12s ease-out, height 0.12s ease-out",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Annotation button — left gutter */}
+      <button
+        type="button"
+        onClick={handleClick}
+        onMouseEnter={() => clearTimeout(hideTimerRef.current)}
+        onMouseLeave={handleMouseLeave}
+        title="批注整段"
+        style={{
+          position: "absolute",
+          top: `${target.top + target.height / 2 - 12}px`,
+          right: `${target.buttonRightCss}px`,
+          width: "24px",
+          height: "24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "6px",
+          backgroundColor: "var(--color-accent-glow)",
+          color: "var(--color-accent)",
+          border: "1px solid var(--color-accent)",
+          cursor: "pointer",
+          transition: "all 0.15s ease-out",
+          opacity: 0.8,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+        onMouseOver={(e) => {
+          const el = e.currentTarget;
+          el.style.opacity = "1";
+          el.style.transform = "scale(1.1)";
+          el.style.boxShadow = "0 4px 12px rgba(59,130,246,0.3)";
+        }}
+        onMouseOut={(e) => {
+          const el = e.currentTarget;
+          el.style.opacity = "0.8";
+          el.style.transform = "scale(1)";
+          el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+        }}
+      >
+        <MessageSquarePlus style={{ width: "13px", height: "13px" }} />
+      </button>
+    </>
   );
 });

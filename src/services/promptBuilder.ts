@@ -1,5 +1,7 @@
 import type { Annotation } from "@/types";
 import { type Locale, messages } from "@/lib/locales";
+import type { PromptConfig } from "@/types";
+import { resolvePromptHeader } from "@/lib/promptTemplates";
 
 /** Resolve a i18n key for the given locale, with optional {n} interpolation */
 function t(locale: Locale, key: string, n?: number | string): string {
@@ -23,10 +25,14 @@ const PROMPT_KIND_KEYS: Record<string, string> = {
  * @param locale — 'zh' | 'en', defaults to 'zh'
  * @returns formatted markdown prompt string
  */
-export function buildPrompt(annotations: Annotation[], locale: Locale = "zh"): string {
+export function buildPrompt(
+  annotations: Annotation[],
+  locale: Locale = "zh",
+  promptConfig?: PromptConfig | null,
+): string {
   if (annotations.length === 0) return "";
 
-  const header = `# ${t(locale, "prompt.replyHeader")}`;
+  const header = `# ${resolvePromptHeader(locale, "reply", promptConfig)}`;
 
   const items = annotations.map((ann, i) => {
     const num = i + 1;
@@ -50,4 +56,3 @@ export function buildPrompt(annotations: Annotation[], locale: Locale = "zh"): s
 
   return header + "\n\n" + items.join("\n\n---\n\n");
 }
-

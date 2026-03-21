@@ -11,10 +11,17 @@ import {
   MessageSquare,
   LogOut,
 } from "lucide-react";
-import { useAnnotationStore, useReturnStore, useDocumentStore, useUIStore } from "@/stores";
+import {
+  useAnnotationStore,
+  useConfigStore,
+  useReturnStore,
+  useDocumentStore,
+  useUIStore,
+} from "@/stores";
 import { writeBack, closeWindow } from "@/services/writeBack";
 import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
+import { resolvePromptHeader } from "@/lib/promptTemplates";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -23,11 +30,6 @@ export type TemplateMode = "reply" | "iterate";
 const TEMPLATE_LABELS: Record<TemplateMode, { labelKey: string; descKey: string }> = {
   reply: { labelKey: "return.replyMode", descKey: "return.replyDesc" },
   iterate: { labelKey: "return.iterateMode", descKey: "return.iterateDesc" },
-};
-
-const TEMPLATE_HEADER_KEYS: Record<TemplateMode, string> = {
-  reply: "prompt.replyHeader",
-  iterate: "prompt.iterateHeader",
 };
 
 const PROMPT_KIND_KEYS: Record<string, string> = {
@@ -61,10 +63,11 @@ function getLineRange(text: string, startOffset?: number, endOffset?: number): [
  */
 export const ReturnBuilder = memo(function ReturnBuilder() {
   const annotations = useAnnotationStore((s) => s.annotations);
+  const promptConfig = useConfigStore((s) => s.promptConfig);
   const { selectedAnnotationIds, selectAll, deselectAll, toggleSelect } =
     useReturnStore();
-  const composePath = useDocumentStore((s) => s.composePath);
-  const composeContent = useDocumentStore((s) => s.composeContent);
+  const targetPath = useDocumentStore((s) => s.targetPath);
+  const targetContent = useDocumentStore((s) => s.targetContent);
   const t = useT();
   const uiLocale = useUIStore((s) => s.locale);
 
@@ -75,27 +78,29 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     return detectContentLocale(combinedText);
   }, [annotations, uiLocale]);
 
-  const [userText, setUserText] = useState(tl(contentLocale, TEMPLATE_HEADER_KEYS["reply"]));
+  const [userText, setUserText] = useState(
+    resolvePromptHeader(contentLocale, "reply", promptConfig),
+  );
   const [templateMode, setTemplateMode] = useState<TemplateMode>("reply");
 
   // Update default text automatically when contentLocale changes, 
   // if the user hasn't modified the default text manually.
   useEffect(() => {
     setUserText((prev) => {
-      const enText = tl("en", TEMPLATE_HEADER_KEYS[templateMode]);
-      const zhText = tl("zh", TEMPLATE_HEADER_KEYS[templateMode]);
+      const enText = resolvePromptHeader("en", templateMode, promptConfig);
+      const zhText = resolvePromptHeader("zh", templateMode, promptConfig);
       if (prev === enText || prev === zhText) {
-        return tl(contentLocale, TEMPLATE_HEADER_KEYS[templateMode]);
+        return resolvePromptHeader(contentLocale, templateMode, promptConfig);
       }
       return prev;
     });
-  }, [contentLocale, templateMode]);
+  }, [contentLocale, promptConfig, templateMode]);
 
   // Switch template → insert default text into editor (based on contentLocale)
   const handleSetTemplate = useCallback((mode: TemplateMode) => {
     setTemplateMode(mode);
-    setUserText(tl(contentLocale, TEMPLATE_HEADER_KEYS[mode]));
-  }, [contentLocale]);
+    setUserText(resolvePromptHeader(contentLocale, mode, promptConfig));
+  }, [contentLocale, promptConfig]);
 
   // Auto-select all annotations on mount and when annotations change
   useEffect(() => {
@@ -170,8 +175,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
       const kind = tl(contentLocale, kindKey);
       
       let linesInfo = "";
-      if (composeContent && ann.range) {
-        const lines = getLineRange(composeContent, ann.range.startOffset, ann.range.endOffset);
+      if (targetContent && ann.range) {
+        const lines = getLineRange(targetContent, ann.range.startOffset, ann.range.endOffset);
         if (lines) {
           if (lines[0] === lines[1]) {
             linesInfo = tl(contentLocale, "prompt.lineNumber", lines[0]);
@@ -196,7 +201,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
       ].join("\n");
     });
     return items.join("\n\n---\n\n");
-  }, [selectedAnns, contentLocale, composeContent]);
+  }, [selectedAnns, contentLocale, targetContent]);
 
   // Final combined output = user text + annotations
   const finalOutput = useMemo(() => {
@@ -220,7 +225,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     if (!hasContent) return;
     try {
       setWriteError(null);
-      const method = await writeBack(finalOutput, composePath);
+      const method = await writeBack(finalOutput, targetPath);
       if (method === "written") {
         setCopySuccess(true);
         // Auto-close window after successful file write-back (Codex flow)
@@ -232,7 +237,20 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     } catch (e) {
       setWriteError(e instanceof Error ? e.message : t("return.writeFail"));
     }
-  }, [finalOutput, composePath, hasContent]);
+  }, [finalOutput, hasContent, t, targetPath]);
+
+  // ── Ctrl+Enter global shortcut for submit ──
+  useEffect(() => {
+    if (collapsed) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [collapsed, handleSubmit]);
 
   return (
     <div
@@ -243,6 +261,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
         flexDirection: "column",
         flexShrink: 0,
       }}
+      data-testid="return-builder"
     >
       {/* ── Vertical resize handle (top border) ── */}
       <div
@@ -281,6 +300,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           cursor: "pointer",
         }}
         onClick={() => setCollapsed(!collapsed)}
+        data-testid="return-builder-header"
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Send
@@ -326,6 +346,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 type="button"
                 onClick={() => handleSetTemplate(mode)}
                 title={t(TEMPLATE_LABELS[mode].descKey)}
+                data-testid={`return-template-${mode}`}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -358,23 +379,25 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               </button>
             ))}
           </div>
-          {collapsed ? (
-            <ChevronUp
-              style={{
-                width: "14px",
-                height: "14px",
-                color: "var(--color-text-faint)",
-              }}
-            />
-          ) : (
-            <ChevronDown
-              style={{
-                width: "14px",
-                height: "14px",
-                color: "var(--color-text-faint)",
-              }}
-            />
-          )}
+          <span data-testid="return-builder-collapse-indicator" data-collapsed={collapsed ? "true" : "false"}>
+            {collapsed ? (
+              <ChevronUp
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  color: "var(--color-text-faint)",
+                }}
+              />
+            ) : (
+              <ChevronDown
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  color: "var(--color-text-faint)",
+                }}
+              />
+            )}
+          </span>
         </div>
       </div>
 
@@ -388,6 +411,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             height: `${panelHeight}px`,
             overflow: "hidden",
           }}
+          data-testid="return-builder-body"
         >
           {/* LEFT: user custom editor */}
           <div
@@ -415,6 +439,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               value={userText}
               onChange={(e) => setUserText(e.target.value)}
               placeholder={t("return.freeEditPlaceholder")}
+              data-testid="return-free-edit"
               style={{
                 flex: 1,
                 border: "none",
@@ -453,6 +478,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               flexDirection: "column",
               minWidth: 0,
             }}
+            data-testid="return-aggregate-panel"
           >
             <div
               style={{
@@ -472,6 +498,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 <button
                   type="button"
                   onClick={handleToggleAll}
+                  data-testid="return-select-all"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -516,6 +543,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   overflowY: "auto",
                   padding: "4px 6px",
                 }}
+                data-testid="return-annotation-list"
               >
                 {[...annotations]
                   .sort(
@@ -528,6 +556,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                     return (
                       <label
                         key={ann.id}
+                        data-testid="return-annotation-row"
+                        data-annotation-id={ann.id}
                         style={{
                           display: "flex",
                           gap: "6px",
@@ -555,6 +585,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(ann.id)}
+                          data-testid="return-annotation-checkbox"
                           style={{
                             accentColor: "var(--color-accent)",
                             marginTop: "2px",
@@ -623,7 +654,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             }}
           >
             {writeError && (
-              <span style={{ fontSize: "0.85rem", color: "#ef4444" }}>
+              <span style={{ fontSize: "0.85rem", color: "#ef4444" }} data-testid="return-status-error">
                 {writeError}
               </span>
             )}
@@ -636,6 +667,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   alignItems: "center",
                   gap: "4px",
                 }}
+                data-testid="return-status-success"
               >
                 <Check style={{ width: "12px", height: "12px" }} />
                 {t("return.copied")}
@@ -658,6 +690,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             type="button"
             disabled={!hasContent}
             onClick={handleSubmit}
+            data-testid="return-submit"
             style={{
               display: "flex",
               alignItems: "center",
@@ -666,7 +699,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               borderRadius: "6px",
               border: "none",
               backgroundColor: hasContent
-                ? composePath && isTauri ? "#10b981" : "#3b82f6"
+                ? targetPath && isTauri ? "#10b981" : "#3b82f6"
                 : "var(--color-text-faint)",
               color: "#fff",
               fontSize: "0.9rem",
@@ -677,10 +710,10 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               transition: "all 0.15s",
             }}
           >
-            {composePath && isTauri ? (
-              <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}</>
+            {targetPath && isTauri ? (
+              <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
             ) : (
-              <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}</>
+              <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
             )}
           </button>
         </div>

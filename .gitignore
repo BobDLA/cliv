@@ -9,6 +9,18 @@
 .idea
 # logs
 *.log
+/playwright-report
+/test-results
 # OS
 .DS_Store
 Thumbs.db
+
+docs/doc/*
+docs/doc
+handoffs/*
+.codex/
+.agent/
+.claude/
+.github/*
+!.github/workflows/
+!.github/workflows/*.yml

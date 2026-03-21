@@ -470,6 +470,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-window-state",
  "tempfile",
+ "toml 0.8.2",
 ]
 
 [[package]]

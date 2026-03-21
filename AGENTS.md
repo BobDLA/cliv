@@ -10,6 +10,8 @@ This file provides context for AI coding agents working on this codebase.
 - **Backend**: Tauri v2 (Rust) — handles CLI parsing, file I/O, and agent reply extraction
 - **Scripts**: Python cache scripts + Bash wrapper for `$EDITOR` integration
 
+- work on multi platform linux, macos, windows
+
 ## Architecture
 
 ```

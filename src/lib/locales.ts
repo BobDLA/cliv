@@ -64,7 +64,7 @@ const zh = {
   "time.daysAgo": "{n}天前",
 
   // ── Annotation: List ──
-  "annList.hint": "选中文本后点击「添加批注」增加批注",
+  "annList.hint": "选中文本后会直接弹出批注框",
 
   // ── Annotation: Popup ──
   "annPopup.comment": "批注",
@@ -185,7 +185,7 @@ const en: Record<keyof typeof zh, string> = {
   "time.daysAgo": "{n}d ago",
 
   // ── Annotation: List ──
-  "annList.hint": "Select text and click \"Annotate\" to add annotations",
+  "annList.hint": "Select text to open the annotation box instantly",
 
   // ── Annotation: Popup ──
   "annPopup.comment": "Comment",

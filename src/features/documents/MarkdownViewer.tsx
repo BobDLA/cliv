@@ -1,8 +1,8 @@
-import { memo, useMemo, useRef, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import type { Components } from "react-markdown";
+import { memo, useRef, useEffect, useState, useCallback } from "react";
+import MarkdownPreview from "@uiw/react-markdown-preview";
+import { useUIStore } from "@/stores/uiStore";
 import { MermaidBlock } from "./MermaidBlock";
+import { ImageLightbox } from "./ImageLightbox";
 
 interface MarkdownViewerProps {
   content: string;
@@ -18,8 +18,9 @@ export interface HeadingInfo {
 }
 
 /**
- * MarkdownViewer — renders Markdown with code highlighting, Mermaid, and GFM.
- * Designed for performance: no inline styles, Tailwind utility classes.
+ * MarkdownViewer — renders Markdown with @uiw/react-markdown-preview.
+ * Built-in: syntax highlighting, GitHub styling, GFM, GitHub Alerts.
+ * Custom: Mermaid blocks, image lightbox, heading extraction.
  */
 export const MarkdownViewer = memo(function MarkdownViewer({
   content,
@@ -29,6 +30,18 @@ export const MarkdownViewer = memo(function MarkdownViewer({
 }: MarkdownViewerProps) {
   const fallbackRef = useRef<HTMLDivElement>(null);
   const ref = containerRef ?? fallbackRef;
+  const theme = useUIStore((s) => s.theme);
+
+  // Image lightbox state
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  const openLightbox = useCallback((src: string) => {
+    setLightboxSrc(src);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxSrc(null);
+  }, []);
 
   // Extract headings after render for DocumentOutline
   useEffect(() => {
@@ -54,270 +67,112 @@ export const MarkdownViewer = memo(function MarkdownViewer({
     return () => cancelAnimationFrame(timer);
   }, [content, onHeadingsChange, ref]);
 
-  // Custom components for react-markdown
-  const components: Components = useMemo(
-    () => ({
-      // Headings with auto-generated IDs for anchor links
-      h1: ({ children, ...props }) => {
-        const text = extractText(children);
-        const id = slugify(text);
-        return (
-          <h1
-            id={id}
-            className="mt-8 mb-4 border-b border-border-subtle pb-2 text-[2em] font-semibold tracking-tight text-text-strong"
-            {...props}
-          >
-            {children}
-          </h1>
-        );
-      },
-      h2: ({ children, ...props }) => {
-        const text = extractText(children);
-        const id = slugify(text);
-        return (
-          <h2
-            id={id}
-            className="mt-6 mb-4 border-b border-border-subtle pb-2 text-[1.5em] font-semibold tracking-tight text-text-strong"
-            {...props}
-          >
-            {children}
-          </h2>
-        );
-      },
-      h3: ({ children, ...props }) => {
-        const text = extractText(children);
-        const id = slugify(text);
-        return (
-          <h3
-            id={id}
-            className="mt-6 mb-4 text-[1.25em] font-semibold tracking-tight text-text-strong"
-            {...props}
-          >
-            {children}
-          </h3>
-        );
-      },
-      h4: ({ children, ...props }) => {
-        const text = extractText(children);
-        const id = slugify(text);
-        return (
-          <h4
-            id={id}
-            className="mt-5 mb-3 text-[1em] font-semibold tracking-tight text-text-strong"
-            {...props}
-          >
-            {children}
-          </h4>
-        );
-      },
-      h5: ({ children, ...props }) => {
-        const text = extractText(children);
-        const id = slugify(text);
-        return (
-          <h5
-            id={id}
-            className="mt-4 mb-2 text-[0.875em] font-semibold tracking-tight text-text-strong"
-            {...props}
-          >
-            {children}
-          </h5>
-        );
-      },
-      h6: ({ children, ...props }) => {
-        const text = extractText(children);
-        const id = slugify(text);
-        return (
-          <h6
-            id={id}
-            className="mt-4 mb-2 text-[0.85em] font-semibold tracking-tight text-text-muted"
-            {...props}
-          >
-            {children}
-          </h6>
-        );
-      },
-
-      // Paragraphs
-      p: ({ children, ...props }) => (
-        <p className="mb-4 text-[0.95em] leading-[1.65] text-text-primary" {...props}>
-          {children}
-        </p>
-      ),
-
-      // Code blocks
-      code: ({ className: codeClassName, children, ...props }) => {
-        const match = /language-(\w+)/.exec(codeClassName || "");
-        const lang = match ? match[1] : "";
-        const codeStr = String(children).replace(/\n$/, "");
-
-        // Mermaid blocks
-        if (lang === "mermaid") {
-          return <MermaidBlock chart={codeStr} />;
-        }
-
-        // Inline code
-        if (!codeClassName) {
-          return (
-            <code
-              className="rounded-md bg-surface-hover px-[0.4em] py-[0.15em] font-mono text-[0.85em] text-text-strong"
-              {...props}
-            >
-              {children}
-            </code>
-          );
-        }
-
-        // Block code
-        return (
-          <div className="group relative mb-4">
-            {lang && (
-              <div className="absolute right-2 top-2 rounded bg-surface-card-strong px-2 py-0.5 font-sans text-[0.7rem] font-medium text-text-subtle opacity-0 transition-opacity group-hover:opacity-100">
-                {lang}
-              </div>
-            )}
-            <pre className="overflow-x-auto rounded-xl border border-border-subtle bg-surface-card p-4 font-mono text-[0.85em] leading-[1.6]">
-              <code className={codeClassName} {...props}>
-                {children}
-              </code>
-            </pre>
-          </div>
-        );
-      },
-
-      // Blockquotes
-      blockquote: ({ children, ...props }) => (
-        <blockquote
-          className="my-4 border-l-4 border-border-strong pl-4 text-text-subtle"
-          {...props}
-        >
-          {children}
-        </blockquote>
-      ),
-
-      // Lists
-      ul: ({ children, ...props }) => (
-        <ul className="mb-4 ml-5 list-disc space-y-2 text-[0.95em]" {...props}>
-          {children}
-        </ul>
-      ),
-      ol: ({ children, ...props }) => (
-        <ol className="mb-4 ml-5 list-decimal space-y-2 text-[0.95em]" {...props}>
-          {children}
-        </ol>
-      ),
-      li: ({ children, ...props }) => (
-        <li className="leading-[1.65] text-text-primary" {...props}>
-          {children}
-        </li>
-      ),
-
-      // Tables
-      table: ({ children, ...props }) => (
-        <div className="mb-4 overflow-x-auto rounded-lg border border-border-strong">
-          <table
-            className="w-full border-collapse text-[0.9em]"
-            {...props}
-          >
-            {children}
-          </table>
-        </div>
-      ),
-      thead: ({ children, ...props }) => (
-        <thead className="bg-surface-card-strong border-b border-border-strong" {...props}>
-          {children}
-        </thead>
-      ),
-      tr: ({ children, ...props }) => (
-        <tr className="even:bg-surface-hover border-b border-border-subtle last:border-0" {...props}>
-          {children}
-        </tr>
-      ),
-      th: ({ children, ...props }) => (
-        <th
-          className="border-x border-border-subtle px-4 py-2 text-left font-semibold text-text-strong"
-          {...props}
-        >
-          {children}
-        </th>
-      ),
-      td: ({ children, ...props }) => (
-        <td
-          className="border-x border-border-subtle px-4 py-2 text-text-primary"
-          {...props}
-        >
-          {children}
-        </td>
-      ),
-
-      // Links
-      a: ({ children, href, ...props }) => (
-        <a
-          href={href}
-          className="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent transition-colors"
-          target="_blank"
-          rel="noopener noreferrer"
-          {...props}
-        >
-          {children}
-        </a>
-      ),
-
-      // Horizontal rule
-      hr: () => <hr className="my-6 border-border-subtle" />,
-
-      // Strong / em
-      strong: ({ children, ...props }) => (
-        <strong className="font-semibold text-text-strong" {...props}>
-          {children}
-        </strong>
-      ),
-
-      // Images
-      img: ({ src, alt, ...props }) => (
-        <img
-          src={src}
-          alt={alt}
-          className="my-4 max-w-full rounded-lg border border-border-subtle"
-          loading="lazy"
-          {...props}
-        />
-      ),
-    }),
-    [],
-  );
+  // Map our theme to data-color-mode: "dark" | "dim" → "dark", "light" → "light"
+  const colorMode = theme === "light" ? "light" : "dark";
 
   return (
-    <div
-      ref={ref}
-      className={`prose-custom max-w-none px-8 py-6 ${className || ""}`}
-      data-testid="markdown-viewer"
-    >
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
-      </ReactMarkdown>
-    </div>
+    <>
+      <div
+        ref={ref}
+        className={`cliv-markdown-preview max-w-none px-12 py-6 ${className || ""}`}
+        data-testid="markdown-viewer"
+      >
+        <MarkdownPreview
+          source={content}
+          wrapperElement={{
+            "data-color-mode": colorMode,
+          }}
+          components={{
+            // Override pre to intercept Mermaid code blocks before rendering
+            pre: ({ children, ...props }) => {
+              // Check if this pre contains a mermaid code block
+              const codeChild = findCodeChild(children);
+              if (codeChild) {
+                const lang = getLangFromClassName(codeChild.props?.className);
+                if (lang === "mermaid") {
+                  // Extract raw text from the original markdown source
+                  const codeText = extractTextFromNode(codeChild);
+                  return <MermaidBlock chart={codeText} />;
+                }
+              }
+              return <pre {...props}>{children}</pre>;
+            },
+            // Override img to support lightbox click-to-zoom
+            img: ({ src, alt, ...props }) => (
+              <img
+                src={src}
+                alt={alt || ""}
+                className="cursor-zoom-in"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (src) openLightbox(src);
+                }}
+                {...props}
+              />
+            ),
+          }}
+        />
+      </div>
+
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={closeLightbox} />
+      )}
+    </>
   );
 });
 
 // ─── Helpers ──────────────────────────────────────────────
 
-function extractText(children: React.ReactNode): string {
-  if (typeof children === "string") return children;
-  if (Array.isArray(children)) return children.map(extractText).join("");
+/**
+ * Find a <code> React element within children (direct child of <pre>).
+ */
+function findCodeChild(
+  children: React.ReactNode,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any | null {
+  if (children == null) return null;
   if (
-    children != null &&
     typeof children === "object" &&
-    "props" in children
+    "type" in children &&
+    (children as { type: unknown }).type === "code"
   ) {
-    const el = children as { props: { children?: React.ReactNode } };
-    return extractText(el.props.children);
+    return children;
   }
-  return String(children ?? "");
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findCodeChild(child);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fff]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+/**
+ * Extract language from className like "language-mermaid" or "language-js".
+ */
+function getLangFromClassName(className?: string): string {
+  if (!className) return "";
+  const match = /language-(\w+)/.exec(className);
+  return match ? match[1] : "";
+}
+
+/**
+ * Recursively extract plain text from a React element tree.
+ * @uiw/react-markdown-preview wraps code tokens in <span> elements
+ * for syntax highlighting; this unwraps them to get raw text
+ * needed by MermaidBlock.
+ */
+function extractTextFromNode(node: React.ReactNode): string {
+  if (node == null) return "";
+  if (typeof node === "string") return node;
+  if (typeof node === "number" || typeof node === "boolean") return String(node);
+  if (Array.isArray(node)) return node.map(extractTextFromNode).join("");
+  if (typeof node === "object") {
+    // React element with props.children
+    if ("props" in node) {
+      const el = node as { props?: { children?: React.ReactNode } };
+      return extractTextFromNode(el.props?.children);
+    }
+  }
+  return String(node);
 }
