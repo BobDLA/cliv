@@ -39,7 +39,6 @@ describe("ReturnBuilder", () => {
     useUIStore.setState({
       theme: "light",
       fontSize: 18,
-      isFullscreen: false,
       locale: "en",
     });
   });

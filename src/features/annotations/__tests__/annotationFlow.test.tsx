@@ -118,7 +118,6 @@ describe("annotation selection flow", () => {
     useUIStore.setState({
       theme: "light",
       fontSize: 18,
-      isFullscreen: false,
       locale: "en",
     });
     window.getSelection()?.removeAllRanges();

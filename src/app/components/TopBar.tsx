@@ -1,5 +1,4 @@
 import {
-  Maximize2,
   ZoomIn,
   ZoomOut,
   BookOpen,
@@ -25,7 +24,7 @@ export function TopBar({
   onOpenFile,
   scrollContainerRef,
 }: TopBarProps) {
-  const { fontSize, adjustFontSize, toggleFullscreen, toggleLocale } = useUIStore();
+  const { fontSize, adjustFontSize, toggleLocale } = useUIStore();
   const t = useT();
 
   return (
@@ -122,18 +121,7 @@ export function TopBar({
           <span>GitHub</span>
         </a>
 
-        {/* Divider */}
-        <div className="h-4 w-px bg-border-subtle/40" />
 
-        {/* Fullscreen */}
-        <button
-          onClick={toggleFullscreen}
-          className="rounded-lg p-1.5 text-text-subtle hover:bg-surface-hover hover:text-text-primary transition-colors"
-          title={t("topbar.fullscreen")}
-          data-testid="topbar-fullscreen-toggle"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </button>
       </div>
     </div>
   );
