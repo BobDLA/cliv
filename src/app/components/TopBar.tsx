@@ -1,5 +1,4 @@
 import {
-  Maximize2,
   ZoomIn,
   ZoomOut,
   BookOpen,
@@ -25,7 +24,7 @@ export function TopBar({
   onOpenFile,
   scrollContainerRef,
 }: TopBarProps) {
-  const { fontSize, adjustFontSize, toggleFullscreen, toggleLocale } = useUIStore();
+  const { fontSize, adjustFontSize, toggleLocale } = useUIStore();
   const t = useT();
 
   return (
@@ -114,7 +113,7 @@ export function TopBar({
           href="https://github.com/BobDLA/cliv"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border-strong/70 bg-surface-panel px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-strong"
+          className="mr-1 inline-flex items-center gap-1.5 rounded-md border border-border-strong/70 bg-surface-panel px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-strong"
           title="View on GitHub"
           data-testid="topbar-github-link"
         >
@@ -122,18 +121,7 @@ export function TopBar({
           <span>GitHub</span>
         </a>
 
-        {/* Divider */}
-        <div className="h-4 w-px bg-border-subtle/40" />
 
-        {/* Fullscreen */}
-        <button
-          onClick={toggleFullscreen}
-          className="rounded-lg p-1.5 text-text-subtle hover:bg-surface-hover hover:text-text-primary transition-colors"
-          title={t("topbar.fullscreen")}
-          data-testid="topbar-fullscreen-toggle"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </button>
       </div>
     </div>
   );

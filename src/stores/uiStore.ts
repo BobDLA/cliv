@@ -36,12 +36,12 @@ function persist(key: string, value: string | number): void {
 interface UIState {
   theme: Theme;
   fontSize: number;
-  isFullscreen: boolean;
+
   locale: Locale;
   setTheme: (theme: Theme) => void;
   setFontSize: (size: number) => void;
   adjustFontSize: (delta: number) => void;
-  toggleFullscreen: () => void;
+
   setLocale: (locale: Locale) => void;
   toggleLocale: () => void;
 }
@@ -49,7 +49,7 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   theme: loadString<Theme>(KEY_THEME, "light"),
   fontSize: loadNumber(KEY_FONT_SIZE, 18),
-  isFullscreen: false,
+
   locale: loadString<Locale>(KEY_LOCALE, detectLocale()),
 
   setTheme: (theme) => {
@@ -78,7 +78,7 @@ export const useUIStore = create<UIState>((set) => ({
       return { fontSize: next };
     }),
 
-  toggleFullscreen: () => set((s) => ({ isFullscreen: !s.isFullscreen })),
+
 
   setLocale: (locale) => {
     persist(KEY_LOCALE, locale);

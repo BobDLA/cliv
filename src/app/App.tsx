@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useUIStore, useDocumentStore } from "@/stores";
-import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
-import { Minimize2, AlertCircle, Loader2 } from "lucide-react";
+import { type HeadingInfo } from "@/features/documents";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useT } from "@/lib/useT";
 
 import { useInitDocument, openFileFromTauri } from "./hooks/useInitDocument";
@@ -16,7 +16,7 @@ import { DocumentArea } from "./components/DocumentArea";
  * All logic lives in extracted hooks; all UI in extracted components.
  */
 export function App() {
-  const { theme, isFullscreen, toggleFullscreen } = useUIStore();
+  const { theme } = useUIStore();
   const { replyContent, isLoading, error, setDocument, setError } =
     useDocumentStore();
   const t = useT();
@@ -107,28 +107,6 @@ export function App() {
         <div className="flex items-center gap-3 text-text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span className="text-sm">{t("app.loading")}</span>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Fullscreen mode ────────────────────────────────────
-  if (isFullscreen && replyContent) {
-    return (
-      <div
-        className="fixed inset-0 z-50 overflow-auto bg-surface-app"
-        data-testid="fullscreen-view"
-      >
-        <button
-          onClick={toggleFullscreen}
-          className="fixed right-4 top-4 z-50 rounded-lg border border-border-subtle bg-surface-popover p-2 text-text-muted shadow-lg hover:text-text-primary transition-colors"
-          title={t("app.exitFullscreen")}
-          data-testid="fullscreen-exit"
-        >
-          <Minimize2 className="h-4 w-4" />
-        </button>
-        <div className="mx-auto max-w-4xl px-8 py-6">
-          <MarkdownViewer content={replyContent} />
         </div>
       </div>
     );
