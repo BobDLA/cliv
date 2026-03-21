@@ -1,6 +1,5 @@
-import { useState } from "react";
 import { Save } from "lucide-react";
-import { useSessionStore, useAnnotationStore } from "@/stores";
+import { useAnnotationStore, useSessionStore, useUIStore } from "@/stores";
 import { DocumentOutline, type HeadingInfo } from "@/features/documents";
 import { SessionTree } from "@/features/sessions";
 import { ResizeHandle } from "./ResizeHandle";
@@ -19,39 +18,45 @@ export function LeftSidebar({
   reviewPath,
   onDragStart,
 }: LeftSidebarProps) {
-  const [sidebarTab, setSidebarTab] = useState<"outline" | "history">(
-    "outline",
-  );
+  const sidebarTab = useUIStore((state) => state.sidebarTab);
+  const setSidebarTab = useUIStore((state) => state.setSidebarTab);
+  const locale = useUIStore((state) => state.locale);
   const { createNewSession, autoSave, currentSessionId } = useSessionStore();
-  const annotations = useAnnotationStore((s) => s.annotations);
+  const annotations = useAnnotationStore((state) => state.annotations);
   const t = useT();
+
+  const sessionLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const outlineTabClass = [
+    "flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors",
+    sidebarTab === "outline"
+      ? "text-accent border-b-2 border-accent"
+      : "text-text-subtle hover:text-text-primary",
+  ].join(" ");
+  const historyTabClass = [
+    "flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors",
+    sidebarTab === "history"
+      ? "text-accent border-b-2 border-accent"
+      : "text-text-subtle hover:text-text-primary",
+  ].join(" ");
 
   return (
     <>
       <aside
-        style={{ width: `${width}px` }}
+        style={{ width: String(width) + "px" }}
         className="flex shrink-0 flex-col bg-surface-sidebar"
         data-testid="left-sidebar"
       >
         <div className="flex items-center border-b border-border-subtle/50">
           <button
             onClick={() => setSidebarTab("outline")}
-            className={`flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
-              sidebarTab === "outline"
-                ? "text-accent border-b-2 border-accent"
-                : "text-text-subtle hover:text-text-primary"
-            }`}
+            className={outlineTabClass}
             data-testid="sidebar-tab-outline"
           >
             {t("sidebar.outline")}
           </button>
           <button
             onClick={() => setSidebarTab("history")}
-            className={`flex-1 px-3 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
-              sidebarTab === "history"
-                ? "text-accent border-b-2 border-accent"
-                : "text-text-subtle hover:text-text-primary"
-            }`}
+            className={historyTabClass}
             data-testid="sidebar-tab-history"
           >
             {t("sidebar.history")}
@@ -64,17 +69,27 @@ export function LeftSidebar({
             <SessionTree />
           )}
         </div>
-        {/* Save session button */}
         {sidebarTab === "history" && annotations.length > 0 && (
-          <div className="border-t border-border-subtle/50 p-2" data-testid="sidebar-history-actions">
+          <div
+            className="border-t border-border-subtle/50 p-2"
+            data-testid="sidebar-history-actions"
+          >
             <button
               onClick={() => {
                 if (currentSessionId) {
                   autoSave();
-                } else {
-                  const name = `Session ${new Date().toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
-                  createNewSession(name, reviewPath);
+                  return;
                 }
+
+                const name =
+                  "Session " +
+                  new Date().toLocaleString(sessionLocale, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                createNewSession(name, reviewPath);
               }}
               className="w-full flex items-center justify-center gap-2 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
               data-testid="sidebar-save-session"
@@ -85,7 +100,6 @@ export function LeftSidebar({
           </div>
         )}
       </aside>
-      {/* Sidebar resize handle */}
       <ResizeHandle onDragStart={onDragStart} />
     </>
   );

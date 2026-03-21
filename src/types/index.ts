@@ -109,9 +109,14 @@ export interface SelectionInfo {
   rect: { top: number; left: number; bottom: number; width: number };
 }
 
-// ─── Theme ────────────────────────────────────────────────
+// ─── UI Preferences ───────────────────────────────────────
 
 export type Theme = "dark" | "dim" | "light";
+export type SidebarTab = "outline" | "history";
+export type ContentWidth = "narrow" | "standard" | "wide";
+export type PagePadding = "compact" | "comfortable" | "airy";
+export type ReadingDensity = "compact" | "comfortable" | "relaxed";
+export type HighlightStrength = "subtle" | "balanced" | "strong";
 
 // ─── Return / Write-back ──────────────────────────────────
 

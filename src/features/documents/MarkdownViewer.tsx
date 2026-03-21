@@ -30,9 +30,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
 }: MarkdownViewerProps) {
   const fallbackRef = useRef<HTMLDivElement>(null);
   const ref = containerRef ?? fallbackRef;
-  const theme = useUIStore((s) => s.theme);
-
-  // Image lightbox state
+  const theme = useUIStore((state) => state.theme);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const openLightbox = useCallback((src: string) => {
@@ -43,17 +41,16 @@ export const MarkdownViewer = memo(function MarkdownViewer({
     setLightboxSrc(null);
   }, []);
 
-  // Extract headings after render for DocumentOutline
   useEffect(() => {
-    if (!onHeadingsChange || !ref.current) return;
+    if (onHeadingsChange == null || ref.current == null) return;
 
     const timer = requestAnimationFrame(() => {
       const container = ref.current;
-      if (!container) return;
+      if (container == null) return;
 
       const headingEls = container.querySelectorAll("h1, h2, h3, h4, h5, h6");
       const headings: HeadingInfo[] = Array.from(headingEls).map((el, i) => {
-        const id = el.id || `heading-${i}`;
+        const id = el.id || "heading-" + i;
         if (!el.id) el.id = id;
         return {
           id,
@@ -67,14 +64,20 @@ export const MarkdownViewer = memo(function MarkdownViewer({
     return () => cancelAnimationFrame(timer);
   }, [content, onHeadingsChange, ref]);
 
-  // Map our theme to data-color-mode: "dark" | "dim" → "dark", "light" → "light"
   const colorMode = theme === "light" ? "light" : "dark";
+  const rootClassName = ["cliv-markdown-preview max-w-none", className || ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <>
       <div
         ref={ref}
-        className={`cliv-markdown-preview max-w-none px-12 py-6 ${className || ""}`}
+        className={rootClassName}
+        style={{
+          padding:
+            "var(--viewer-padding-y, 24px) var(--viewer-padding-x, 48px)",
+        }}
         data-testid="markdown-viewer"
       >
         <MarkdownPreview
@@ -83,21 +86,17 @@ export const MarkdownViewer = memo(function MarkdownViewer({
             "data-color-mode": colorMode,
           }}
           components={{
-            // Override pre to intercept Mermaid code blocks before rendering
             pre: ({ children, ...props }) => {
-              // Check if this pre contains a mermaid code block
               const codeChild = findCodeChild(children);
               if (codeChild) {
                 const lang = getLangFromClassName(codeChild.props?.className);
                 if (lang === "mermaid") {
-                  // Extract raw text from the original markdown source
                   const codeText = extractTextFromNode(codeChild);
                   return <MermaidBlock chart={codeText} />;
                 }
               }
               return <pre {...props}>{children}</pre>;
             },
-            // Override img to support lightbox click-to-zoom
             img: ({ src, alt, ...props }) => (
               <img
                 src={src}
@@ -114,22 +113,12 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         />
       </div>
 
-      {lightboxSrc && (
-        <ImageLightbox src={lightboxSrc} onClose={closeLightbox} />
-      )}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={closeLightbox} />}
     </>
   );
 });
 
-// ─── Helpers ──────────────────────────────────────────────
-
-/**
- * Find a <code> React element within children (direct child of <pre>).
- */
-function findCodeChild(
-  children: React.ReactNode,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any | null {
+function findCodeChild(children: React.ReactNode): any | null {
   if (children == null) return null;
   if (
     typeof children === "object" &&
@@ -147,28 +136,18 @@ function findCodeChild(
   return null;
 }
 
-/**
- * Extract language from className like "language-mermaid" or "language-js".
- */
 function getLangFromClassName(className?: string): string {
   if (!className) return "";
   const match = /language-(\w+)/.exec(className);
   return match ? match[1] : "";
 }
 
-/**
- * Recursively extract plain text from a React element tree.
- * @uiw/react-markdown-preview wraps code tokens in <span> elements
- * for syntax highlighting; this unwraps them to get raw text
- * needed by MermaidBlock.
- */
 function extractTextFromNode(node: React.ReactNode): string {
   if (node == null) return "";
   if (typeof node === "string") return node;
   if (typeof node === "number" || typeof node === "boolean") return String(node);
   if (Array.isArray(node)) return node.map(extractTextFromNode).join("");
   if (typeof node === "object") {
-    // React element with props.children
     if ("props" in node) {
       const el = node as { props?: { children?: React.ReactNode } };
       return extractTextFromNode(el.props?.children);

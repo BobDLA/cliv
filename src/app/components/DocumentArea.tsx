@@ -1,8 +1,5 @@
 import { FolderOpen } from "lucide-react";
-import {
-  MarkdownViewer,
-  type HeadingInfo,
-} from "@/features/documents";
+import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
 import {
   SelectionCatcher,
   AnnotationPopup,
@@ -40,11 +37,14 @@ export function DocumentArea({
     <main className="relative flex flex-1 flex-col overflow-hidden">
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <div className="flex">
-          {/* Document column */}
-          <div className="flex-1 min-w-0" style={{ padding: "0 24px" }}>
+          <div
+            className="flex-1 min-w-0"
+            style={{ padding: "0 var(--content-shell-padding, 24px)" }}
+          >
             {replyContent ? (
               <div
-                className="relative mx-auto max-w-4xl"
+                className="relative mx-auto"
+                style={{ maxWidth: "var(--content-max-width, 56rem)" }}
                 ref={viewerRef}
                 data-viewer-root
               >
@@ -54,7 +54,6 @@ export function DocumentArea({
                   onHeadingsChange={onHeadingsChange}
                 />
 
-                {/* M2: Annotation floating elements */}
                 <SelectionCatcher containerRef={viewerRef} />
                 <AnnotationOverlay containerRef={viewerRef} />
                 <AnnotationHoverActions containerRef={viewerRef} />
@@ -88,12 +87,10 @@ export function DocumentArea({
             )}
           </div>
 
-          {/* Annotation margin resize handle */}
           <ResizeHandle onDragStart={onMarginDragStart} />
 
-          {/* Annotation margin — inside the same scroll container */}
           <div
-            style={{ width: `${marginWidth}px` }}
+            style={{ width: String(marginWidth) + "px" }}
             className="shrink-0 relative"
           >
             <AnnotationList
@@ -104,14 +101,13 @@ export function DocumentArea({
         </div>
       </div>
 
-      {/* M3: ReturnBuilder — bottom panel, aligned to document column only */}
       <div style={{ display: "flex", flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <ReturnBuilder />
         </div>
         <div
           style={{
-            width: `${marginWidth + 6}px`,
+            width: String(marginWidth + 6) + "px",
             borderLeft: "1px solid var(--color-border-subtle)",
           }}
           className="shrink-0"

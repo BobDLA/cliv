@@ -61,6 +61,20 @@
   --radius-xl: 12px;
 }
 
+:root {
+  --content-max-width: 56rem;
+  --content-shell-padding: 24px;
+  --viewer-padding-x: 48px;
+  --viewer-padding-y: 24px;
+  --markdown-line-height: 1.75;
+  --highlight-comment-alpha: 0.2;
+  --highlight-question-alpha: 0.2;
+  --highlight-rewrite-alpha: 0.2;
+  --highlight-challenge-alpha: 0.2;
+  --highlight-active-alpha: 0.4;
+  --highlight-creating-alpha: 0.18;
+}
+
 /* ─── Base Styles ─────────────────────────────────────────── */
 
 *,
@@ -142,29 +156,29 @@ body {
 /* ─── Annotation Highlights (CSS Highlight API) ───────────── */
 
 ::highlight(annotation-comment) {
-  background-color: rgba(59, 130, 246, 0.2);
+  background-color: rgb(59 130 246 / var(--highlight-comment-alpha, 0.2));
 }
 
 ::highlight(annotation-question) {
-  background-color: rgba(255, 175, 85, 0.2);
+  background-color: rgb(255 175 85 / var(--highlight-question-alpha, 0.2));
 }
 
 ::highlight(annotation-rewrite) {
-  background-color: rgba(120, 235, 190, 0.2);
+  background-color: rgb(120 235 190 / var(--highlight-rewrite-alpha, 0.2));
 }
 
 ::highlight(annotation-challenge) {
-  background-color: rgba(255, 110, 110, 0.2);
+  background-color: rgb(255 110 110 / var(--highlight-challenge-alpha, 0.2));
 }
 
 ::highlight(annotation-active) {
-  background-color: rgba(164, 195, 255, 0.4);
+  background-color: rgb(164 195 255 / var(--highlight-active-alpha, 0.4));
   text-decoration: underline;
   text-decoration-color: var(--color-accent);
 }
 
 ::highlight(annotation-creating) {
-  background-color: rgba(96, 165, 250, 0.18);
+  background-color: rgb(96 165 250 / var(--highlight-creating-alpha, 0.18));
   text-decoration: underline;
   text-decoration-style: dashed;
   text-decoration-color: rgba(59, 130, 246, 0.65);
@@ -228,6 +242,7 @@ body {
   background-color: transparent !important;
   font-family: var(--font-sans) !important;
   font-size: 1rem !important;
+  line-height: var(--markdown-line-height, 1.75);
   color: var(--color-text-primary);
 }
 
@@ -436,4 +451,3 @@ body {
 [data-color-mode="light"] .cliv-markdown-preview .wmde-markdown pre code .token.variable {
   color: #e36209;
 }
-
