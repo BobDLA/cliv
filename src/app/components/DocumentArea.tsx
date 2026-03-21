@@ -5,7 +5,6 @@ import {
 } from "@/features/documents";
 import {
   SelectionCatcher,
-  FloatingAnnotateButton,
   AnnotationPopup,
   ParagraphBubble,
   AnnotationOverlay,
@@ -60,7 +59,6 @@ export function DocumentArea({
                 <AnnotationOverlay containerRef={viewerRef} />
                 <AnnotationHoverActions containerRef={viewerRef} />
                 <ParagraphBubble containerRef={viewerRef} />
-                <FloatingAnnotateButton />
                 <AnnotationPopup />
               </div>
             ) : (

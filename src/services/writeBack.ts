@@ -48,11 +48,11 @@ export async function closeWindow(): Promise<void> {
  */
 export async function writeBack(
   content: string,
-  composePath?: string | null,
+  targetPath?: string | null,
 ): Promise<"written" | "clipboard"> {
-  if (composePath && isTauri) {
+  if (targetPath && isTauri) {
     try {
-      await writeToFile(composePath, content);
+      await writeToFile(targetPath, content);
       return "written";
     } catch {
       // fallback to clipboard

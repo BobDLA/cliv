@@ -163,6 +163,13 @@ body {
   text-decoration-color: var(--color-accent);
 }
 
+::highlight(annotation-creating) {
+  background-color: rgba(96, 165, 250, 0.18);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: rgba(59, 130, 246, 0.65);
+}
+
 /* ─── Dim Theme ───────────────────────────────────────────── */
 
 [data-theme="dim"] {
@@ -429,3 +436,4 @@ body {
 [data-color-mode="light"] .cliv-markdown-preview .wmde-markdown pre code .token.variable {
   color: #e36209;
 }
+

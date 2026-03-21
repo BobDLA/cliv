@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useSelectionStore, useAnnotationStore } from "@/stores";
 import type { AnnotationKind } from "@/types";
 import { useT } from "@/lib/useT";
+import { createAnnotationFromSelection } from "./createAnnotation";
 
 const KIND_OPTIONS: {
   value: AnnotationKind;
@@ -22,8 +23,15 @@ const KIND_OPTIONS: {
  * - EDIT: editingAnnotationId is set (opens popup near the annotation's text)
  */
 export const AnnotationPopup = memo(function AnnotationPopup() {
-  const { selection, showPopup, popupKind, setPopupKind, closePopup } =
-    useSelectionStore();
+  const {
+    selection,
+    showPopup,
+    popupKind,
+    draftComment,
+    setPopupKind,
+    setDraftComment,
+    closePopup,
+  } = useSelectionStore();
   const {
     annotations,
     editingAnnotationId,
@@ -43,21 +51,33 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
   const [comment, setComment] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const commentValue = isEditMode ? comment : draftComment;
 
   // Auto-focus and pre-fill when popup opens
   useEffect(() => {
-    if (isVisible) {
-      if (isEditMode && editingAnnotation) {
-        setComment(editingAnnotation.comment);
-        setPopupKind(editingAnnotation.kind);
-      }
-      const timer = setTimeout(() => {
-        textareaRef.current?.focus();
-        if (isEditMode) textareaRef.current?.select();
-      }, 80);
-      return () => clearTimeout(timer);
+    if (!isVisible) return;
+
+    if (isEditMode && editingAnnotation) {
+      setComment(editingAnnotation.comment);
+      setPopupKind(editingAnnotation.kind);
     }
-  }, [isVisible, isEditMode, editingAnnotation, setPopupKind]);
+
+    const raf = requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      if (isEditMode) textarea.select();
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [
+    isVisible,
+    isEditMode,
+    editingAnnotation,
+    selection?.range.startOffset,
+    selection?.range.endOffset,
+    setPopupKind,
+  ]);
 
   // Reset on close
   useEffect(() => {
@@ -89,19 +109,16 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
     return () => cancelAnimationFrame(raf);
   });
 
-  // Click-outside to close
+  // Click-outside to close only in edit mode.
+  // Create mode keeps the draft alive until the user closes explicitly.
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || !isEditMode) return;
 
     const handler = (e: MouseEvent) => {
       const popup = popupRef.current;
       if (!popup) return;
       if (popup.contains(e.target as Node)) return;
-      if (isEditMode) {
-        setEditingAnnotation(null);
-      } else {
-        closePopup();
-      }
+      setEditingAnnotation(null);
     };
 
     const timer = setTimeout(() => {
@@ -112,7 +129,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
       clearTimeout(timer);
       document.removeEventListener("mousedown", handler, true);
     };
-  }, [isVisible, isEditMode, closePopup, setEditingAnnotation]);
+  }, [isVisible, isEditMode, setEditingAnnotation]);
 
   const handleClose = useCallback(() => {
     if (isEditMode) {
@@ -123,7 +140,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
   }, [isEditMode, setEditingAnnotation, closePopup]);
 
   const handleSubmit = useCallback(() => {
-    const text = comment.trim();
+    const text = commentValue.trim();
     if (!text) return;
 
     if (isEditMode && editingAnnotation) {
@@ -137,23 +154,12 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
       const kind = useSelectionStore.getState().popupKind;
       if (!sel) return;
 
-      addAnnotation({
-        id: crypto.randomUUID(),
-        documentId: "default",
-        quote: sel.quote,
-        comment: text,
-        range: sel.range,
-        kind: kind,
-        status: "open",
-        createdAt: new Date().toISOString(),
-      });
-
-      setComment("");
+      addAnnotation(createAnnotationFromSelection(sel, text, kind));
       closePopup();
       window.getSelection()?.removeAllRanges();
     }
   }, [
-    comment,
+    commentValue,
     isEditMode,
     editingAnnotation,
     addAnnotation,
@@ -272,8 +278,14 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
         <div style={{ padding: "8px 10px" }}>
           <textarea
             ref={textareaRef}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            value={commentValue}
+            onChange={(e) => {
+              if (isEditMode) {
+                setComment(e.target.value);
+              } else {
+                setDraftComment(e.target.value);
+              }
+            }}
             placeholder={isEditMode ? t("annPopup.editPlaceholder") : t("annPopup.addPlaceholder")}
             rows={3}
             data-testid="annotation-popup-textarea"
@@ -346,7 +358,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 e.stopPropagation();
                 handleSubmit();
               }}
-              disabled={!comment.trim()}
+              disabled={!commentValue.trim()}
               data-testid="annotation-popup-submit"
               style={{
                 padding: "4px 12px",
@@ -356,12 +368,12 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
                 fontFamily: "var(--font-sans)",
                 color: "#fff",
                 whiteSpace: "nowrap" as const,
-                backgroundColor: comment.trim()
+                backgroundColor: commentValue.trim()
                   ? "var(--color-accent)"
                   : "var(--color-text-faint)",
                 border: "none",
-                cursor: comment.trim() ? "pointer" : "not-allowed",
-                opacity: comment.trim() ? 1 : 0.5,
+                cursor: commentValue.trim() ? "pointer" : "not-allowed",
+                opacity: commentValue.trim() ? 1 : 0.5,
                 transition: "all 0.15s",
               }}
             >

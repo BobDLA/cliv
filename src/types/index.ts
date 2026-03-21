@@ -52,10 +52,11 @@ export interface Metadata {
 }
 
 export interface LoadResult {
-  compose: string | null;
+  target: string | null;
   reply: string | null;
   metadata: Metadata | null;
-  composePath: string | null;
+  targetPath: string | null;
+  reviewPath: string | null;
   replyPath: string | null;
   error: string | null;
 }
@@ -71,11 +72,33 @@ export interface SessionListItem {
 // ─── CLI Args ─────────────────────────────────────────────
 
 export interface CliArgs {
-  composePath: string | null;
+  reviewPath: string | null;
+  targetPath: string | null;
   metadataPath: string | null;
   filePath: string | null;
   /** Which agent triggered the launch: "codex" | "claude" | "gemini" | "unknown" */
   agent: string | null;
+  trustedCaller: string | null;
+}
+
+// ─── App Config ───────────────────────────────────────────
+
+export interface LaunchConfig {
+  scanDepth: number;
+  trustedCallers: string[];
+  ignoredCallers: string[];
+}
+
+export interface PromptConfig {
+  replyHeaderZh: string | null;
+  replyHeaderEn: string | null;
+  iterateHeaderZh: string | null;
+  iterateHeaderEn: string | null;
+}
+
+export interface AppConfig {
+  launch: LaunchConfig;
+  prompts: PromptConfig;
 }
 
 // ─── Selection ────────────────────────────────────────────

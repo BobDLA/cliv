@@ -1,5 +1,10 @@
 import { useEffect, useCallback } from "react";
-import { useAnnotationStore, useDocumentStore, useUIStore } from "@/stores";
+import {
+  useAnnotationStore,
+  useConfigStore,
+  useDocumentStore,
+  useUIStore,
+} from "@/stores";
 import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
 
 // Check if running inside Tauri
@@ -41,6 +46,7 @@ function buildExtractionPlan(
  */
 export function useInitDocument() {
   const { setDocument, setLoading, setError } = useDocumentStore();
+  const setAppConfig = useConfigStore((s) => s.setAppConfig);
   const locale = useUIStore((s) => s.locale);
 
   const loadDocument = useCallback(async () => {
@@ -49,14 +55,21 @@ export function useInitDocument() {
     if (isTauri) {
       try {
         const {
+          getAppConfig,
           getCliArgs,
           loadFiles,
           extractCodexReply,
           extractClaudeReply,
           extractGeminiReply,
         } = await import("@/services/tauri-ipc");
+        const appConfig = await getAppConfig();
+        setAppConfig(appConfig);
         const args = await getCliArgs();
-        const result = await loadFiles(args.composePath, args.metadataPath);
+        const result = await loadFiles(
+          args.reviewPath,
+          args.targetPath,
+          args.metadataPath,
+        );
 
         if (result.error && !result.reply) {
           setError(result.error);
@@ -88,10 +101,15 @@ export function useInitDocument() {
 
         setDocument({
           reply: replyContent,
-          compose: result.compose,
-          composePath: result.composePath,
+          target: result.target,
+          targetPath: result.targetPath,
+          reviewPath: result.reviewPath ?? args.reviewPath,
           replyPath: result.replyPath,
-          documentId: result.metadata?.turn?.id ?? "default",
+          documentId:
+            result.metadata?.turn?.id ??
+            result.reviewPath ??
+            result.replyPath ??
+            "default",
         });
       } catch (e) {
         setError(
@@ -105,7 +123,7 @@ export function useInitDocument() {
     }
 
     setLoading(false);
-  }, [setDocument, setLoading, setError, locale]);
+  }, [setAppConfig, setDocument, setLoading, setError, locale]);
 
   useEffect(() => {
     loadDocument();
@@ -137,6 +155,9 @@ export function openFileFromTauri(
           });
           setDocument({
             reply: content,
+            target: null,
+            targetPath: null,
+            reviewPath: selected,
             replyPath: selected,
             documentId: selected.split("/").pop() ?? selected.split("\\").pop() ?? "file",
           });

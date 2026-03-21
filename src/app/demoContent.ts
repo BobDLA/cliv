@@ -1,189 +1,409 @@
-export const DEMO_CONTENT_ZH = `# cliV v0.2
+export const DEMO_CONTENT_ZH = `# cliV
 
-> AI 长回复审阅器 — 选区批注 · 多批注聚合 · 写回当前线程
+> AI 长回复审阅器，作为 \`$EDITOR\` 使用，完成阅读、批注、聚合和返回。
 
-## 功能状态
+## 为什么用 cliV
 
-| 功能 | 状态 |
+在 Claude Code、Codex、Gemini 这类 CLI coding 工具里，长回复能生成出来，但不适合精读，也不适合做精确批注。
+
+cliV 把这段最别扭的流程接走：你在终端里继续写代码，在需要精读时，按快捷键触发 \`$EDITOR\`，自动把最新回复带到桌面 GUI，做标注、整理意见，再直接写回当前线程或复制返回。
+
+## 核心能力
+
+| 能力 | 说明 |
 |---|---|
-| Markdown 渲染 | ✅ 就绪 |
-| Mermaid 图表 | ✅ 就绪 |
-| 目录导航 | ✅ 就绪 |
-| 文档搜索 | ✅ Ctrl+F |
-| 主题切换 | ✅ Dark/Dim/Light |
-| 字体缩放 | ✅ Ctrl+=/Ctrl-/Ctrl+0 |
-| 全屏预览 | ✅ 就绪 |
-| 选区批注 | ✅ 就绪 |
-| 聚合回写 | ✅ 就绪 |
+| 作为 \`$EDITOR\` 使用 | 常见入口是 \`Ctrl+G\` |
+| 自动解析最后一条回复 | 面向 Claude Code、Codex、Gemini |
+| 选区批注 | 直接对具体段落加意见 |
+| 多批注聚合 | 自动整理成结构化 Prompt |
+| 写回或复制 | 有 compose target 就写回，没有就复制 |
+| 提交返回 | \`Ctrl+Enter\` 提交结果 |
 
-## 技术栈
-
-- **前端**: React 19 + TypeScript + Tailwind CSS v4
-- **状态**: Zustand
-- **后端**: Tauri v2 (Rust)
-- **测试**: Vitest
-
-## 示例代码
-
-\`\`\`typescript
-// Zustand store 示例
-export const useUIStore = create<UIState>((set) => ({
-  theme: "dark",
-  fontSize: 18,
-  setTheme: (theme) => {
-    document.documentElement.setAttribute("data-theme", theme);
-    set({ theme });
-  },
-}));
-\`\`\`
-
-## 架构图
+## 工作流
 
 \`\`\`mermaid
-graph LR
-    A[CLI] --> B[Tauri v2]
-    B --> C[React 19]
-    C --> D[MarkdownViewer]
-    C --> E[AnnotationSystem]
-    C --> F[ReturnBuilder]
-    D --> G[Mermaid]
-    D --> H[react-markdown]
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 60, "rankSpacing": 80, "padding": 24}} }%%
+flowchart LR
+    subgraph A["CLI Coding 工具"]
+        A1["Claude Code"]
+        A2["Codex"]
+        A3["Gemini"]
+    end
+
+    B["按快捷键触发 \`$EDITOR\`<br/>常见是 Ctrl+G"]
+
+    subgraph C["cliV 审阅阶段"]
+        C1["自动解析最后一条回复"]
+        C2["富文本阅读"]
+        C3["添加 / 编辑 / 删除标注"]
+        C4["聚合批注为 Prompt"]
+    end
+
+    subgraph D["返回结果"]
+        D1["写回当前编辑目标"]
+        D2["复制到剪贴板"]
+    end
+
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    B --> C1 --> C2 --> C3 --> C4
+    C4 --> D1
+    C4 -. 无回写目标 .-> D2
+
+    classDef cli fill:#EDF4FF,stroke:#5B8DEF,color:#17325C,stroke-width:1.5px;
+    classDef review fill:#EEF8F1,stroke:#43A047,color:#1F4D2E,stroke-width:1.5px;
+    classDef back fill:#FFF4E5,stroke:#FB8C00,color:#6A3A00,stroke-width:1.5px;
+
+    class A1,A2,A3,B cli;
+    class C1,C2,C3,C4 review;
+    class D1,D2 back;
 \`\`\`
 
-## 设计令牌验证
+## 快速开始
 
-这段文字使用 \`--text-primary\` 颜色。
+### 1. 安装 cliV
 
-**加粗文字** 使用 \`--text-strong\` 颜色。
+下载安装 cliV，并确保命令 \`cliv\` 在终端可用。
 
-*这段斜体* 测试排版。
+### 2. 设置 \`$EDITOR\`
 
-## 图片测试
+\`\`\`bash
+export EDITOR="cliv"
+\`\`\`
 
-点击图片可全屏查看：
+如需手动覆盖 Agent 识别，可设置：
 
-![风景示例](https://picsum.photos/id/10/800/400)
+\`\`\`bash
+export CLIV_AGENT="codex"
+\`\`\`
 
-并排小图：
+可选值：\`codex\`、\`claude\`、\`gemini\`
 
-| 图片 A | 图片 B |
-|---|---|
-| ![样例A](https://picsum.photos/id/20/300/200) | ![样例B](https://picsum.photos/id/30/300/200) |
+### 3. 配置 Agent 回调
 
----
+下面给的是可直接照抄的最小可用配置。  
+如果你的配置文件里已经有其他内容，请把下面片段合并进去，不要整文件覆盖。
 
-### 列表测试
+#### Codex
 
-1. 第一项：支持有序列表
-2. 第二项：正确缩进
-3. 第三项：间距合理
+编辑 \`~/.codex/config.toml\`：
 
-- 无序列表项 A
-- 无序列表项 B
-  - 嵌套项 B.1
-  - 嵌套项 B.2
+\`\`\`toml
+notify = ["cliv", "cache-codex"]
+\`\`\`
 
-### 引用测试
+如果文件里已有其他配置，可参考：
 
-> 批注是对文档内容的局部评价，一条批注通常包含：
-> 被引用的原文片段、用户的批注文字、批注类型。
+\`\`\`toml
+model = "o4-mini"
+notify = ["cliv", "cache-codex"]
+\`\`\`
 
-### 长文档性能测试
+如果是 macOS，且 \`cliv\` 不在 PATH 里，可改成：
 
-${"以下是填充内容用于验证长文档渲染性能。cliV 设计为处理超过 1000 行的 Markdown 文档。每段文本确保渲染器不会出现卡顿或延迟。\\n\\n".repeat(20)}
+\`\`\`toml
+notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
+\`\`\`
+
+#### Claude Code
+
+编辑 \`~/.claude/settings.json\`，把下面内容合并进现有配置：
+
+\`\`\`json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+如果是 macOS，且 \`cliv\` 不在 PATH 里，可改成：
+
+\`\`\`json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/cliV.app/Contents/MacOS/cliv cache-claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+#### Gemini CLI
+
+编辑 \`~/.gemini/settings.json\`，把下面内容合并进现有配置：
+
+\`\`\`json
+{
+  "hooks": {
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-gemini"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+如果是 macOS，且 \`cliv\` 不在 PATH 里，可改成：
+
+\`\`\`json
+{
+  "hooks": {
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/cliV.app/Contents/MacOS/cliv cache-gemini"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+### 4. 开始使用
+
+1. 在 Claude Code、Codex 或 Gemini 中完成一轮对话，让 agent 生成一条长回复
+2. 按快捷键触发 \`$EDITOR\`，常见是 \`Ctrl+G\`
+3. cliV 自动启动并加载最后一条回复
+4. 在文中选中需要处理的段落，批注框会立刻弹出并自动聚焦
+5. 选择类型：批注、提问、重写、质疑
+6. 输入内容后按 \`Ctrl+Enter\` 提交；如果中途再划选或复制别处内容，当前批注草稿会保持不变，直到你显式提交或关闭
+7. 完成后，cliV 会自动聚合批注为 Prompt
+8. 有回写目标时直接写回；没有时复制到剪贴板
+9. 回到 coding 工具，继续下一轮协作
+
+## 一句话总结
+
+cliV 不是另一个聊天窗口，而是 AI coding agent 长回复的桌面审阅台。
 `;
 
-export const DEMO_CONTENT_EN = `# cliV v0.2
+export const DEMO_CONTENT_EN = `# cliV
 
-> AI Long Reply Reviewer — Selection Annotation · Aggregated Writeback · Return to Thread
+> A desktop reviewer for long AI replies, used as \`$EDITOR\` for reading, annotation, aggregation, and return.
 
-## Feature Status
+## Why cliV
 
-| Feature | Status |
+In CLI coding tools like Claude Code, Codex, and Gemini, long replies are easy to generate but awkward to review carefully and even harder to annotate precisely.
+
+cliV takes over the most uncomfortable part of that loop: you keep coding in the terminal, then when a reply needs close review, trigger \`$EDITOR\` with a shortcut and cliV automatically brings the latest reply into a desktop GUI, where you annotate, organize feedback, and send it back by write-back or clipboard.
+
+## Core Capabilities
+
+| Capability | Description |
 |---|---|
-| Markdown Rendering | ✅ Ready |
-| Mermaid Diagrams | ✅ Ready |
-| Outline Navigation | ✅ Ready |
-| Document Search | ✅ Ctrl+F |
-| Theme Switcher | ✅ Dark/Dim/Light |
-| Font Zooming | ✅ Ctrl+=/Ctrl-/Ctrl+0 |
-| Fullscreen Preview | ✅ Ready |
-| Selection Annotation | ✅ Ready |
-| Aggregated Writeback | ✅ Ready |
+| Used as \`$EDITOR\` | Common entry is \`Ctrl+G\` |
+| Automatic last-reply parsing | Works with Claude Code, Codex, and Gemini |
+| Selection-based annotation | Comment directly on specific passages |
+| Multi-annotation aggregation | Turns annotations into a structured prompt |
+| Write-back or copy | Writes back when a compose target exists, otherwise copies |
+| Submit return | \`Ctrl+Enter\` submits the result |
 
-## Tech Stack
-
-- **Frontend**: React 19 + TypeScript + Tailwind CSS v4
-- **State**: Zustand
-- **Backend**: Tauri v2 (Rust)
-- **Testing**: Vitest
-
-## Example Code
-
-\`\`\`typescript
-// Zustand store example
-export const useUIStore = create<UIState>((set) => ({
-  theme: "dark",
-  fontSize: 18,
-  setTheme: (theme) => {
-    document.documentElement.setAttribute("data-theme", theme);
-    set({ theme });
-  },
-}));
-\`\`\`
-
-## Architecture Diagram
+## Workflow
 
 \`\`\`mermaid
-graph LR
-    A[CLI] --> B[Tauri v2]
-    B --> C[React 19]
-    C --> D[MarkdownViewer]
-    C --> E[AnnotationSystem]
-    C --> F[ReturnBuilder]
-    D --> G[Mermaid]
-    D --> H[react-markdown]
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 60, "rankSpacing": 80, "padding": 24}} }%%
+flowchart LR
+    subgraph A["CLI Coding Tools"]
+        A1["Claude Code"]
+        A2["Codex"]
+        A3["Gemini"]
+    end
+
+    B["Trigger \`$EDITOR\` with a shortcut<br/>commonly Ctrl+G"]
+
+    subgraph C["cliV Review Stage"]
+        C1["Automatically parse the latest reply"]
+        C2["Read in rich text"]
+        C3["Add / edit / delete annotations"]
+        C4["Aggregate annotations into a prompt"]
+    end
+
+    subgraph D["Return Result"]
+        D1["Write back to the current compose target"]
+        D2["Copy to clipboard"]
+    end
+
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    B --> C1 --> C2 --> C3 --> C4
+    C4 --> D1
+    C4 -. No compose target .-> D2
+
+    classDef cli fill:#EDF4FF,stroke:#5B8DEF,color:#17325C,stroke-width:1.5px;
+    classDef review fill:#EEF8F1,stroke:#43A047,color:#1F4D2E,stroke-width:1.5px;
+    classDef back fill:#FFF4E5,stroke:#FB8C00,color:#6A3A00,stroke-width:1.5px;
+
+    class A1,A2,A3,B cli;
+    class C1,C2,C3,C4 review;
+    class D1,D2 back;
 \`\`\`
 
-## Design Tokens Validation
+## Quick Start
 
-This text uses the \`--text-primary\` color.
+### 1. Install cliV
 
-**Bold text** uses the \`--text-strong\` color.
+Install cliV and make sure the \`cliv\` command is available in your terminal.
 
-*This italic text* tests typography.
+### 2. Set \`$EDITOR\`
 
-## Image Tests
+\`\`\`bash
+export EDITOR="cliv"
+\`\`\`
 
-Click any image to view fullscreen:
+If you want to override agent detection manually, set:
 
-![Landscape example](https://picsum.photos/id/10/800/400)
+\`\`\`bash
+export CLIV_AGENT="codex"
+\`\`\`
 
-Side-by-side thumbnails:
+Available values: \`codex\`, \`claude\`, \`gemini\`
 
-| Image A | Image B |
-|---|---|
-| ![Sample A](https://picsum.photos/id/20/300/200) | ![Sample B](https://picsum.photos/id/30/300/200) |
+### 3. Configure Agent Hooks
 
----
+The snippets below are the minimum working examples.  
+If your config file already contains other settings, merge these blocks instead of overwriting the whole file.
 
-### List Tests
+#### Codex
 
-1. First item: Ordered list support
-2. Second item: Correct indentation
-3. Third item: Reasonable spacing
+Edit \`~/.codex/config.toml\`:
 
-- Unordered item A
-- Unordered item B
-  - Nested item B.1
-  - Nested item B.2
+\`\`\`toml
+notify = ["cliv", "cache-codex"]
+\`\`\`
 
-### Blockquote Tests
+If the file already has other settings, this is also valid:
 
-> An annotation is a local evaluation of document content. It typically includes:
-> the quoted original text fragment, the user's annotation text, and the annotation type.
+\`\`\`toml
+model = "o4-mini"
+notify = ["cliv", "cache-codex"]
+\`\`\`
 
-### Long Document Performance Tests
+On macOS, if \`cliv\` is not in PATH, use:
 
-${"The following is placeholder content used to verify long document rendering performance. cliV is designed to handle Markdown documents exceeding 1000 lines. Each paragraph ensures the renderer will not stutter or lag.\\n\\n".repeat(20)}
+\`\`\`toml
+notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
+\`\`\`
+
+#### Claude Code
+
+Edit \`~/.claude/settings.json\` and merge this into your existing config:
+
+\`\`\`json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+On macOS, if \`cliv\` is not in PATH, use:
+
+\`\`\`json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/cliV.app/Contents/MacOS/cliv cache-claude"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+#### Gemini CLI
+
+Edit \`~/.gemini/settings.json\` and merge this into your existing config:
+
+\`\`\`json
+{
+  "hooks": {
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-gemini"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+On macOS, if \`cliv\` is not in PATH, use:
+
+\`\`\`json
+{
+  "hooks": {
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/cliV.app/Contents/MacOS/cliv cache-gemini"
+          }
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+### 4. Start Using It
+
+1. Finish a turn in Claude Code, Codex, or Gemini so the agent produces a long reply
+2. Trigger \`$EDITOR\` with a shortcut, commonly \`Ctrl+G\`
+3. cliV starts automatically and loads the latest reply
+4. Select the passages you want to address and the annotation box opens immediately with focus
+5. Choose a type: comment, question, rewrite, or challenge
+6. Type and press \`Ctrl+Enter\`; if you select or copy another passage meanwhile, the current draft stays unchanged until you explicitly submit or close it
+7. When you're done, cliV aggregates the annotations into a prompt
+8. If a compose target exists, cliV writes back directly; otherwise it copies to the clipboard
+9. Go back to your coding tool and continue the next iteration
+
+## One-line Summary
+
+cliV is not another chat window. It is a desktop review surface for long AI coding-agent replies.
 `;

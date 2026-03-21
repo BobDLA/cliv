@@ -5,6 +5,7 @@ import {
   BookOpen,
   FolderOpen,
   Languages,
+  Github,
 } from "lucide-react";
 import { useUIStore } from "@/stores";
 import { DocumentSearch } from "@/features/documents";
@@ -104,6 +105,22 @@ export function TopBar({
           <Languages className="h-3.5 w-3.5" />
           <span>{t("lang.switch")}</span>
         </button>
+
+        {/* Divider */}
+        <div className="h-4 w-px bg-border-subtle/40" />
+
+        {/* GitHub */}
+        <a
+          href="https://github.com/BobDLA/cliv"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border-strong/70 bg-surface-panel px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-strong"
+          title="View on GitHub"
+          data-testid="topbar-github-link"
+        >
+          <Github className="h-3.5 w-3.5 text-accent/90" />
+          <span>GitHub</span>
+        </a>
 
         {/* Divider */}
         <div className="h-4 w-px bg-border-subtle/40" />

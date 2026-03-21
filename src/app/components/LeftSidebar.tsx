@@ -9,14 +9,14 @@ import { useT } from "@/lib/useT";
 interface LeftSidebarProps {
   width: number;
   headings: HeadingInfo[];
-  composePath: string | null;
+  reviewPath: string | null;
   onDragStart: (e: React.MouseEvent) => void;
 }
 
 export function LeftSidebar({
   width,
   headings,
-  composePath,
+  reviewPath,
   onDragStart,
 }: LeftSidebarProps) {
   const [sidebarTab, setSidebarTab] = useState<"outline" | "history">(
@@ -73,7 +73,7 @@ export function LeftSidebar({
                   autoSave();
                 } else {
                   const name = `Session ${new Date().toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
-                  createNewSession(name, composePath);
+                  createNewSession(name, reviewPath);
                 }
               }}
               className="w-full flex items-center justify-center gap-2 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"

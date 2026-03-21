@@ -4,8 +4,9 @@ import { create } from "zustand";
 
 interface DocumentState {
   replyContent: string | null;
-  composeContent: string | null;
-  composePath: string | null;
+  targetContent: string | null;
+  targetPath: string | null;
+  reviewPath: string | null;
   replyPath: string | null;
   documentId: string;
   isLoading: boolean;
@@ -13,8 +14,9 @@ interface DocumentState {
 
   setDocument: (opts: {
     reply?: string | null;
-    compose?: string | null;
-    composePath?: string | null;
+    target?: string | null;
+    targetPath?: string | null;
+    reviewPath?: string | null;
     replyPath?: string | null;
     documentId?: string;
   }) => void;
@@ -24,8 +26,9 @@ interface DocumentState {
 
 export const useDocumentStore = create<DocumentState>((set) => ({
   replyContent: null,
-  composeContent: null,
-  composePath: null,
+  targetContent: null,
+  targetPath: null,
+  reviewPath: null,
   replyPath: null,
   documentId: "default",
   isLoading: false,
@@ -34,11 +37,18 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   setDocument: (opts) =>
     set((state) => ({
       ...state,
-      replyContent: opts.reply ?? state.replyContent,
-      composeContent: opts.compose ?? state.composeContent,
-      composePath: opts.composePath ?? state.composePath,
-      replyPath: opts.replyPath ?? state.replyPath,
-      documentId: opts.documentId ?? state.documentId,
+      replyContent:
+        opts.reply !== undefined ? opts.reply : state.replyContent,
+      targetContent:
+        opts.target !== undefined ? opts.target : state.targetContent,
+      targetPath:
+        opts.targetPath !== undefined ? opts.targetPath : state.targetPath,
+      reviewPath:
+        opts.reviewPath !== undefined ? opts.reviewPath : state.reviewPath,
+      replyPath:
+        opts.replyPath !== undefined ? opts.replyPath : state.replyPath,
+      documentId:
+        opts.documentId !== undefined ? opts.documentId : state.documentId,
       error: null,
     })),
 

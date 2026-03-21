@@ -11,8 +11,8 @@ This document explains how to integrate cliV with Codex, Claude Code, and Gemini
 cliV is a single binary with no external dependencies (no Python, no Bash).
 
 1. **Agent hook** calls `cliv cache-xxx` after each reply → caches to disk
-2. **You press Ctrl+G** → agent calls `$EDITOR` (which is `cliv`)
-3. **cliV** auto-detects which agent called it, loads the cached reply, and opens the GUI
+2. **You press Ctrl+G** → agent calls `$EDITOR` (usually just `cliv`)
+3. **cliV** auto-detects the calling agent, resolves any write target from explicit flags or trusted-caller rules, then opens the GUI
 
 ```
 Agent completes a reply
@@ -22,8 +22,10 @@ Agent completes a reply
 
 You press Ctrl+G
     ↓ $EDITOR = cliv
-    cliv --compose <file>
+    cliv <file>                 # legacy caller shape
+    or cliv --target <file>     # preferred when the caller supports explicit args
     ↓ auto-detects agent from env vars
+    ↓ resolves write target from explicit flags or trusted-caller matching
     ↓ loads cached reply
     cliV GUI opens
 ```
@@ -45,6 +47,31 @@ cp cliv ~/.local/bin/
 ```bash
 # ~/.bashrc or ~/.zshrc
 export EDITOR="cliv"
+```
+
+If your caller supports extra arguments, you can also use:
+
+```bash
+export EDITOR="cliv --target"
+```
+
+If the caller can only launch `cliv <file>`, cliV will still treat that positional file as the write target when the parent-process chain matches a trusted caller. Plain standalone launches stay review-only.
+
+### Optional: configure trusted callers and prompt templates
+
+Edit `~/.cliv/config.toml`:
+
+```toml
+[launch]
+scan_depth = 5
+trusted_callers = ["codex", "claude", "gemini"]
+ignored_callers = ["bash", "zsh", "fish", "tmux", "launchd", "open"]
+
+[prompts]
+reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
+reply_header_en = "Please respond to each annotation below in Markdown."
+iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
+iterate_header_en = "Please make incremental revisions based on the following annotations."
 ```
 
 ### Step 3: Configure agent hooks
@@ -148,6 +175,13 @@ cliV is a single binary. No Python, Bash, Node.js, or wrapper scripts needed.
 ### Agent auto-detection
 
 When launched as `$EDITOR`, cliV auto-detects the calling agent from environment variables (`CODEX_THREAD_ID`, `CLAUDE_SESSION_ID`, `GEMINI_SESSION_ID`). No `CLIV_AGENT` env var is needed unless you want to override.
+
+### Launch modes
+
+- `cliv file.md`: open `file.md` as the review document and do not treat it as a write target.
+- `cliv --target draft.md` / `cliv -t draft.md`: use `draft.md` as the explicit write target.
+- `cliv --compose draft.md`: compatibility alias for `--target`.
+- If a trusted caller launches cliV with only one positional file, that file is treated as the write target for legacy `$EDITOR` integrations.
 
 ### Extraction priority
 

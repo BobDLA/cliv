@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AppConfig,
   CliArgs,
   LoadResult,
   SessionListItem,
@@ -14,12 +15,18 @@ export async function getCliArgs(): Promise<CliArgs> {
   return invoke<CliArgs>("get_cli_args");
 }
 
+export async function getAppConfig(): Promise<AppConfig> {
+  return invoke<AppConfig>("get_app_config");
+}
+
 export async function loadFiles(
-  composePath?: string | null,
+  reviewPath?: string | null,
+  targetPath?: string | null,
   metadataPath?: string | null,
 ): Promise<LoadResult> {
   return invoke<LoadResult>("load_files", {
-    composePath: composePath ?? null,
+    reviewPath: reviewPath ?? null,
+    targetPath: targetPath ?? null,
     metadataPath: metadataPath ?? null,
   });
 }

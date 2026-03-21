@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useCallback } from "react";
-import { useAnnotationStore } from "@/stores";
+import { useAnnotationStore, useSelectionStore } from "@/stores";
 import type { Annotation } from "@/types";
 
 type DocumentWithCaretApis = Document & {
@@ -21,6 +21,7 @@ export const AnnotationOverlay = memo(function AnnotationOverlay({
   containerRef: React.RefObject<HTMLElement | null>;
 }) {
   const { annotations, hoveredAnnotationId } = useAnnotationStore();
+  const { selection, showPopup } = useSelectionStore();
   const rafRef = useRef<number>(0);
   const textNodesCache = useRef<{ node: Text; start: number; end: number }[]>(
     [],
@@ -58,8 +59,9 @@ export const AnnotationOverlay = memo(function AnnotationOverlay({
     CSS.highlights.delete("annotation-rewrite");
     CSS.highlights.delete("annotation-challenge");
     CSS.highlights.delete("annotation-active");
+    CSS.highlights.delete("annotation-creating");
 
-    if (annotations.length === 0) return;
+    if (annotations.length === 0 && (!showPopup || !selection?.range)) return;
 
     buildTextNodes();
     const textNodes = textNodesCache.current;
@@ -72,6 +74,14 @@ export const AnnotationOverlay = memo(function AnnotationOverlay({
       challenge: [],
     };
     const activeRanges: Range[] = [];
+    const creatingRanges: Range[] =
+      showPopup && selection?.range
+        ? findRangesForAnnotation(
+            textNodes,
+            selection.range.startOffset,
+            selection.range.endOffset,
+          )
+        : [];
 
     for (const ann of annotations) {
       if (!ann.range) continue;
@@ -99,7 +109,19 @@ export const AnnotationOverlay = memo(function AnnotationOverlay({
       const activeHighlight = new Highlight(...activeRanges);
       CSS.highlights.set("annotation-active", activeHighlight);
     }
-  }, [containerRef, annotations, hoveredAnnotationId, buildTextNodes]);
+
+    if (creatingRanges.length > 0) {
+      const creatingHighlight = new Highlight(...creatingRanges);
+      CSS.highlights.set("annotation-creating", creatingHighlight);
+    }
+  }, [
+    containerRef,
+    annotations,
+    hoveredAnnotationId,
+    buildTextNodes,
+    showPopup,
+    selection,
+  ]);
 
   useEffect(() => {
     cancelAnimationFrame(rafRef.current);

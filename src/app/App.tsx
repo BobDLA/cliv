@@ -17,7 +17,7 @@ import { DocumentArea } from "./components/DocumentArea";
  */
 export function App() {
   const { theme, isFullscreen, toggleFullscreen } = useUIStore();
-  const { replyContent, composePath, isLoading, error, setDocument, setError } =
+  const { replyContent, reviewPath, isLoading, error, setDocument, setError } =
     useDocumentStore();
   const t = useT();
 
@@ -61,6 +61,9 @@ export function App() {
         if (content) {
           setDocument({
             reply: content,
+            target: null,
+            targetPath: null,
+            reviewPath: file.name,
             replyPath: file.name,
             documentId: file.name,
           });
@@ -160,7 +163,7 @@ export function App() {
           <LeftSidebar
             width={sidebarWidth}
             headings={headings}
-            composePath={composePath}
+            reviewPath={reviewPath}
             onDragStart={onSidebarDragStart}
           />
         )}

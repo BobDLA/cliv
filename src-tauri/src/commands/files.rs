@@ -44,10 +44,11 @@ pub struct Metadata {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadResult {
-    pub compose: Option<String>,
+    pub target: Option<String>,
     pub reply: Option<String>,
     pub metadata: Option<Metadata>,
-    pub compose_path: Option<String>,
+    pub target_path: Option<String>,
+    pub review_path: Option<String>,
     pub reply_path: Option<String>,
     pub error: Option<String>,
 }
@@ -60,25 +61,46 @@ pub fn get_cli_args(state: tauri::State<'_, CliArgs>) -> CliArgs {
 }
 
 #[tauri::command]
-pub fn load_files(compose_path: Option<String>, metadata_path: Option<String>) -> LoadResult {
+pub fn load_files(
+    review_path: Option<String>,
+    target_path: Option<String>,
+    metadata_path: Option<String>,
+) -> LoadResult {
     let mut result = LoadResult {
-        compose: None,
+        target: None,
         reply: None,
         metadata: None,
-        compose_path: None,
+        target_path: None,
+        review_path: None,
         reply_path: None,
         error: None,
     };
 
-    if let Some(ref cp) = compose_path {
-        let path = PathBuf::from(cp);
+    if let Some(ref tp) = target_path {
+        let path = PathBuf::from(tp);
         match fs::read_to_string(&path) {
             Ok(content) => {
-                result.compose = Some(content);
-                result.compose_path = Some(cp.clone());
+                result.target = Some(content);
+                result.target_path = Some(tp.clone());
             }
             Err(e) => {
-                eprintln!("[load_files] compose read error: {}", e);
+                eprintln!("[load_files] target read error: {}", e);
+            }
+        }
+    }
+
+    if let Some(ref rp) = review_path {
+        let path = PathBuf::from(rp);
+        if is_standalone_view_path(&path) {
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    result.reply = Some(content);
+                    result.reply_path = Some(rp.clone());
+                    result.review_path = Some(rp.clone());
+                }
+                Err(e) => {
+                    result.error = Some(format!("File not found: {}", e));
+                }
             }
         }
     }
@@ -109,30 +131,6 @@ pub fn load_files(compose_path: Option<String>, metadata_path: Option<String>) -
             },
             Err(e) => {
                 eprintln!("[load_files] metadata read error: {}", e);
-            }
-        }
-    }
-
-    // Fallback: when no metadata is provided, treat a standalone markdown-like
-    // file as the reply document we want to review.
-    if result.reply.is_none() && metadata_path.is_none() {
-        if let Some(ref cp) = compose_path {
-            let path = PathBuf::from(cp);
-            if is_standalone_view_path(&path) {
-                if let Some(content) = result.compose.clone() {
-                    result.reply = Some(content);
-                    result.reply_path = Some(cp.clone());
-                } else {
-                    match fs::read_to_string(&path) {
-                        Ok(content) => {
-                            result.reply = Some(content);
-                            result.reply_path = Some(cp.clone());
-                        }
-                        Err(e) => {
-                            result.error = Some(format!("File not found: {}", e));
-                        }
-                    }
-                }
             }
         }
     }
@@ -180,22 +178,27 @@ mod tests {
         let file = dir.path().join("note.md");
         std::fs::write(&file, "# hello\n\nworld\n").unwrap();
 
-        let result = load_files(Some(file.display().to_string()), None);
+        let result = load_files(Some(file.display().to_string()), None, None);
 
         assert_eq!(result.reply.as_deref(), Some("# hello\n\nworld\n"));
         assert_eq!(
             result.reply_path.as_deref(),
             Some(file.to_string_lossy().as_ref())
         );
+        assert_eq!(
+            result.review_path.as_deref(),
+            Some(file.to_string_lossy().as_ref())
+        );
+        assert!(result.target.is_none());
         assert!(result.error.is_none());
     }
 
     #[test]
-    fn metadata_mode_does_not_fallback_to_compose_as_reply() {
+    fn metadata_mode_does_not_fallback_to_target_as_reply() {
         let dir = tempfile::tempdir().unwrap();
-        let compose = dir.path().join("compose.md");
+        let target = dir.path().join("compose.md");
         let metadata = dir.path().join("meta.json");
-        std::fs::write(&compose, "compose only").unwrap();
+        std::fs::write(&target, "compose only").unwrap();
         std::fs::write(
             &metadata,
             r#"{
@@ -208,12 +211,36 @@ mod tests {
         )
         .unwrap();
 
-        let result = load_files(
-            Some(compose.display().to_string()),
-            Some(metadata.display().to_string()),
-        );
+        let result = load_files(None, Some(target.display().to_string()), Some(metadata.display().to_string()));
 
         assert!(result.reply.is_none());
+        assert_eq!(result.target.as_deref(), Some("compose only"));
         assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn explicit_target_and_review_paths_are_loaded_separately() {
+        let dir = tempfile::tempdir().unwrap();
+        let review = dir.path().join("review.md");
+        let target = dir.path().join("target.md");
+        std::fs::write(&review, "# review").unwrap();
+        std::fs::write(&target, "draft target").unwrap();
+
+        let result = load_files(
+            Some(review.display().to_string()),
+            Some(target.display().to_string()),
+            None,
+        );
+
+        assert_eq!(result.reply.as_deref(), Some("# review"));
+        assert_eq!(result.target.as_deref(), Some("draft target"));
+        assert_eq!(
+            result.review_path.as_deref(),
+            Some(review.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            result.target_path.as_deref(),
+            Some(target.to_string_lossy().as_ref())
+        );
     }
 }

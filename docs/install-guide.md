@@ -50,6 +50,7 @@ export EDITOR="cliv"
 Then run `source ~/.bashrc` (or restart your terminal).
 
 > **How it works**: When an AI agent triggers `Ctrl+G`, it invokes `$EDITOR`. Setting it to `cliv` launches the cliV GUI directly.
+> `cliv file.md` stays review-only by default; use `cliv --target file.md` when you need an explicit write target (`--compose` remains a compatibility alias).
 
 ## 4. Configure Agent Hooks
 

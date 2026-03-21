@@ -659,10 +659,11 @@ stateDiagram-v2
     [*] --> Idle: App loaded
 
     Idle --> Selecting: User selects text
-    Selecting --> Creating: Click annotation button
-    Creating --> Editing: Annotation created
-    Editing --> Saved: User types comment
-    Saved --> Idle: Click away
+    Selecting --> Creating: Popup opens immediately
+    Creating --> Saved: User types comment
+    Creating --> Idle: Explicit close / cancel / Escape
+    Saved --> Idle: Submit annotation
+    Saved --> Saved: Reselect or copy elsewhere while popup stays open
 
     Saved --> Hovering: Mouse enters highlight
     Hovering --> Active: Click on highlight
@@ -683,21 +684,27 @@ sequenceDiagram
     participant User
     participant DOM as DOM Selection API
     participant SEL as selectionStore
+    participant POP as AnnotationPopup
     participant ANN as annotationStore
     participant HL as CSS Highlight API
-    participant BUBBLE as ParagraphBubble
 
     User->>DOM: Select text passage
-    DOM->>SEL: selectionChange event
+    DOM->>SEL: selectionChange + mouseup
     SEL->>SEL: Store range + text + position
+    SEL->>POP: Open create popup immediately
+    POP->>User: Focus textarea
 
-    User->>BUBBLE: Click annotation button
-    BUBBLE->>ANN: addAnnotation with id, text, range
+    User->>POP: Type comment draft
+    POP->>SEL: Persist draftComment in selectionStore
+
+    User->>DOM: Select or copy another passage
+    DOM->>SEL: selectionChange + mouseup
+    SEL->>SEL: Ignore reselection while popup is open
+
+    User->>POP: Submit annotation explicitly
+    POP->>ANN: addAnnotation with stored selection + draft
     ANN->>HL: Create CSS Highlight
     HL->>DOM: Apply highlight pseudo-element
-
-    User->>ANN: Type comment
-    ANN->>ANN: updateAnnotation id and comment
 
     Note over User,DOM: Highlight is now visible with hover and click interactions
 ```

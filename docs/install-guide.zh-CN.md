@@ -50,6 +50,7 @@ export EDITOR="cliv"
 然后 `source ~/.bashrc`（或重启终端）。
 
 > **原理**：当 AI agent 触发 Ctrl+G 时，它会调用 `$EDITOR`。设成 `cliv` 后，agent 会直接启动 cliV。
+> `cliv file.md` 默认是只读审阅；如需显式写回目标，可用 `cliv --target file.md`（兼容别名：`--compose`）。
 
 ## 4. 配置 Agent Hook
 

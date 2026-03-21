@@ -11,9 +11,10 @@ vi.mock("@/app/hooks/useInitDocument", () => ({
 describe("App", () => {
   beforeEach(() => {
     useDocumentStore.setState({
-      replyContent: "# cliV v0.2\n\nTest document",
-      composeContent: null,
-      composePath: null,
+      replyContent: "# cliV\n\nTest document",
+      targetContent: null,
+      targetPath: null,
+      reviewPath: "demo.md",
       replyPath: "demo.md",
       documentId: "test-doc",
       isLoading: false,
@@ -35,11 +36,18 @@ describe("App", () => {
 
   it("should display the title", () => {
     render(<App />);
-    expect(screen.getByText("cliV")).toBeInTheDocument();
+    expect(screen.getAllByText("cliV").length).toBeGreaterThan(0);
   });
 
   it("should show the version message", () => {
     render(<App />);
-    expect(screen.getByText("cliV v0.2")).toBeInTheDocument();
+    expect(screen.getByText("Test document")).toBeInTheDocument();
+  });
+
+  it("renders the GitHub link in the top bar", () => {
+    render(<App />);
+    const githubLink = screen.getByTestId("topbar-github-link");
+    expect(githubLink).toHaveTextContent("GitHub");
+    expect(githubLink).toHaveAttribute("href", "https://github.com/BobDLA/cliv");
   });
 });
