@@ -11,10 +11,6 @@ vi.mock("@/features/history", () => ({
   HistoryTree: () => <div data-testid="history-tree-stub">History</div>,
 }));
 
-vi.mock("@/features/sessions", () => ({
-  SessionTree: () => <div data-testid="session-tree-stub">Sessions</div>,
-}));
-
 describe("LeftSidebar", () => {
   beforeEach(() => {
     useUIStore.setState({
@@ -27,7 +23,7 @@ describe("LeftSidebar", () => {
     });
   });
 
-  it("keeps archived history as the default view and still exposes saved sessions", () => {
+  it("shows archived history directly without exposing saved sessions", () => {
     render(
       <LeftSidebar
         width={240}
@@ -37,16 +33,8 @@ describe("LeftSidebar", () => {
     );
 
     expect(screen.getByTestId("history-tree-stub")).toBeInTheDocument();
-    expect(screen.queryByTestId("session-tree-stub")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("history-view-sessions"));
-
-    expect(screen.getByTestId("session-tree-stub")).toBeInTheDocument();
-    expect(screen.queryByTestId("history-tree-stub")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("history-view-archives"));
-
-    expect(screen.getByTestId("history-tree-stub")).toBeInTheDocument();
+    expect(screen.queryByTestId("history-view-archives")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("history-view-sessions")).not.toBeInTheDocument();
   });
 
   it("still switches back to the outline tab", () => {

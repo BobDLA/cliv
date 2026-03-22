@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { useDocumentStore, useUIStore } from "@/stores";
 import { DocumentOutline, type HeadingInfo } from "@/features/documents";
 import { HistoryTree } from "@/features/history";
-import { SessionTree } from "@/features/sessions";
 import { ResizeHandle } from "./ResizeHandle";
 import { useT } from "@/lib/useT";
 
@@ -17,7 +15,6 @@ export function LeftSidebar({
   headings,
   onDragStart,
 }: LeftSidebarProps) {
-  const [historyView, setHistoryView] = useState<"archives" | "sessions">("archives");
   const sidebarTab = useUIStore((state) => state.sidebarTab);
   const setSidebarTab = useUIStore((state) => state.setSidebarTab);
   const isReadOnly = useDocumentStore((state) => state.isReadOnly);
@@ -35,13 +32,6 @@ export function LeftSidebar({
       ? "border-b-2 border-accent text-accent"
       : "text-text-subtle hover:text-text-primary",
   ].join(" ");
-  const historyViewButtonClass = (view: "archives" | "sessions") =>
-    [
-      "flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold tracking-wide transition-colors",
-      historyView === view
-        ? "bg-accent text-white"
-        : "text-text-subtle hover:text-text-primary",
-    ].join(" ");
 
   return (
     <>
@@ -74,37 +64,7 @@ export function LeftSidebar({
           {sidebarTab === "outline" ? (
             <DocumentOutline headings={headings} />
           ) : (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="border-b border-border-subtle/50 px-2 py-2">
-                <div className="flex rounded-lg bg-surface-panel/80 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setHistoryView("archives")}
-                    className={historyViewButtonClass("archives")}
-                    data-testid="history-view-archives"
-                  >
-                    {t("history.archivesTab")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryView("sessions")}
-                    className={historyViewButtonClass("sessions")}
-                    data-testid="history-view-sessions"
-                  >
-                    {t("history.sessionsTab")}
-                  </button>
-                </div>
-              </div>
-              <div className="min-h-0 flex-1">
-                {historyView === "archives" ? (
-                  <HistoryTree />
-                ) : (
-                  <div className="h-full overflow-y-auto">
-                    <SessionTree />
-                  </div>
-                )}
-              </div>
-            </div>
+            <HistoryTree />
           )}
         </div>
         {sidebarTab === "history" && isReadOnly ? (
