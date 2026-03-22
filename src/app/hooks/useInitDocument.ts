@@ -5,6 +5,7 @@ import {
   useDocumentStore,
   useUIStore,
 } from "@/stores";
+import { hydrateUIFromAppConfig } from "@/stores/uiStore";
 import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
 import { getPathInfo, resolveWorkspacePath } from "@/lib/pathUtils";
 
@@ -65,6 +66,7 @@ export function useInitDocument() {
         } = await import("@/services/tauri-ipc");
         const appConfig = await getAppConfig();
         setAppConfig(appConfig);
+        hydrateUIFromAppConfig(appConfig);
         const args = await getCliArgs();
         const result = await loadFiles(
           args.reviewPath,

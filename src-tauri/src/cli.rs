@@ -579,17 +579,16 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 #[cfg(test)]
 mod tests {
     use super::{detect_trusted_caller, parse_gui_args, resolve_launch_paths, ParentProcess};
-    use crate::config::{AppConfig, LaunchConfig, PromptConfig};
+    use crate::config::{AppConfig, LaunchConfig};
 
     fn test_config() -> AppConfig {
-        AppConfig {
-            launch: LaunchConfig {
-                scan_depth: 5,
-                trusted_callers: vec!["codex".into(), "mycli".into()],
-                ignored_callers: vec!["bash".into(), "sh".into()],
-            },
-            prompts: PromptConfig::default(),
-        }
+        let mut config = AppConfig::default();
+        config.launch = LaunchConfig {
+            scan_depth: 5,
+            trusted_callers: vec!["codex".into(), "mycli".into()],
+            ignored_callers: vec!["bash".into(), "sh".into()],
+        };
+        config
     }
 
     #[test]

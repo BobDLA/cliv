@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { Search, X } from "lucide-react";
+import { matchShortcut } from "@/lib/shortcuts";
 import { useT } from "@/lib/useT";
+import { useUIStore } from "@/stores";
 
 interface DocumentSearchProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -8,13 +10,14 @@ interface DocumentSearchProps {
 }
 
 /**
- * DocumentSearch — Ctrl+F in-document search with match highlighting.
+ * DocumentSearch — in-document search with configurable toggle shortcut.
  */
 export const DocumentSearch = memo(function DocumentSearch({
   containerRef,
   className,
 }: DocumentSearchProps) {
   const t = useT();
+  const searchShortcut = useUIStore((state) => state.shortcuts.search);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
@@ -30,19 +33,19 @@ export const DocumentSearch = memo(function DocumentSearch({
     setCurrentMatch(0);
   }, []);
 
-  // Toggle search with Ctrl+F
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+      if (matchShortcut(e, searchShortcut)) {
         e.preventDefault();
         setIsOpen((prev) => {
           if (!prev) {
-            // Will focus after render
             requestAnimationFrame(() => inputRef.current?.focus());
           }
           return !prev;
         });
+        return;
       }
+
       if (e.key === "Escape" && isOpen) {
         setIsOpen(false);
         setQuery("");
@@ -52,9 +55,8 @@ export const DocumentSearch = memo(function DocumentSearch({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [clearHighlights, isOpen]);
+  }, [clearHighlights, isOpen, searchShortcut]);
 
-  // Focus input when opened
   useEffect(() => {
     if (isOpen) {
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -95,7 +97,6 @@ export const DocumentSearch = memo(function DocumentSearch({
         setMatchCount(ranges.length);
         setCurrentMatch(ranges.length > 0 ? 1 : 0);
 
-        // Scroll to first match
         const firstRange = ranges[0];
         const rect = firstRange.getBoundingClientRect();
         if (rect) {
@@ -110,13 +111,11 @@ export const DocumentSearch = memo(function DocumentSearch({
     [containerRef, clearHighlights],
   );
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => search(query), 200);
     return () => clearTimeout(timer);
   }, [query, search]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => clearHighlights();
   }, [clearHighlights]);
@@ -148,7 +147,7 @@ export const DocumentSearch = memo(function DocumentSearch({
           setQuery("");
           clearHighlights();
         }}
-        className="rounded p-0.5 text-text-subtle hover:bg-surface-hover hover:text-text-primary transition-colors"
+        className="rounded p-0.5 text-text-subtle transition-colors hover:bg-surface-hover hover:text-text-primary"
       >
         <X className="h-3.5 w-3.5" />
       </button>

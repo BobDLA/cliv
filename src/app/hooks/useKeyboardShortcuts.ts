@@ -1,15 +1,12 @@
 import { useEffect } from "react";
+import { matchShortcut } from "@/lib/shortcuts";
 import { useDocumentStore, useSelectionStore, useUIStore } from "@/stores";
 
 /**
  * Hook: register global keyboard shortcuts and Ctrl+Wheel zoom.
- *
- * Shortcuts:
- *   Ctrl+= / Ctrl+- / Ctrl+0 — font size
- *   Ctrl+Alt+M — add annotation
- *   Ctrl+O — open file
  */
 export function useKeyboardShortcuts(handleOpenFile: () => void) {
+  const shortcuts = useUIStore((state) => state.shortcuts);
   const adjustFontSize = useUIStore((state) => state.adjustFontSize);
   const setFontSize = useUIStore((state) => state.setFontSize);
 
@@ -26,33 +23,43 @@ export function useKeyboardShortcuts(handleOpenFile: () => void) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "=" || e.key === "+") {
-          e.preventDefault();
-          adjustFontSize(1);
-        } else if (e.key === "-") {
-          e.preventDefault();
-          adjustFontSize(-1);
-        } else if (e.key === "0") {
-          e.preventDefault();
-          setFontSize(18);
-        } else if (e.key === "m" && e.altKey) {
-          e.preventDefault();
-          if (useDocumentStore.getState().isReadOnly) {
-            return;
-          }
-          const selection = useSelectionStore.getState().selection;
-          if (selection) {
-            useSelectionStore.getState().openPopup();
-          }
-        } else if (e.key === "o") {
-          e.preventDefault();
-          handleOpenFile();
+      if (matchShortcut(e, shortcuts.fontIncrease)) {
+        e.preventDefault();
+        adjustFontSize(1);
+        return;
+      }
+
+      if (matchShortcut(e, shortcuts.fontDecrease)) {
+        e.preventDefault();
+        adjustFontSize(-1);
+        return;
+      }
+
+      if (matchShortcut(e, shortcuts.fontReset)) {
+        e.preventDefault();
+        setFontSize(18);
+        return;
+      }
+
+      if (matchShortcut(e, shortcuts.addAnnotation)) {
+        e.preventDefault();
+        if (useDocumentStore.getState().isReadOnly) {
+          return;
         }
+        const selection = useSelectionStore.getState().selection;
+        if (selection) {
+          useSelectionStore.getState().openPopup();
+        }
+        return;
+      }
+
+      if (matchShortcut(e, shortcuts.openFile)) {
+        e.preventDefault();
+        handleOpenFile();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [adjustFontSize, handleOpenFile, setFontSize]);
+  }, [adjustFontSize, handleOpenFile, setFontSize, shortcuts]);
 }
