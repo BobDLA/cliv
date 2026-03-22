@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   Check,
   ChevronDown,
   ChevronRight,
@@ -16,6 +17,7 @@ export const HistoryTree = memo(function HistoryTree() {
     groups,
     query,
     isLoading,
+    error,
     currentArchiveRef,
     refreshHistory,
     setQuery,
@@ -67,6 +69,16 @@ export const HistoryTree = memo(function HistoryTree() {
     }
   }, []);
 
+  if (!isLoading && error && groups.length === 0) {
+    return (
+      <EmptyHistoryState
+        title={t("history.loadError")}
+        hint={error}
+        variant="error"
+      />
+    );
+  }
+
   if (!isLoading && groups.length === 0) {
     return (
       <EmptyHistoryState
@@ -78,6 +90,14 @@ export const HistoryTree = memo(function HistoryTree() {
 
   return (
     <div className="flex h-full flex-col" data-testid="history-tree">
+      {error ? (
+        <div
+          className="border-b border-border-subtle/50 bg-kind-challenge-bg/70 px-3 py-2 text-xs text-kind-challenge-text"
+          data-testid="history-error-banner"
+        >
+          {t("history.loadError")}: {error}
+        </div>
+      ) : null}
       <div
         className="border-b border-border-subtle/50"
         style={{ padding: "8px" }}
@@ -390,9 +410,11 @@ export const HistoryTree = memo(function HistoryTree() {
 function EmptyHistoryState({
   title,
   hint,
+  variant = "empty",
 }: {
   title: string;
   hint: string;
+  variant?: "empty" | "error";
 }) {
   return (
     <div
@@ -403,16 +425,27 @@ function EmptyHistoryState({
         fontSize: "0.85rem",
         fontFamily: "var(--font-sans)",
       }}
-      data-testid="history-tree-empty"
+      data-testid={variant === "error" ? "history-tree-error" : "history-tree-empty"}
     >
-      <Clock
-        style={{
-          width: "20px",
-          height: "20px",
-          margin: "0 auto 8px",
-          opacity: 0.5,
-        }}
-      />
+      {variant === "error" ? (
+        <AlertCircle
+          style={{
+            width: "20px",
+            height: "20px",
+            margin: "0 auto 8px",
+            opacity: 0.7,
+          }}
+        />
+      ) : (
+        <Clock
+          style={{
+            width: "20px",
+            height: "20px",
+            margin: "0 auto 8px",
+            opacity: 0.5,
+          }}
+        />
+      )}
       <p>{title}</p>
       <p style={{ fontSize: "0.8rem", marginTop: "4px" }}>{hint}</p>
     </div>

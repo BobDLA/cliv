@@ -50,6 +50,9 @@ function tl(locale: Locale, key: string, n?: number | string): string {
   return str;
 }
 
+const HEADER_SOURCE_LOCALES: readonly Locale[] = ["en", "zh"];
+const HEADER_SOURCE_MODES: readonly TemplateMode[] = ["reply", "iterate"];
+
 function getLineRange(text: string, startOffset?: number, endOffset?: number): [number, number] | null {
   if (startOffset == null || endOffset == null || !text) return null;
   const prefix = text.slice(0, startOffset);
@@ -66,12 +69,36 @@ function resolveUserTextSeed(
   targetContent?: string | null,
 ): string {
   const header = resolvePromptHeader(locale, mode, promptConfig).trim();
-  const existingTargetText = targetContent?.trim();
+  const existingTargetText = stripLeadingPromptHeader(targetContent, promptConfig);
 
   if (!existingTargetText) return header;
-  if (existingTargetText.startsWith(header)) return existingTargetText;
 
   return `${header}\n\n${existingTargetText}`;
+}
+
+function stripLeadingPromptHeader(
+  targetContent: string | null | undefined,
+  promptConfig: PromptConfig | null,
+): string {
+  const existingTargetText = targetContent?.trim();
+  if (!existingTargetText) return "";
+
+  const knownHeaders = new Set<string>();
+  for (const locale of HEADER_SOURCE_LOCALES) {
+    for (const mode of HEADER_SOURCE_MODES) {
+      const header = resolvePromptHeader(locale, mode, promptConfig).trim();
+      if (header) knownHeaders.add(header);
+    }
+  }
+
+  for (const header of knownHeaders) {
+    if (existingTargetText === header) return "";
+    if (existingTargetText.startsWith(header)) {
+      return existingTargetText.slice(header.length).trimStart();
+    }
+  }
+
+  return existingTargetText;
 }
 
 function normalizeTemplateMode(mode: string | null | undefined): TemplateMode {

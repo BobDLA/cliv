@@ -264,4 +264,16 @@ describe("HistoryTree", () => {
     fireEvent.click(screen.getByTestId("history-group-toggle"));
     expect(screen.getByTestId("history-group-children")).toBeInTheDocument();
   });
+
+  it("surfaces load failures instead of showing the generic empty history state", async () => {
+    listReviewHistoryMock.mockRejectedValue(new Error("history directory unreadable"));
+
+    render(<HistoryTree />);
+
+    expect(await screen.findByTestId("history-tree-error")).toHaveTextContent(
+      "Failed to load history",
+    );
+    expect(screen.getByText("history directory unreadable")).toBeInTheDocument();
+    expect(screen.queryByText("No archived reviews yet")).not.toBeInTheDocument();
+  });
 });

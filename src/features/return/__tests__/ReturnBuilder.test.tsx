@@ -245,4 +245,34 @@ describe("ReturnBuilder", () => {
     fireEvent.change(textarea, { target: { value: "mutated" } });
     expect(textarea).toHaveValue("Archived custom input");
   });
+
+  it("replaces stale prompt headers instead of stacking them when switching templates", async () => {
+    const replyHeader = resolvePromptHeader("en", "reply", null);
+    const iterateHeader = resolvePromptHeader("en", "iterate", null);
+
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        target: `${replyHeader}\n\nKeep the response focused on the failing test.`,
+      });
+    });
+
+    render(<ReturnBuilder />);
+
+    const textarea = screen.getByTestId("return-free-edit");
+    expect(textarea).toHaveValue(
+      `${replyHeader}\n\nKeep the response focused on the failing test.`,
+    );
+
+    fireEvent.click(screen.getByTestId("return-template-iterate"));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue(
+        `${iterateHeader}\n\nKeep the response focused on the failing test.`,
+      );
+    });
+
+    expect(textarea).not.toHaveValue(
+      `${iterateHeader}\n\n${replyHeader}\n\nKeep the response focused on the failing test.`,
+    );
+  });
 });
