@@ -26,7 +26,6 @@ test("creates, edits, and submits annotations in browser mode", async ({ page })
   await expect(page.getByRole("heading", { name: "E2E Fixture Document" })).toBeVisible();
 
   await selectTextInViewer(page, "This paragraph is used for browser upload tests and annotation coverage.");
-  await page.getByTestId("floating-annotate-button").click();
   await expect(page.getByTestId("annotation-popup")).toHaveAttribute("data-mode", "create");
 
   await page.getByTestId("annotation-popup-kind-question").click();
