@@ -1,6 +1,5 @@
 import { memo, useRef, useEffect, useState, useCallback, isValidElement } from "react";
 import MarkdownPreview from "@uiw/react-markdown-preview";
-import { useUIStore } from "@/stores/uiStore";
 import { MermaidBlock } from "./MermaidBlock";
 import { ImageLightbox } from "./ImageLightbox";
 
@@ -17,10 +16,24 @@ export interface HeadingInfo {
   level: number;
 }
 
+/** Derive color-mode from the root data-theme attribute. */
+function getColorModeFromRoot(): "light" | "dark" {
+  const theme = document.documentElement.getAttribute("data-theme");
+  return theme === "light" ? "light" : "dark";
+}
+
 /**
  * MarkdownViewer — renders Markdown with @uiw/react-markdown-preview.
  * Built-in: syntax highlighting, GitHub styling, GFM, GitHub Alerts.
  * Custom: Mermaid blocks, image lightbox, heading extraction.
+ *
+ * Theme handling: instead of subscribing to the Zustand store (which would
+ * cause a full re-render of MarkdownPreview on every theme change), we
+ * observe `data-theme` on <html> via MutationObserver and update
+ * `data-color-mode` on the wrapper div directly through the DOM.
+ * Our CSS overrides in globals.css already handle all actual color changes
+ * through CSS variables, so this attribute is only needed for the library's
+ * internal style selection.
  */
 export const MarkdownViewer = memo(function MarkdownViewer({
   content,
@@ -30,8 +43,41 @@ export const MarkdownViewer = memo(function MarkdownViewer({
 }: MarkdownViewerProps) {
   const fallbackRef = useRef<HTMLDivElement>(null);
   const ref = containerRef ?? fallbackRef;
-  const theme = useUIStore((state) => state.theme);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // Read initial color mode once (no store subscription).
+  const initialColorMode = useRef(getColorModeFromRoot());
+
+  // Observe data-theme changes on <html> and update wrapper DOM directly.
+  useEffect(() => {
+    const wrapper = ref.current;
+    if (!wrapper) return;
+
+    // Find the element with data-color-mode (MarkdownPreview's wrapper).
+    const updateColorMode = () => {
+      const mode = getColorModeFromRoot();
+      const target = wrapper.querySelector("[data-color-mode]");
+      if (target) {
+        target.setAttribute("data-color-mode", mode);
+      }
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === "data-theme") {
+          updateColorMode();
+          break;
+        }
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => observer.disconnect();
+  }, [ref]);
 
   const openLightbox = useCallback((src: string) => {
     setLightboxSrc(src);
@@ -64,7 +110,6 @@ export const MarkdownViewer = memo(function MarkdownViewer({
     return () => cancelAnimationFrame(timer);
   }, [content, onHeadingsChange, ref]);
 
-  const colorMode = theme === "light" ? "light" : "dark";
   const rootClassName = ["cliv-markdown-preview max-w-none", className || ""]
     .filter(Boolean)
     .join(" ");
@@ -83,7 +128,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
         <MarkdownPreview
           source={content}
           wrapperElement={{
-            "data-color-mode": colorMode,
+            "data-color-mode": initialColorMode.current,
           }}
           components={{
             pre: ({ children, ...props }) => {

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, memo, useCallback } from "react";
 import mermaid from "mermaid";
-import { useUIStore } from "@/stores/uiStore";
 import { ImageLightbox } from "@/features/documents/ImageLightbox";
 
 interface MermaidBlockProps {
   chart: string;
+}
+
+/** Derive mermaid theme from root data-theme attribute. */
+function getMermaidThemeFromRoot(): "default" | "dark" {
+  const theme = document.documentElement.getAttribute("data-theme");
+  return theme === "light" ? "default" : "dark";
 }
 
 /**
@@ -12,6 +17,10 @@ interface MermaidBlockProps {
  * Theme-aware: uses "default" for light, "dark" for dark/dim.
  * Click-to-zoom: renders SVG to a data URL and opens in lightbox.
  * Falls back to showing the raw code on render failure (silent degradation).
+ *
+ * Theme handling: observes `data-theme` on <html> via MutationObserver
+ * instead of subscribing to the Zustand store, and debounces re-renders
+ * to avoid queuing multiple expensive SVG generations during rapid toggling.
  */
 export const MermaidBlock = memo(function MermaidBlock({
   chart,
@@ -20,10 +29,35 @@ export const MermaidBlock = memo(function MermaidBlock({
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const theme = useUIStore((s) => s.theme);
 
-  // Re-initialize mermaid when theme changes
-  const mermaidTheme = theme === "light" ? "default" : "dark";
+  // Track mermaid theme via MutationObserver, debounced.
+  const [mermaidTheme, setMermaidTheme] = useState(getMermaidThemeFromRoot);
+
+  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === "data-theme") {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            setMermaidTheme(getMermaidThemeFromRoot());
+          }, 300);
+          break;
+        }
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => {
+      observer.disconnect();
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
