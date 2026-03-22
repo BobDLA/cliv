@@ -130,6 +130,10 @@ describe("HistoryTree", () => {
     render(<HistoryTree />);
 
     await screen.findByText("project");
+    expect(screen.queryByTestId("history-entry")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("history-group-toggle"));
+
     expect(screen.getByTestId("history-entry")).toHaveAttribute(
       "title",
       expect.stringContaining("128 chars · 3 items"),
@@ -152,6 +156,66 @@ describe("HistoryTree", () => {
       screen.getByText((text) => text.includes("128 chars · 3 items")),
     ).toBeInTheDocument();
     expect(screen.queryByText("Review feedback")).not.toBeInTheDocument();
+  });
+
+  it("keeps all project groups collapsed by default until opened", async () => {
+    listReviewHistoryMock.mockResolvedValue([
+      {
+        key: "ws_project",
+        label: "project",
+        path: "/tmp/project",
+        entries: [
+          {
+            id: "arch_1",
+            workspaceKey: "ws_project",
+            workspaceLabel: "project",
+            workspacePath: "/tmp/project",
+            archivedAt: "2026-03-22T10:01:00.000Z",
+            agent: "codex",
+            reviewPath: null,
+            replyPath: null,
+            targetPath: null,
+            submittedChars: 128,
+            itemCount: 3,
+            preview: "Detail review",
+            searchText: "detail review",
+          },
+        ],
+      },
+      {
+        key: "ws_docs",
+        label: "docs",
+        path: "/tmp/docs",
+        entries: [
+          {
+            id: "arch_2",
+            workspaceKey: "ws_docs",
+            workspaceLabel: "docs",
+            workspacePath: "/tmp/docs",
+            archivedAt: "2026-03-22T09:01:00.000Z",
+            agent: "codex",
+            reviewPath: null,
+            replyPath: null,
+            targetPath: null,
+            submittedChars: 64,
+            itemCount: 1,
+            preview: "Docs note",
+            searchText: "docs note",
+          },
+        ],
+      },
+    ]);
+
+    render(<HistoryTree />);
+
+    await screen.findByText("project");
+    expect(screen.getByText("docs")).toBeInTheDocument();
+    expect(screen.queryAllByTestId("history-group-children")).toHaveLength(0);
+    expect(screen.queryByTestId("history-entry")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByTestId("history-group-toggle")[0]);
+
+    expect(screen.getByTestId("history-group-children")).toBeInTheDocument();
   });
 
   it("filters entries by archived search text", async () => {
@@ -197,6 +261,7 @@ describe("HistoryTree", () => {
 
     render(<HistoryTree />);
     await screen.findByText("project");
+    expect(screen.queryByTestId("history-entry")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("history-search-input"), {
       target: { value: "important" },
@@ -257,12 +322,13 @@ describe("HistoryTree", () => {
       expect(writeTextMock).toHaveBeenCalledWith(longPath);
     });
     expect(screen.getByText("Copied")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("history-group-toggle"));
     expect(screen.queryByTestId("history-group-children")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("history-group-toggle"));
     expect(screen.getByTestId("history-group-children")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("history-group-toggle"));
+    expect(screen.queryByTestId("history-group-children")).not.toBeInTheDocument();
   });
 
   it("surfaces load failures instead of showing the generic empty history state", async () => {
