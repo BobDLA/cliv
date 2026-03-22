@@ -7,6 +7,7 @@ import {
 } from "@/stores";
 import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
 import { getPathInfo, resolveWorkspacePath } from "@/lib/pathUtils";
+import type { CliArgs } from "@/types";
 
 // Check if running inside Tauri
 const isTauri =
@@ -40,6 +41,16 @@ function buildExtractionPlan(
     case "gemini":  return [gemini, claude, codex];
     default:        return [claude, gemini, codex]; // default fallback order
   }
+}
+
+/**
+ * Only use cached agent-reply fallback when the launch clearly came from an
+ * integrated agent/editor flow. A plain `cliv` launch should stay blank.
+ */
+export function shouldUseReplyExtractionFallback(
+  args: Pick<CliArgs, "agent" | "trustedCaller">,
+): boolean {
+  return Boolean(args.agent || args.trustedCaller);
 }
 
 /**
@@ -80,7 +91,10 @@ export function useInitDocument() {
 
         // Try to extract the last reply using cached hooks
         let replyContent = result.reply;
-        if (!replyContent || replyContent.trim() === "") {
+        if (
+          (!replyContent || replyContent.trim() === "") &&
+          shouldUseReplyExtractionFallback(args)
+        ) {
           const plan = buildExtractionPlan(
             args.agent,
             () => extractCodexReply(null, args.workspacePath),
