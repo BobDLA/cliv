@@ -154,6 +154,55 @@ describe("ReturnBuilder", () => {
     expect(saveReviewArchiveMock).not.toHaveBeenCalled();
   });
 
+  it("ignores repeated clicks while a submit is already in progress", async () => {
+    let resolveWriteBack: ((value: "clipboard") => void) | undefined;
+    writeBackMock.mockImplementation(
+      () =>
+        new Promise<"clipboard">((resolve) => {
+          resolveWriteBack = resolve;
+        }),
+    );
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        reply: "# Current reply",
+        target: null,
+        targetPath: null,
+        reviewPath: "/tmp/reply.md",
+        replyPath: "/tmp/reply.md",
+        workspacePath: "/tmp/workspace",
+      });
+    });
+
+    render(<ReturnBuilder />);
+
+    const submitButton = screen.getByTestId("return-submit");
+    fireEvent.click(submitButton);
+    fireEvent.click(submitButton);
+
+    expect(writeBackMock).toHaveBeenCalledTimes(1);
+    expect(saveReviewArchiveMock).not.toHaveBeenCalled();
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("return-status-pending")).toHaveTextContent(
+      "Copying and saving",
+    );
+
+    if (!resolveWriteBack) {
+      throw new Error("writeBack resolver was not captured");
+    }
+
+    const resolvePendingWriteBack: (value: "clipboard") => void = resolveWriteBack;
+    await act(async () => {
+      resolvePendingWriteBack("clipboard");
+    });
+
+    await waitFor(() => {
+      expect(saveReviewArchiveMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("archives standalone open-file reviews under the opened file folder", async () => {
     writeBackMock.mockResolvedValue("clipboard");
     saveReviewArchiveMock.mockResolvedValue(undefined);
