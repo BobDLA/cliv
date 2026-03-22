@@ -57,7 +57,9 @@ export EDITOR="cliv --target"
 
 If the caller can only launch `cliv <file>`, cliV will still treat that positional file as the write target when the parent-process chain matches a trusted caller. Plain standalone launches stay review-only.
 
-### Optional: configure trusted callers and prompt templates
+### Optional: configure cliV-owned settings
+
+cliV keeps its own durable settings in `~/.cliv/config.toml`. The Settings panel writes the same file for `Reading`, `Prompts`, and supported `Shortcuts`. Codex / Claude / Gemini hook files stay outside this boundary and are not rewritten by cliV.
 
 Edit `~/.cliv/config.toml`:
 
@@ -65,14 +67,51 @@ Edit `~/.cliv/config.toml`:
 [launch]
 scan_depth = 5
 trusted_callers = ["codex", "claude", "gemini"]
-ignored_callers = ["bash", "zsh", "fish", "tmux", "launchd", "open"]
+ignored_callers = [
+  "bash",
+  "sh",
+  "zsh",
+  "fish",
+  "tmux",
+  "open",
+  "launchd",
+  "cmd.exe",
+  "powershell.exe",
+  "pwsh.exe",
+  "explorer.exe",
+]
 
 [prompts]
 reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
 reply_header_en = "Please respond to each annotation below in Markdown."
 iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
 iterate_header_en = "Please make incremental revisions based on the following annotations."
+
+[ui]
+theme = "light"
+font_size = 18
+locale = "en"
+sidebar_open = true
+sidebar_tab = "outline"
+sidebar_width = 224
+annotation_margin_width = 256
+content_width = "standard"
+page_padding = "comfortable"
+reading_density = "comfortable"
+highlight_strength = "balanced"
+
+[ui.shortcuts]
+open_file = "Mod+O"
+search = "Mod+F"
+submit_return = "Mod+Enter"
+submit_annotation = "Mod+Enter"
+add_annotation = "Mod+Alt+M"
+font_increase = "Mod+="
+font_decrease = "Mod+-"
+font_reset = "Mod+0"
 ```
+
+If `submit_annotation` and `submit_return` share `Mod+Enter`, cliV resolves the conflict by focus priority: annotation submit wins while the annotation editor is active; otherwise the key falls through to return submit.
 
 ### Step 3: Configure agent hooks
 

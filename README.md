@@ -85,14 +85,15 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
 - 🗂️ **Save sessions** — persist review snapshots and annotations locally (local-only for now)
-- 🎛️ **Reading settings** — one settings surface for theme, font size, locale, layout memory, and reading presets
+- 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
 
 ## Notes
 
 - **Launch semantics** — `cliv <file.md>` opens that file for review. `cliv --target <file>`, `cliv -t <file>`, and the compatibility alias `cliv --compose <file>` treat the file as the write target.
 - **Write-back behavior** — cliV writes back directly only when an explicit target is present or the launch comes from a trusted caller; otherwise it falls back to clipboard.
 - **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
-- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, scan depth, and prompt headers can be configured in `~/.cliv/config.toml`.
+- **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
+- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
 - **Logging** — on non-Windows systems, cliV may write diagnostic logs to `/tmp/cliv.log`.
 
 ### Example `~/.cliv/config.toml`
@@ -101,14 +102,51 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 [launch]
 scan_depth = 5
 trusted_callers = ["codex", "claude", "gemini"]
-ignored_callers = ["bash", "zsh", "fish", "tmux", "launchd", "open"]
+ignored_callers = [
+  "bash",
+  "sh",
+  "zsh",
+  "fish",
+  "tmux",
+  "open",
+  "launchd",
+  "cmd.exe",
+  "powershell.exe",
+  "pwsh.exe",
+  "explorer.exe",
+]
 
 [prompts]
 reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
 reply_header_en = "Please respond to each annotation below in Markdown."
 iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
 iterate_header_en = "Please make incremental revisions based on the following annotations."
+
+[ui]
+theme = "light"
+font_size = 18
+locale = "en"
+sidebar_open = true
+sidebar_tab = "outline"
+sidebar_width = 224
+annotation_margin_width = 256
+content_width = "standard"
+page_padding = "comfortable"
+reading_density = "comfortable"
+highlight_strength = "balanced"
+
+[ui.shortcuts]
+open_file = "Mod+O"
+search = "Mod+F"
+submit_return = "Mod+Enter"
+submit_annotation = "Mod+Enter"
+add_annotation = "Mod+Alt+M"
+font_increase = "Mod+="
+font_decrease = "Mod+-"
+font_reset = "Mod+0"
 ```
+
+When `submit_annotation` and `submit_return` share `Mod+Enter`, cliV uses focus priority: annotation submit wins while the annotation editor is active; otherwise the same key falls through to return submit.
 
 ## Tech Stack
 
