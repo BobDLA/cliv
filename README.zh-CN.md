@@ -84,14 +84,13 @@ export EDITOR="cliv"
 - 📋 **写回流程** — 将批注汇总为提示词，然后写回或复制
 - 🔄 **多 Agent 支持** — 尽力自动识别 Codex / Claude / Gemini，也可用 `CLIV_AGENT` 强制指定
 - 📂 **打开本地 Markdown** — 既能审阅缓存回复，也能直接打开 `.md` 文件，且默认按只读审阅处理
-- 🗂️ **保存会话** — 在本地保留审阅快照和批注（目前仅做本地持久化）
 - 🎛️ **阅读设置** — 在统一设置面里调整主题、字号、语言、布局记忆和阅读预设
 
 ## 说明
 
 - **启动语义** — `cliv <file.md>` 会把文件当作审阅内容打开；`cliv --target <file>`、`cliv -t <file>` 和兼容别名 `cliv --compose <file>` 会把文件当作写回目标。
 - **写回行为** — 只有存在显式目标或命中受信调用方时，cliV 才会直接写回；否则回退到剪贴板。
-- **本地存储** — 集成 hook 会把回复缓存在各 Agent 的 `reply_cache` 目录下；会话数据目前也只保存在本地。
+- **本地存储** — 集成 hook 会把回复缓存在各 Agent 的 `reply_cache` 目录下。
 - **自动识别** — Agent 识别依赖环境变量和进程启发式；如需强制指定，可设置 `CLIV_AGENT=codex|claude|gemini`。受信调用方、扫描深度和提示词模板可在 `~/.cliv/config.toml` 中配置。
 - **日志** — 在非 Windows 系统上，cliV 可能会把诊断日志写到 `/tmp/cliv.log`。
 

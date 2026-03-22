@@ -84,14 +84,13 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - 📋 **Write-back flow** — aggregate annotations into a prompt, then write back or copy
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
-- 🗂️ **Save sessions** — persist review snapshots and annotations locally (local-only for now)
 - 🎛️ **Reading settings** — one settings surface for theme, font size, locale, layout memory, and reading presets
 
 ## Notes
 
 - **Launch semantics** — `cliv <file.md>` opens that file for review. `cliv --target <file>`, `cliv -t <file>`, and the compatibility alias `cliv --compose <file>` treat the file as the write target.
 - **Write-back behavior** — cliV writes back directly only when an explicit target is present or the launch comes from a trusted caller; otherwise it falls back to clipboard.
-- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
+- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory.
 - **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, scan depth, and prompt headers can be configured in `~/.cliv/config.toml`.
 - **Logging** — on non-Windows systems, cliV may write diagnostic logs to `/tmp/cliv.log`.
 
