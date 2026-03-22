@@ -36,18 +36,18 @@ export const DocumentOutline = memo(function DocumentOutline({
 
   return (
     <nav
-      className={`space-y-1 p-3 ${className || ""}`}
+      className={`space-y-0.5 p-3 ${className || ""}`}
       data-testid="document-outline"
       aria-label={t("outline.ariaLabel")}
     >
-      <div className="mb-4 pt-1 px-1 text-xs font-semibold uppercase tracking-wider text-text-subtle">
+      <div className="mb-2 pt-1 px-1 text-xs font-semibold uppercase tracking-wider text-text-subtle">
         {t("outline.toc")}
       </div>
       {headings.map((heading) => (
         <button
           key={heading.id}
           onClick={() => scrollTo(heading.id)}
-          className="group flex w-full items-start rounded-md px-2 py-1.5 text-left text-[0.85em] leading-[1.4] transition-colors hover:bg-surface-hover"
+          className="group flex w-full items-start rounded-md px-2 py-1 text-left text-[0.85em] leading-[1.4] transition-colors hover:bg-surface-hover"
           style={{ paddingLeft: `${(heading.level - minLevel) * 16 + 8}px` }}
           title={heading.text}
           data-testid="outline-item"

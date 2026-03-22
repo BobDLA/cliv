@@ -11,6 +11,7 @@ import { useColumnResize } from "./hooks/useColumnResize";
 import { TopBar } from "./components/TopBar";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { DocumentArea } from "./components/DocumentArea";
+import { PersonalizationPanel } from "./components/PersonalizationPanel";
 
 /**
  * App shell — thin orchestrator.
@@ -24,6 +25,7 @@ export function App() {
   const t = useT();
 
   const [headings, setHeadings] = useState<HeadingInfo[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,6 +137,8 @@ export function App() {
         onToggleSidebar={toggleSidebarOpen}
         onOpenFile={handleOpenFile}
         scrollContainerRef={scrollContainerRef}
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => setSettingsOpen((v) => !v)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -154,6 +158,11 @@ export function App() {
           onMarginDragStart={onMarginDragStart}
           onHeadingsChange={handleHeadingsChange}
           onOpenFile={handleOpenFile}
+        />
+
+        <PersonalizationPanel
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
         />
       </div>
     </div>

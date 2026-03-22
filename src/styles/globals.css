@@ -46,6 +46,7 @@
   --color-kind-challenge-text: #ff8c8c;
 
   /* Spacing scale */
+  --spacing: 0.25rem;
   --spacing-panel-gap: 1px;
 
   /* Font */
@@ -75,70 +76,70 @@
   --highlight-creating-alpha: 0.18;
 }
 
-/* ─── Base Styles ─────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+  html {
+    font-size: var(--font-scale, 18px);
+  }
 
-html {
-  font-size: var(--font-scale, 18px);
-}
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-app);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+    min-height: 100vh;
+  }
 
-body {
-  font-family: var(--font-sans);
-  color: var(--color-text-primary);
-  background-color: var(--color-surface-app);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  overflow: hidden;
-  min-height: 100vh;
-}
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 
-#root {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+  /* ─── Scrollbar ───────────────────────────────────────────── */
 
-/* ─── Scrollbar ───────────────────────────────────────────── */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-subtle);
+    border-radius: 3px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-subtle);
-  border-radius: 3px;
-}
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-strong);
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-strong);
-}
+  /* ─── Selection ───────────────────────────────────────────── */
 
-/* ─── Selection ───────────────────────────────────────────── */
+  ::selection {
+    background-color: var(--color-accent-glow);
+    color: var(--color-text-strong);
+  }
 
-::selection {
-  background-color: var(--color-accent-glow);
-  color: var(--color-text-strong);
-}
+  /* ─── List Alignment ──────────────────────────────────────── */
 
-/* ─── List Alignment ──────────────────────────────────────── */
-
-[data-viewer-root] ul,
-[data-viewer-root] ol {
-  padding-left: 1.5em;
-  list-style-position: outside;
+  [data-viewer-root] ul,
+  [data-viewer-root] ol {
+    padding-left: 1.5em;
+    list-style-position: outside;
+  }
 }
 
 /* ─── Search Highlights (CSS Highlight API) ───────────────── */
