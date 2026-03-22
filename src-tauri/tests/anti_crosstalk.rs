@@ -151,9 +151,7 @@ fn no_session_returns_error_not_random_data() {
     let tmp = TempDir::new().unwrap();
     let home = tmp.path();
 
-    // Plant some cache files — none should be returned without a session ID
-    // (for Claude/Codex). Gemini has a newest-file fallback, so it will
-    // return the newest cache file when no session ID is provided.
+    // Plant some cache files — none should be returned without a session key.
     write_cache(home, "orphan-session", "This should never be returned");
 
     let claude_err = cliv_lib::extract::claude::extract_claude_reply_from(home, None);
@@ -166,12 +164,10 @@ fn no_session_returns_error_not_random_data() {
         "Error message should be specific"
     );
 
-    // Gemini now falls back to newest file when no session ID is provided.
-    // This is intentional: Gemini CLI does not always provide GEMINI_SESSION_ID.
     let gemini_result = cliv_lib::extract::gemini::extract_gemini_reply_from(home, None);
     assert!(
-        gemini_result.is_ok(),
-        "Gemini should fall back to newest cache file when no session ID"
+        gemini_result.is_err(),
+        "Gemini should error without a cache key"
     );
 
     let codex_err = cliv_lib::extract::codex::extract_codex_reply_from(home, None);

@@ -50,11 +50,9 @@ pub fn extract_gemini_reply(session_id: Option<String>) -> Result<String, String
 
 /// Testable inner function: reads Gemini reply cache from a given home directory.
 ///
-/// Fallback chain:
+/// Lookup chain:
 /// 1. PID cache hit — if session_id looks like a numeric PID, try `{pid}.md`
 /// 2. Session-id direct hit — try `{session_id}.md`
-/// 3. Newest file scan — only when no session_id was provided, pick the
-///    newest `.md` in `reply_cache/`
 pub fn extract_gemini_reply_from(
     gemini_home: &Path,
     session_id: Option<String>,
@@ -99,18 +97,12 @@ pub fn extract_gemini_reply_from(
         }
     }
 
-    // Strategy 3: Newest .md file in the cache directory (last resort) only
-    // when the caller did not request a specific session key.
     if session_id.is_none() {
-        if let Some(newest) = find_newest_md(&cache_dir) {
-            logging::log(&format!(
-                "  extract gemini: HIT newest cache file={} size={}",
-                newest.display(),
-                fs::metadata(&newest).map(|m| m.len()).unwrap_or(0)
-            ));
-            return fs::read_to_string(&newest)
-                .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
-        }
+        return Err(format!(
+            "Gemini reply cache key not found. session_id={:?}, cache_dir={}",
+            session_id,
+            cache_dir.display()
+        ));
     }
 
     Err(format!(
@@ -122,33 +114,6 @@ pub fn extract_gemini_reply_from(
 
 fn is_pid_like(value: &str) -> bool {
     !value.is_empty() && value.chars().all(|ch| ch.is_ascii_digit())
-}
-
-/// Find the newest `.md` file (by mtime) in a directory, ignoring `.meta.json` files.
-fn find_newest_md(dir: &Path) -> Option<PathBuf> {
-    let entries = fs::read_dir(dir).ok()?;
-    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(n) => n,
-            None => continue,
-        };
-        if !name.ends_with(".md") || name.ends_with(".meta.json") {
-            continue;
-        }
-        let mtime = match fs::metadata(&path).and_then(|m| m.modified()) {
-            Ok(t) => t,
-            Err(_) => continue,
-        };
-        match newest {
-            Some((best_time, _)) if mtime <= best_time => {}
-            _ => newest = Some((mtime, path)),
-        }
-    }
-
-    newest.map(|(_, path)| path)
 }
 
 #[cfg(test)]
@@ -184,24 +149,21 @@ mod tests {
     }
 
     #[test]
-    fn newest_file_fallback() {
-        let home = setup_temp_home();
-        let old = home.path().join("reply_cache").join("old.md");
-        let new = home.path().join("reply_cache").join("new.md");
-        fs::write(&old, "Old reply").unwrap();
-        // Ensure different mtime
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        fs::write(&new, "New reply").unwrap();
-
-        let result = extract_gemini_reply_from(home.path(), None);
-        assert_eq!(result.unwrap(), "New reply");
-    }
-
-    #[test]
     fn no_cache_returns_error() {
         let home = setup_temp_home();
         let result = extract_gemini_reply_from(home.path(), None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn no_key_does_not_fall_back_to_unrelated_cache() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("other-session.md");
+        fs::write(&cache_path, "Other session reply").unwrap();
+
+        let result = extract_gemini_reply_from(home.path(), None);
+        let err = result.expect_err("expected missing Gemini key to fail");
+        assert!(err.contains("key not found"));
     }
 
     #[test]

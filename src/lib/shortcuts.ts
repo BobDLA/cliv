@@ -36,6 +36,7 @@ const SPECIAL_KEYS = new Map<string, string>([
   ["escape", "Escape"],
   ["esc", "Escape"],
   ["=", "="],
+  ["+", "="],
   ["plus", "="],
   ["-", "-"],
   ["minus", "-"],
