@@ -49,37 +49,162 @@ pub fn extract_gemini_reply(session_id: Option<String>) -> Result<String, String
 }
 
 /// Testable inner function: reads Gemini reply cache from a given home directory.
+///
+/// Fallback chain:
+/// 1. PID cache hit — if session_id looks like a numeric PID, try `{pid}.md`
+/// 2. Session-id direct hit — try `{session_id}.md`
+/// 3. Newest file scan — pick the newest `.md` in `reply_cache/`
 pub fn extract_gemini_reply_from(
     gemini_home: &Path,
     session_id: Option<String>,
 ) -> Result<String, String> {
-    let session_id = match session_id {
-        Some(sid) => sid,
-        None => return Err(
-            "No Gemini session ID found. Set GEMINI_SESSION_ID or ensure the AfterAgent hook provides it.".to_string()
-        ),
-    };
+    let cache_dir = gemini_home.join("reply_cache");
 
-    let cache_path = gemini_home
-        .join("reply_cache")
-        .join(format!("{}.md", session_id));
-    logging::log(&format!(
-        "  extract gemini: trying cache path={}",
-        cache_path.display()
-    ));
-    if cache_path.exists() {
+    // Strategy 1: PID cache hit (numeric key → {pid}.md)
+    if let Some(ref key) = session_id {
+        if is_pid_like(key) {
+            let cache_path = cache_dir.join(format!("{}.md", key));
+            logging::log(&format!(
+                "  extract gemini: trying PID cache path={}",
+                cache_path.display()
+            ));
+            if cache_path.exists() {
+                logging::log(&format!(
+                    "  extract gemini: HIT PID cache file={} size={}",
+                    cache_path.display(),
+                    fs::metadata(&cache_path).map(|m| m.len()).unwrap_or(0)
+                ));
+                return fs::read_to_string(&cache_path)
+                    .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
+            }
+        }
+    }
+
+    // Strategy 2: Session-id direct hit ({session_id}.md)
+    if let Some(ref key) = session_id {
+        let cache_path = cache_dir.join(format!("{}.md", key));
         logging::log(&format!(
-            "  extract gemini: HIT cache file={} size={}",
-            cache_path.display(),
-            fs::metadata(&cache_path).map(|m| m.len()).unwrap_or(0)
+            "  extract gemini: trying session cache path={}",
+            cache_path.display()
         ));
-        return fs::read_to_string(&cache_path)
+        if cache_path.exists() {
+            logging::log(&format!(
+                "  extract gemini: HIT session cache file={} size={}",
+                cache_path.display(),
+                fs::metadata(&cache_path).map(|m| m.len()).unwrap_or(0)
+            ));
+            return fs::read_to_string(&cache_path)
+                .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
+        }
+    }
+
+    // Strategy 3: Newest .md file in the cache directory (last resort)
+    if let Some(newest) = find_newest_md(&cache_dir) {
+        logging::log(&format!(
+            "  extract gemini: HIT newest cache file={} size={}",
+            newest.display(),
+            fs::metadata(&newest).map(|m| m.len()).unwrap_or(0)
+        ));
+        return fs::read_to_string(&newest)
             .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
     }
 
     Err(format!(
-        "Gemini reply cache not found for session '{}'. Cache file expected at: {}",
+        "Gemini reply cache not found. session_id={:?}, cache_dir={}",
         session_id,
-        cache_path.display()
+        cache_dir.display()
     ))
 }
+
+fn is_pid_like(value: &str) -> bool {
+    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_digit())
+}
+
+/// Find the newest `.md` file (by mtime) in a directory, ignoring `.meta.json` files.
+fn find_newest_md(dir: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        if !name.ends_with(".md") || name.ends_with(".meta.json") {
+            continue;
+        }
+        let mtime = match fs::metadata(&path).and_then(|m| m.modified()) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        match newest {
+            Some((best_time, _)) if mtime <= best_time => {}
+            _ => newest = Some((mtime, path)),
+        }
+    }
+
+    newest.map(|(_, path)| path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn setup_temp_home() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        fs::create_dir_all(dir.path().join("reply_cache"))
+            .expect("failed to create reply_cache dir");
+        dir
+    }
+
+    #[test]
+    fn pid_cache_hit() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("12345.md");
+        fs::write(&cache_path, "Hello from Gemini").unwrap();
+
+        let result = extract_gemini_reply_from(home.path(), Some("12345".into()));
+        assert_eq!(result.unwrap(), "Hello from Gemini");
+    }
+
+    #[test]
+    fn session_id_cache_hit() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("session-abc.md");
+        fs::write(&cache_path, "Session reply").unwrap();
+
+        let result = extract_gemini_reply_from(home.path(), Some("session-abc".into()));
+        assert_eq!(result.unwrap(), "Session reply");
+    }
+
+    #[test]
+    fn newest_file_fallback() {
+        let home = setup_temp_home();
+        let old = home.path().join("reply_cache").join("old.md");
+        let new = home.path().join("reply_cache").join("new.md");
+        fs::write(&old, "Old reply").unwrap();
+        // Ensure different mtime
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        fs::write(&new, "New reply").unwrap();
+
+        let result = extract_gemini_reply_from(home.path(), None);
+        assert_eq!(result.unwrap(), "New reply");
+    }
+
+    #[test]
+    fn no_cache_returns_error() {
+        let home = setup_temp_home();
+        let result = extract_gemini_reply_from(home.path(), None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn no_cache_with_session_id_returns_error() {
+        let home = setup_temp_home();
+        let result = extract_gemini_reply_from(home.path(), Some("nonexistent".into()));
+        assert!(result.is_err());
+    }
+}
+
