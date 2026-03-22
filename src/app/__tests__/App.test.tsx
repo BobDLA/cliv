@@ -106,6 +106,6 @@ describe("App", () => {
 
     expect(screen.getByTestId("personalization-panel")).toBeInTheDocument();
     expect(screen.getByTestId("theme-switcher")).toBeInTheDocument();
-    expect(screen.getByTestId("settings-font-size")).toHaveTextContent("18");
+    expect(screen.getByTestId("settings-font-controls")).toHaveTextContent("18px");
   });
 });
