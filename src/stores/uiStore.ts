@@ -331,8 +331,20 @@ function fromUiConfig(ui: UiConfig): UIPreferences {
 }
 
 function getReadingDefaults(): Omit<UIPreferences, "shortcuts"> {
-  const { shortcuts: _ignored, ...defaults } = getDefaultPreferences();
-  return defaults;
+  const defaults = getDefaultPreferences();
+  return {
+    theme: defaults.theme,
+    fontSize: defaults.fontSize,
+    locale: defaults.locale,
+    sidebarOpen: defaults.sidebarOpen,
+    sidebarTab: defaults.sidebarTab,
+    sidebarWidth: defaults.sidebarWidth,
+    marginWidth: defaults.marginWidth,
+    contentWidth: defaults.contentWidth,
+    pagePadding: defaults.pagePadding,
+    readingDensity: defaults.readingDensity,
+    highlightStrength: defaults.highlightStrength,
+  };
 }
 
 function hasLegacyUIPreferences(): boolean {
