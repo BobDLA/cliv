@@ -143,4 +143,68 @@ describe("PersonalizationPanel", () => {
       "Mod+J",
     );
   });
+
+  it("shows config-backed integration status and agent boundary paths", () => {
+    useConfigStore.setState({
+      configStatus: {
+        path: "/tmp/cliv/config.toml",
+        exists: true,
+        launchConfigured: true,
+        promptsConfigured: true,
+        uiConfigured: true,
+      },
+    });
+
+    render(<PersonalizationPanel open onClose={() => {}} />);
+
+    fireEvent.click(screen.getByTestId("settings-tab-integrations"));
+
+    expect(screen.getByText("/tmp/cliv/config.toml")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "cliV already has a config file on disk. Future settings changes continue to write there.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Durable UI settings for this launch came from the config file.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("External agent hook boundary")).toBeInTheDocument();
+    expect(screen.getByText("Codex: `~/.codex/config.toml`")).toBeInTheDocument();
+    expect(
+      screen.getByText("Claude: `~/.claude/settings.json`"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Gemini: `~/.gemini/settings.json`"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows pending migration copy when config-backed UI settings are not set up yet", () => {
+    useConfigStore.setState({
+      configStatus: {
+        path: "~/.cliv/config.toml",
+        exists: false,
+        launchConfigured: false,
+        promptsConfigured: false,
+        uiConfigured: false,
+      },
+    });
+
+    render(<PersonalizationPanel open onClose={() => {}} />);
+
+    fireEvent.click(screen.getByTestId("settings-tab-integrations"));
+
+    expect(screen.getByText("~/.cliv/config.toml")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "cliV does not have a config file yet. It will be created on the first settings save.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Legacy localStorage preferences are still honored for compatibility until the first save migrates them into the unified config.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
