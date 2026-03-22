@@ -6,7 +6,7 @@ pub mod extract;
 pub mod logging;
 
 pub use cli::{CliArgs, CliMode, CliParsed};
-pub use config::AppConfig;
+pub use config::{AppConfig, AppConfigState};
 
 // ─── GUI Entry ────────────────────────────────────────────
 
@@ -18,9 +18,10 @@ pub fn run_gui(cli_args: CliArgs, app_config: AppConfig) {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(cli_args)
-        .manage(app_config)
+        .manage(AppConfigState::new(app_config))
         .invoke_handler(tauri::generate_handler![
             commands::config::get_app_config,
+            commands::config::save_app_config,
             // File operations
             commands::files::load_files,
             commands::files::read_file,

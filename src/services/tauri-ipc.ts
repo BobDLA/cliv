@@ -5,6 +5,7 @@ import type {
   HistoryWorkspaceGroup,
   LoadResult,
   ReviewArchiveData,
+  SaveAppConfigInput,
   SaveReviewArchiveInput,
   SessionListItem,
 } from "@/types";
@@ -20,6 +21,12 @@ export async function getCliArgs(): Promise<CliArgs> {
 
 export async function getAppConfig(): Promise<AppConfig> {
   return invoke<AppConfig>("get_app_config");
+}
+
+export async function saveAppConfig(
+  input: SaveAppConfigInput,
+): Promise<AppConfig> {
+  return invoke<AppConfig>("save_app_config", { input });
 }
 
 export async function loadFiles(

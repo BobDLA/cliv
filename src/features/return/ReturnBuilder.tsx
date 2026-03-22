@@ -25,6 +25,7 @@ import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
 import { resolveWorkspacePath } from "@/lib/pathUtils";
 import { resolvePromptHeader } from "@/lib/promptTemplates";
+import { matchShortcut } from "@/lib/shortcuts";
 import type { PromptConfig } from "@/types";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -133,6 +134,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const isReadOnly = useDocumentStore((s) => s.isReadOnly);
   const t = useT();
   const uiLocale = useUIStore((s) => s.locale);
+  const submitReturnShortcut = useUIStore((s) => s.shortcuts.submitReturn);
 
   // Content locale dynamically detected from selected annotations
   const contentLocale = useMemo(() => {
@@ -460,18 +462,17 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     submissionFingerprint,
   ]);
 
-  // ── Ctrl+Enter global shortcut for submit ──
   useEffect(() => {
     if (collapsed || isReadOnly) return;
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      if (matchShortcut(e, submitReturnShortcut)) {
         e.preventDefault();
         handleSubmit();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [collapsed, handleSubmit, isReadOnly]);
+  }, [collapsed, handleSubmit, isReadOnly, submitReturnShortcut]);
 
   return (
     <div

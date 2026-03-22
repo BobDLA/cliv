@@ -1,12 +1,15 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AnnotationPopup } from "@/features/annotations/AnnotationPopup";
 import { ReturnBuilder } from "@/features/return/ReturnBuilder";
+import { DEFAULT_SHORTCUTS } from "@/lib/shortcuts";
 import { resolvePromptHeader } from "@/lib/promptTemplates";
 import {
   useAnnotationStore,
   useConfigStore,
   useDocumentStore,
   useReturnStore,
+  useSelectionStore,
   useUIStore,
 } from "@/stores";
 
@@ -34,7 +37,8 @@ describe("ReturnBuilder", () => {
 
     useAnnotationStore.getState().clearAnnotations();
     useReturnStore.getState().reset();
-    useConfigStore.setState({ appConfig: null, promptConfig: null });
+    useSelectionStore.getState().reset();
+    useConfigStore.setState({ appConfig: null, promptConfig: null, configStatus: null });
     useDocumentStore.setState({
       replyContent: null,
       targetContent: null,
@@ -48,10 +52,12 @@ describe("ReturnBuilder", () => {
       isLoading: false,
       error: null,
     });
+    useUIStore.getState().resetPreferences();
     useUIStore.setState({
       theme: "light",
       fontSize: 18,
       locale: "en",
+      shortcuts: { ...DEFAULT_SHORTCUTS },
     });
   });
 
@@ -369,4 +375,58 @@ describe("ReturnBuilder", () => {
       `${iterateHeader}\n\n${replyHeader}\n\nKeep the response focused on the failing test.`,
     );
   });
+
+  it("submits the return builder on the shared Mod+Enter shortcut when no annotation popup is active", async () => {
+    writeBackMock.mockResolvedValue("written");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    render(<ReturnBuilder />);
+
+    fireEvent.keyDown(document, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(writeBackMock).toHaveBeenCalled();
+    });
+  });
+
+  it("lets annotation submit win over return submit when both use Mod+Enter", async () => {
+    writeBackMock.mockResolvedValue("written");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+    useSelectionStore.setState({
+      selection: {
+        quote: "reply",
+        range: {
+          startOffset: 0,
+          endOffset: 5,
+          contextSnippet: "reply",
+        },
+        rect: {
+          top: 12,
+          left: 24,
+          bottom: 36,
+          width: 120,
+        },
+      },
+      showPopup: true,
+      popupKind: "comment",
+      draftComment: "",
+    });
+
+    render(
+      <>
+        <ReturnBuilder />
+        <AnnotationPopup />
+      </>,
+    );
+
+    const textarea = await screen.findByTestId("annotation-popup-textarea");
+    fireEvent.change(textarea, { target: { value: "First note" } });
+    fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(useAnnotationStore.getState().annotations).toHaveLength(1);
+    });
+    expect(writeBackMock).not.toHaveBeenCalled();
+  });
+
 });
