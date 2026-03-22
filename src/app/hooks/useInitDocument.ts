@@ -127,8 +127,9 @@ export function useInitDocument() {
         );
       }
     } else {
-      // Browser dev mode: use demo content
+      // Browser dev mode: use the docs-backed demo content
       const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
+      useAnnotationStore.getState().clearAnnotations();
       setDocument({
         reply: demoContent,
         workspacePath: null,
