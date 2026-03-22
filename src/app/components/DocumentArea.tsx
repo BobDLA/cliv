@@ -1,8 +1,6 @@
-import { FolderOpen } from "lucide-react";
-import {
-  MarkdownViewer,
-  type HeadingInfo,
-} from "@/features/documents";
+import { FolderOpen, History } from "lucide-react";
+import { useDocumentStore } from "@/stores";
+import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
 import {
   SelectionCatcher,
   AnnotationPopup,
@@ -35,42 +33,102 @@ export function DocumentArea({
   onOpenFile,
 }: DocumentAreaProps) {
   const t = useT();
+  const isReadOnly = useDocumentStore((state) => state.isReadOnly);
 
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden">
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <div className="flex">
-          {/* Document column */}
-          <div className="flex-1 min-w-0" style={{ padding: "0 24px" }}>
+          <div
+            className="flex-1 min-w-0"
+            style={{ padding: "0 var(--content-shell-padding, 24px)" }}
+          >
             {replyContent ? (
               <div
-                className="relative mx-auto max-w-4xl"
+                className="relative mx-auto"
+                style={{ maxWidth: "var(--content-max-width, 56rem)" }}
                 ref={viewerRef}
                 data-viewer-root
               >
+                {isReadOnly ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "12px",
+                      margin: "18px 0 16px",
+                      padding: "12px 14px",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(245, 158, 11, 0.28)",
+                      backgroundColor: "rgba(245, 158, 11, 0.1)",
+                      color: "var(--color-text-strong)",
+                    }}
+                    data-testid="history-readonly-banner"
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "999px",
+                        backgroundColor: "rgba(245, 158, 11, 0.18)",
+                        color: "#b45309",
+                      }}
+                    >
+                      <History className="h-4 w-4" />
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: "0.95rem",
+                          fontWeight: 700,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {t("history.readOnlyMode")}
+                      </div>
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "0.84rem",
+                          lineHeight: 1.5,
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {t("history.readOnlyHint")}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <MarkdownViewer
                   content={replyContent}
                   containerRef={viewerRef}
                   onHeadingsChange={onHeadingsChange}
                 />
 
-                {/* M2: Annotation floating elements */}
-                <SelectionCatcher containerRef={viewerRef} />
+                {!isReadOnly ? <SelectionCatcher containerRef={viewerRef} /> : null}
                 <AnnotationOverlay containerRef={viewerRef} />
-                <AnnotationHoverActions containerRef={viewerRef} />
-                <ParagraphBubble containerRef={viewerRef} />
-                <AnnotationPopup />
+                {!isReadOnly ? (
+                  <>
+                    <AnnotationHoverActions containerRef={viewerRef} />
+                    <ParagraphBubble containerRef={viewerRef} />
+                    <AnnotationPopup />
+                  </>
+                ) : null}
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center h-full min-h-[60vh]">
-                <div className="flex max-w-lg flex-col items-center justify-center gap-6 text-center transform -translate-y-12">
-                  <div className="text-5xl opacity-80 mb-2">📖</div>
-                  <h2 className="text-3xl font-bold text-text-strong tracking-tight">
+              <div className="flex h-full min-h-[60vh] flex-1 items-center justify-center">
+                <div className="flex max-w-lg -translate-y-12 transform flex-col items-center justify-center gap-6 text-center">
+                  <div className="mb-2 text-5xl opacity-80">📖</div>
+                  <h2 className="text-3xl font-bold tracking-tight text-text-strong">
                     cliV v0.2
                   </h2>
-                  <p className="text-base text-text-muted leading-relaxed">
+                  <p className="text-base leading-relaxed text-text-muted">
                     {t("docarea.hintUse")}{" "}
-                    <code className="bg-surface-card px-1.5 py-0.5 rounded-md text-sm font-mono text-text-primary border border-border-subtle mx-1">
+                    <code className="mx-1 rounded-md border border-border-subtle bg-surface-card px-1.5 py-0.5 text-sm font-mono text-text-primary">
                       cliv &lt;file.md&gt;
                     </code>{" "}
                     <br className="hidden sm:block" />
@@ -88,13 +146,11 @@ export function DocumentArea({
             )}
           </div>
 
-          {/* Annotation margin resize handle */}
           <ResizeHandle onDragStart={onMarginDragStart} />
 
-          {/* Annotation margin — inside the same scroll container */}
           <div
             style={{ width: `${marginWidth}px` }}
-            className="shrink-0 relative"
+            className="relative shrink-0"
           >
             <AnnotationList
               viewerRef={viewerRef}
@@ -104,7 +160,6 @@ export function DocumentArea({
         </div>
       </div>
 
-      {/* M3: ReturnBuilder — bottom panel, aligned to document column only */}
       <div style={{ display: "flex", flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <ReturnBuilder />

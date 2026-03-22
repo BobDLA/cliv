@@ -38,6 +38,7 @@ export const ThemeSwitcher = memo(function ThemeSwitcher() {
         return (
           <button
             key={item.value}
+            type="button"
             onClick={() => setTheme(item.value)}
             role="radio"
             aria-checked={active}
@@ -54,7 +55,7 @@ export const ThemeSwitcher = memo(function ThemeSwitcher() {
               cursor: "pointer",
               transition: "all 0.15s",
               backgroundColor: active ? "var(--color-accent)" : "transparent",
-              color: active ? "#fff" : "var(--color-text-secondary)",
+              color: active ? "#fff" : "var(--color-text-subtle)",
             }}
           >
             <Icon style={{ width: "14px", height: "14px" }} />

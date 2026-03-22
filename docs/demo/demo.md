@@ -17,7 +17,7 @@ This document presents a comprehensive walkthrough of cliV's internal architectu
 7. [Frontend Architecture](#frontend-architecture)
 8. [State Management Deep Dive](#state-management-deep-dive)
 9. [Annotation Workflow](#annotation-workflow)
-10. [Session Lifecycle](#session-lifecycle)
+10. [Review History](#review-history)
 11. [Write-back & Return Flow](#write-back--return-flow)
 12. [Data Model Reference](#data-model-reference)
 13. [Security & Reliability](#security--reliability)
@@ -38,8 +38,7 @@ AI coding agents like **Codex**, **Claude Code**, and **Gemini CLI** produce lon
 | 📋 Write-back | Aggregate annotations → write back or copy |
 | 🔄 Multi-agent | Auto-detect Codex / Claude / Gemini |
 | 🗂️ Sessions | Persist review snapshots locally |
-| 🌙 Themes | Dark / muted / light switching |
-| 🔍 Font Scaling | Adjustable reading comfort |
+| 🎛️ Reading Settings | One surface for theme, font size, layout memory, and reading presets |
 
 ### Design Philosophy
 
@@ -356,8 +355,8 @@ fn atomic_write_cache(path: &PathBuf, content: &str) {
 ```
 ~/.codex/
 └── reply_cache/
-    ├── <thread_id>.md        # Indexed by Codex thread ID
-    └── <agent_pid>.md        # Indexed by process PID
+    ├── <agent_pid>.md        # Indexed by process PID
+    └── <agent_pid>.meta.json # Stores the real Codex thread ID
 
 ~/.claude/
 └── reply_cache/
@@ -370,25 +369,28 @@ fn atomic_write_cache(path: &PathBuf, content: &str) {
     └── <agent_pid>.md        # Indexed by process PID
 ```
 
-### Dual-Key Write Strategy
+### Codex PID-Key Cache Strategy
 
-Every cached reply is written under **two keys** for maximum lookup reliability:
+Codex writes reply content under a single pid-keyed cache file and stores the real thread ID in the sidecar metadata file:
 
 ```mermaid
 graph TD
-    REPLY["Agent Reply"] --> DUAL["Dual-Key Write"]
+    REPLY["Codex Reply"] --> PID["Keyed by Agent PID"]
+    REPLY --> META["Sidecar Metadata"]
 
-    DUAL --> KEY_ID["Key 1: Session/Thread ID<br/>(agent-provided identifier)"]
-    DUAL --> KEY_PID["Key 2: Agent PID<br/>(process-tree detected)"]
+    PID --> CACHE["reply_cache/&lt;agent_pid&gt;.md"]
+    META --> METAJSON["reply_cache/&lt;agent_pid&gt;.meta.json<br/>real_session_id = thread-id"]
 
-    KEY_ID --> LOOKUP1["GUI reads by ID<br/>(when env var is set)"]
-    KEY_PID --> LOOKUP2["GUI reads by PID<br/>(anti-crosstalk fallback)"]
+    CACHE --> LOOKUP1["GUI reads by pid cache key<br/>(when available)"]
+    METAJSON --> LOOKUP2["GUI maps thread-id → newest pid cache"]
 
-    style KEY_ID fill:#e3f2fd
-    style KEY_PID fill:#fff3e0
+    style PID fill:#fff3e0
+    style META fill:#e3f2fd
 ```
 
-> **Why dual keys?** If multiple agent instances run concurrently, session IDs may collide or not propagate correctly through the environment. The PID-based key provides a deterministic, collision-free fallback.
+Claude and Gemini still keep both session-id and pid-keyed cache files.
+
+> **Why pid + metadata for Codex?** The pid-keyed cache gives cliV a deterministic lookup key during GUI launch, while the sidecar metadata preserves the real thread ID for SQLite-based recovery.
 
 ---
 
@@ -486,13 +488,13 @@ graph TB
         F_DOC["📄 documents/"]
         F_ANN["✏️ annotations/"]
         F_RET["📋 return/"]
-        F_SESS["🗂️ sessions/"]
+        F_HIS["🗂️ history/"]
     end
 
     subgraph "Services (src/services/)"
         SVC_IPC["tauriIpc.ts"]
         SVC_WB["writeBack.ts"]
-        SVC_SESS["sessionService.ts"]
+        SVC_HIS["historyService.ts"]
     end
 
     subgraph "State (src/stores/)"
@@ -642,8 +644,8 @@ flowchart LR
     PERSIST -->|"serialize"| LS["localStorage<br/>(prefix: cliv:)"]
     LS -->|"hydrate on load"| ZUSTAND
 
-    ZUSTAND -->|"sessions"| FS["~/.cliv/sessions/"]
-    FS -->|"load session"| ZUSTAND
+    ZUSTAND -->|"history archives"| FS["~/.cliv/history/archive/"]
+    FS -->|"load archive summaries"| ZUSTAND
 ```
 
 ---
@@ -749,49 +751,43 @@ long-running sessions?
 
 ---
 
-## Session Lifecycle
+## Review History
 
-Sessions allow users to save and restore complete review states.
+Submitted reviews are archived per workspace and can later be replayed as read-only review scenes.
 
 ### Session State Machine
 
 ```mermaid
 stateDiagram-v2
-    [*] --> NoSession: App starts
+    [*] --> Reviewing: App starts with review content
 
-    NoSession --> Active: Document loaded
-    Active --> Saving: User clicks "Save Session"
-    Saving --> Saved: Written to ~/.cliv/sessions/
+    Reviewing --> Submitting: User clicks Submit
+    Submitting --> Archived: Submission succeeds
+    Archived --> Reviewing: User keeps working on current document
+    Archived --> [*]: Close app
 
-    Saved --> Active: Continue working
-    Saved --> [*]: Close app
-
-    NoSession --> Restoring: User selects saved session
-    Restoring --> Active: Session data hydrated
-
-    Active --> Discarding: User clicks "New"
-    Discarding --> NoSession: State cleared
+    Reviewing --> Replay: User opens archived history entry
+    Replay --> Reviewing: User opens a live document again
 ```
 
 ### Session Data Structure
 
 ```mermaid
 classDiagram
-    class Session {
+    class ReviewArchive {
         +String id
-        +String name
-        +Number createdAt
-        +Number updatedAt
-        +DocumentSnapshot document
+        +String workspacePath
+        +String archivedAt
+        +DocumentSnapshot reply
         +Annotation[] annotations
-        +UISnapshot ui
+        +Submission submission
     }
 
     class DocumentSnapshot {
         +String replyContent
-        +String composePath
+        +String reviewPath
         +String replyPath
-        +String documentId
+        +String workspacePath
     }
 
     class Annotation {
@@ -803,15 +799,16 @@ classDiagram
         +Number endOffset
     }
 
-    class UISnapshot {
-        +String theme
-        +Number fontScale
-        +Number scrollPosition
+    class Submission {
+        +String method
+        +String templateMode
+        +String userText
+        +String finalOutput
     }
 
-    Session *-- DocumentSnapshot
-    Session *-- Annotation
-    Session *-- UISnapshot
+    ReviewArchive *-- DocumentSnapshot
+    ReviewArchive *-- Annotation
+    ReviewArchive *-- Submission
 ```
 
 ### Session Storage Flow
@@ -819,30 +816,29 @@ classDiagram
 ```mermaid
 sequenceDiagram
     participant UI as React UI
-    participant Store as sessionStore
-    participant SVC as sessionService
+    participant Store as historyStore
+    participant SVC as historyService
     participant IPC as Tauri IPC
-    participant FS as Session Storage
+    participant FS as History Archive
 
-    Note over UI: User clicks Save Session
-    UI->>Store: saveSession
-    Store->>Store: Collect document + annotations + UI state
-    Store->>SVC: persistSession snapshot
-    SVC->>IPC: invoke save_session with data
-    IPC->>FS: atomic_write session_id.json
+    Note over UI: User clicks Submit
+    UI->>Store: gather current reply + annotations + submission payload
+    Store->>SVC: saveReviewArchive snapshot
+    SVC->>IPC: invoke save_review_archive with data
+    IPC->>FS: atomic_write archive files
     FS-->>IPC: OK
     IPC-->>SVC: OK
     SVC-->>Store: Updated
-    Store-->>UI: Re-render session list
+    Store-->>UI: Re-render grouped history list
 
-    Note over UI: Later the user clicks a saved session
-    UI->>Store: loadSession id
-    Store->>SVC: loadSession id
-    SVC->>IPC: invoke load_session with id
-    IPC->>FS: read session_id.json
-    FS-->>IPC: JSON data
-    IPC-->>SVC: Session object
-    SVC-->>Store: Hydrate all stores
+    Note over UI: Later the user clicks an archived review
+    UI->>Store: loadReviewArchive workspace + archive id
+    Store->>SVC: loadReviewArchive
+    SVC->>IPC: invoke load_review_archive
+    IPC->>FS: read reply.md + annotations.json + submission.json
+    FS-->>IPC: Archive snapshot
+    IPC-->>SVC: ReviewArchive object
+    SVC-->>Store: Hydrate read-only replay stores
     Store-->>UI: Re-render everything
 ```
 
@@ -1128,7 +1124,7 @@ graph TB
 |:---|:---|:---|
 | `EDITOR` | Set cliV as default editor | `export EDITOR="cliv"` |
 | `CLIV_AGENT` | Force agent detection | `codex`, `claude`, `gemini` |
-| `CODEX_THREAD_ID` | Codex session identifier | *(auto-set by Codex)* |
+| `CODEX_THREAD_ID` | Active Codex cache key (compat name; usually the agent PID) | *(set by cliV or caller)* |
 | `CODEX_HOME` | Codex config directory | `~/.codex` |
 | `CLAUDE_SESSION_ID` | Claude session identifier | *(auto-set by Claude)* |
 | `GEMINI_SESSION_ID` | Gemini session identifier | *(auto-set by Gemini)* |
@@ -1137,7 +1133,7 @@ graph TB
 
 | Path | Purpose |
 |:---|:---|
-| `~/.cliv/sessions/` | Saved review sessions |
+| `~/.cliv/history/archive/` | Project-grouped archived reviews |
 | `~/.codex/reply_cache/` | Cached Codex replies |
 | `~/.claude/reply_cache/` | Cached Claude replies |
 | `~/.gemini/reply_cache/` | Cached Gemini replies |

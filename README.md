@@ -85,8 +85,7 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
 - 🗂️ **Save sessions** — persist review snapshots and annotations locally (local-only for now)
-- 🌙 **Theme switching** — dark / muted / light
-- 🔍 **Font scaling** — adjust reading comfort
+- 🎛️ **Reading settings** — one settings surface for theme, font size, locale, layout memory, and reading presets
 
 ## Notes
 
@@ -124,7 +123,7 @@ iterate_header_en = "Please make incremental revisions based on the following an
 - [x] Standalone review polish (`cliv <file.md>` now stays review-only by default)
 - [x] Cross-platform builds (macOS, Windows)
 - [ ] Plugin system for custom agents
-- [ ] Review history
+- [x] Review history (project-grouped archives with read-only replay)
 - [ ] Favorites
 - [ ] Iterative editing mode
 

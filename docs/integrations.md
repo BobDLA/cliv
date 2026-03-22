@@ -18,7 +18,7 @@ cliV is a single binary with no external dependencies (no Python, no Bash).
 Agent completes a reply
     ↓ hook fires
     cliv cache-codex / cache-claude / cache-gemini
-    ↓ writes ~/.{agent}/reply_cache/{id}.md
+    ↓ writes ~/.{agent}/reply_cache/<cache-key>.md
 
 You press Ctrl+G
     ↓ $EDITOR = cliv
@@ -92,13 +92,13 @@ notify = ["cliv", "cache-codex"]
 # notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
-**How it works**: When Codex completes a turn, it calls `cliv cache-codex '<json>'` with JSON as an argument. cliV extracts `thread-id` and `last-assistant-message` and caches to `~/.codex/reply_cache/{thread-id}.md`.
+**How it works**: When Codex completes a turn, it calls `cliv cache-codex '<json>'` with JSON as an argument. cliV extracts `thread-id` and `last-assistant-message`, detects the active Codex PID, writes `~/.codex/reply_cache/{pid}.md`, and stores the real thread ID in `~/.codex/reply_cache/{pid}.meta.json`.
 
 ### Extraction fallback chain
 
-1. **Cache hit**: `CODEX_THREAD_ID` → `~/.codex/reply_cache/{id}.md`
-2. **SQLite query**: Match CWD in `~/.codex/state_5.sqlite`
-3. **JSONL scan**: Find newest file in `~/.codex/sessions/`
+1. **PID cache hit**: `CODEX_THREAD_ID` (compatibility env name for the active Codex cache key, usually the agent PID) → `~/.codex/reply_cache/{pid}.md`
+2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `real_session_id` matches the lookup key
+3. **Legacy cache hit**: Direct file match `~/.codex/reply_cache/{thread-id}.md`
 
 ---
 
@@ -174,7 +174,7 @@ cliV is a single binary. No Python, Bash, Node.js, or wrapper scripts needed.
 
 ### Agent auto-detection
 
-When launched as `$EDITOR`, cliV auto-detects the calling agent from environment variables (`CODEX_THREAD_ID`, `CLAUDE_SESSION_ID`, `GEMINI_SESSION_ID`). No `CLIV_AGENT` env var is needed unless you want to override.
+When launched as `$EDITOR`, cliV auto-detects the calling agent from environment variables (`CODEX_THREAD_ID`, `CLAUDE_SESSION_ID`, `GEMINI_SESSION_ID`). For Codex, `CODEX_THREAD_ID` is kept as a compatibility variable name, but the value used for cache lookup is normally the active agent PID. No `CLIV_AGENT` env var is needed unless you want to override.
 
 ### Launch modes
 

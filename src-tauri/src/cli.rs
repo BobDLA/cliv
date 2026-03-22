@@ -23,6 +23,7 @@ pub struct CliArgs {
     pub target_path: Option<String>,
     pub metadata_path: Option<String>,
     pub file_path: Option<String>,
+    pub workspace_path: Option<String>,
     /// Which agent triggered the launch: "codex", "claude", "gemini", or "unknown".
     /// Auto-detected from environment variables.
     pub agent: Option<String>,
@@ -111,7 +112,12 @@ impl CliParsed {
             agent, trusted_caller
         ));
 
-        let args = parse_gui_args(&argv[1..], agent, trusted_caller);
+        let workspace_path = std::env::current_dir()
+            .ok()
+            .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
+            .map(|path| path.to_string_lossy().to_string());
+
+        let args = parse_gui_args(&argv[1..], workspace_path, agent, trusted_caller);
 
         logging::log(&format!(
             "  review_path={:?} target_path={:?} file_path={:?}",
@@ -128,6 +134,7 @@ impl CliParsed {
 /// Parse GUI-mode arguments from an argv slice (excluding the binary name).
 fn parse_gui_args(
     argv: &[String],
+    workspace_path: Option<String>,
     agent: Option<String>,
     trusted_caller: Option<String>,
 ) -> CliArgs {
@@ -166,14 +173,18 @@ fn parse_gui_args(
         }
     }
 
-    let (review_path, target_path) =
-        resolve_launch_paths(positional_path.clone(), explicit_target, trusted_caller.clone());
+    let (review_path, target_path) = resolve_launch_paths(
+        positional_path.clone(),
+        explicit_target,
+        trusted_caller.clone(),
+    );
 
     CliArgs {
         review_path,
         target_path,
         metadata_path,
         file_path: positional_path,
+        workspace_path,
         agent,
         trusted_caller,
     }
@@ -270,8 +281,8 @@ fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) ->
     None
 }
 
-/// Given a matched agent and its PID, set the appropriate session env var.
-/// All agents use PID as their cache key — simple, deterministic, cross-platform.
+/// Given a matched agent and its PID, set the appropriate lookup env var.
+/// The env value is used as the active reply-cache key during GUI extraction.
 fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<String> {
     let pid_str = agent_pid.to_string();
     let (env_var, agent) = match agent_name {
@@ -550,10 +561,7 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
             .unwrap_or(MAX_PATH);
         let name = String::from_utf16_lossy(&entry.sz_exe_file[..name_len]);
 
-        map.insert(
-            entry.th32_process_id,
-            (name, entry.th32_parent_process_id),
-        );
+        map.insert(entry.th32_process_id, (name, entry.th32_parent_process_id));
 
         entry.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
         ok = unsafe { Process32NextW(snapshot, &mut entry) };
@@ -561,7 +569,10 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 
     unsafe { CloseHandle(snapshot) };
 
-    logging::debug(&format!("  win: built process map with {} entries", map.len()));
+    logging::debug(&format!(
+        "  win: built process map with {} entries",
+        map.len()
+    ));
     Some(map)
 }
 
@@ -588,7 +599,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, None);
+        let args = parse_gui_args(&argv, None, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -597,7 +608,7 @@ mod tests {
     #[test]
     fn trusted_caller_turns_lone_positional_into_target() {
         let argv = vec!["draft.md".to_string()];
-        let args = parse_gui_args(&argv, None, Some("codex".to_string()));
+        let args = parse_gui_args(&argv, None, None, Some("codex".to_string()));
 
         assert_eq!(args.review_path, None);
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -610,7 +621,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, Some("codex".to_string()));
+        let args = parse_gui_args(&argv, None, None, Some("codex".to_string()));
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -623,7 +634,7 @@ mod tests {
             "draft.md".to_string(),
             "review.md".to_string(),
         ];
-        let args = parse_gui_args(&argv, None, None);
+        let args = parse_gui_args(&argv, None, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -631,8 +642,12 @@ mod tests {
 
     #[test]
     fn short_target_alias_sets_target_path() {
-        let argv = vec!["-t".to_string(), "draft.md".to_string(), "review.md".to_string()];
-        let args = parse_gui_args(&argv, None, None);
+        let argv = vec![
+            "-t".to_string(),
+            "draft.md".to_string(),
+            "review.md".to_string(),
+        ];
+        let args = parse_gui_args(&argv, None, None, None);
 
         assert_eq!(args.review_path.as_deref(), Some("review.md"));
         assert_eq!(args.target_path.as_deref(), Some("draft.md"));
@@ -640,8 +655,7 @@ mod tests {
 
     #[test]
     fn standalone_lone_positional_stays_review_only() {
-        let (review_path, target_path) =
-            resolve_launch_paths(Some("note.md".into()), None, None);
+        let (review_path, target_path) = resolve_launch_paths(Some("note.md".into()), None, None);
 
         assert_eq!(review_path.as_deref(), Some("note.md"));
         assert_eq!(target_path, None);

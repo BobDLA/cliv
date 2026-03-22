@@ -86,6 +86,10 @@ function buildAppArgs(workspace) {
     return ["--compose", workspace.composePath, "--metadata", workspace.metadataPath];
   }
 
+  if (desktopScenario === "standalone") {
+    return ["--compose", workspace.composePath, workspace.composePath];
+  }
+
   return [workspace.composePath];
 }
 

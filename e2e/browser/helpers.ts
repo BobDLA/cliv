@@ -1,5 +1,4 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { seedSessionRecord } from "./fixtures";
 
 export async function gotoApp(page: Page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -24,12 +23,6 @@ export async function openDocumentSearch(page: Page) {
   const search = page.getByTestId("document-search");
   await expect(search).toBeVisible();
   return search;
-}
-
-export async function seedSavedSession(page: Page) {
-  await page.addInitScript((record) => {
-    window.localStorage.setItem("cliv-sessions", JSON.stringify([record]));
-  }, seedSessionRecord);
 }
 
 export async function selectTextInViewer(page: Page, exactText: string) {
@@ -58,7 +51,7 @@ export async function selectTextInViewer(page: Page, exactText: string) {
   }, exactText);
 
   await page.mouse.up();
-  await expect(page.getByTestId("floating-annotate-button")).toBeVisible();
+  await expect(page.getByTestId("annotation-popup")).toBeVisible();
 }
 
 export async function annotationRows(page: Page): Promise<Locator> {

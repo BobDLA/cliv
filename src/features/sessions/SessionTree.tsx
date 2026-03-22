@@ -3,6 +3,7 @@ import { Clock, Trash2, FileText, MessageSquare } from "lucide-react";
 import { useSessionStore, useAnnotationStore, useDocumentStore } from "@/stores";
 import type { SessionSummary } from "@/services/sessionService";
 import { useT } from "@/lib/useT";
+import { getPathInfo } from "@/lib/pathUtils";
 
 const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -35,6 +36,7 @@ export const SessionTree = memo(function SessionTree() {
         useAnnotationStore.getState().setAnnotations(session.annotations);
 
         if (session.documentPath) {
+          const { baseName, parentPath } = getPathInfo(session.documentPath);
           if (isTauri) {
             try {
               const { readFile } = await import("@/services/tauri-ipc");
@@ -45,19 +47,27 @@ export const SessionTree = memo(function SessionTree() {
                 target: null,
                 targetPath: null,
                 replyPath: session.documentPath,
-                documentId:
-                  session.documentPath.split("/").pop() ??
-                  session.documentPath.split("\\").pop() ??
-                  session.documentPath,
+                workspacePath: parentPath,
+                archivedSubmission: null,
+                documentId: baseName || session.documentPath,
+                isReadOnly: false,
               });
             } catch {
               useDocumentStore.getState().setDocument({
                 reviewPath: session.documentPath,
+                workspacePath: parentPath,
+                archivedSubmission: null,
+                documentId: baseName || session.documentPath,
+                isReadOnly: false,
               });
             }
           } else {
             useDocumentStore.getState().setDocument({
               reviewPath: session.documentPath,
+              workspacePath: parentPath,
+              archivedSubmission: null,
+              documentId: baseName || session.documentPath,
+              isReadOnly: false,
             });
           }
         }

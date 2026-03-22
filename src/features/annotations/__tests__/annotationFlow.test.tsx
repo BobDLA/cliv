@@ -111,14 +111,16 @@ describe("annotation selection flow", () => {
       target: null,
       targetPath: null,
       replyPath: null,
+      workspacePath: null,
+      archivedSubmission: null,
       documentId: "test-doc",
+      isReadOnly: false,
     });
     useDocumentStore.getState().setLoading(false);
     useDocumentStore.getState().setError(null);
     useUIStore.setState({
       theme: "light",
       fontSize: 18,
-      isFullscreen: false,
       locale: "en",
     });
     window.getSelection()?.removeAllRanges();

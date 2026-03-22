@@ -7,5 +7,6 @@ export { useAnnotationStore } from "./annotationStore";
 export { useSelectionStore } from "./selectionStore";
 export { useConfigStore } from "./configStore";
 export { useDocumentStore } from "./documentStore";
+export { useHistoryStore } from "./historyStore";
 export { useReturnStore, type ReturnStatus } from "./returnStore";
 export { useSessionStore } from "./sessionStore";

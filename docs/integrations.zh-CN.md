@@ -18,7 +18,7 @@ cliV 是一个单一二进制文件，无需任何外部依赖（不需要 Pytho
 Agent 完成一次回复
     ↓ hook 触发
     cliv cache-codex / cache-claude / cache-gemini
-    ↓ 写入 ~/.{agent}/reply_cache/{id}.md
+    ↓ 写入 ~/.{agent}/reply_cache/<cache-key>.md
 
 你按下 Ctrl+G
     ↓ $EDITOR = cliv
@@ -92,13 +92,13 @@ notify = ["cliv", "cache-codex"]
 # notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
-**工作原理**：Codex 完成一轮对话后，调用 `cliv cache-codex '<json>'`，JSON 作为命令行参数传入。cliV 提取 `thread-id` 和 `last-assistant-message`，缓存到 `~/.codex/reply_cache/{thread-id}.md`。
+**工作原理**：Codex 完成一轮对话后，会调用 `cliv cache-codex '<json>'`，JSON 作为命令行参数传入。cliV 提取 `thread-id` 和 `last-assistant-message`，检测当前 Codex 进程 PID，把正文写到 `~/.codex/reply_cache/{pid}.md`，并把真实 thread ID 写进 `~/.codex/reply_cache/{pid}.meta.json`。
 
 ### 提取回退链
 
-1. **缓存命中**：`CODEX_THREAD_ID` → `~/.codex/reply_cache/{id}.md`
-2. **SQLite 查询**：在 `~/.codex/state_5.sqlite` 中匹配 CWD
-3. **JSONL 扫描**：在 `~/.codex/sessions/` 中查找最新文件
+1. **PID 缓存命中**：`CODEX_THREAD_ID`（保留的兼容变量名，实际通常承载当前 Codex 的 PID 缓存键）→ `~/.codex/reply_cache/{pid}.md`
+2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `real_session_id` 等于查找键的最新记录
+3. **传统缓存命中**：直接匹配 `~/.codex/reply_cache/{thread-id}.md`
 
 ---
 
@@ -174,7 +174,7 @@ cliV 是一个单一二进制文件。不需要 Python、Bash、Node.js 或任�
 
 ### Agent 自动检测
 
-当作为 `$EDITOR` 启动时，cliV 通过环境变量（`CODEX_THREAD_ID`、`CLAUDE_SESSION_ID`、`GEMINI_SESSION_ID`）自动检测调用的 Agent。除非你想手动覆盖，否则不需要设置 `CLIV_AGENT` 环境变量。
+当作为 `$EDITOR` 启动时，cliV 会通过环境变量（`CODEX_THREAD_ID`、`CLAUDE_SESSION_ID`、`GEMINI_SESSION_ID`）自动检测调用的 Agent。对于 Codex，`CODEX_THREAD_ID` 这个名字出于兼容性保留，但实际用于缓存查找的值通常是当前 agent 的 PID。除非你想手动覆盖，否则不需要设置 `CLIV_AGENT` 环境变量。
 
 ### 启动模式
 

@@ -21,6 +21,8 @@ handoffs/*
 .codex/
 .agent/
 .claude/
+/temp/
 .github/*
 !.github/workflows/
 !.github/workflows/*.yml
+/temp/

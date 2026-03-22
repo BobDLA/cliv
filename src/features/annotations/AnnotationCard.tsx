@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import { useAnnotationStore } from "@/stores";
+import { useAnnotationStore, useDocumentStore } from "@/stores";
 import type { Annotation, AnnotationKind } from "@/types";
 import { useT } from "@/lib/useT";
 
@@ -29,6 +29,7 @@ export const AnnotationCard = memo(function AnnotationCard({
     setEditingAnnotation,
     removeAnnotation,
   } = useAnnotationStore();
+  const isReadOnly = useDocumentStore((s) => s.isReadOnly);
   const t = useT();
 
   const isHovered = hoveredAnnotationId === annotation.id;
@@ -88,70 +89,72 @@ export const AnnotationCard = memo(function AnnotationCard({
         >
           {formatRelativeTime(annotation.createdAt, t)}
         </span>
-        <div style={{ display: "flex", gap: "2px" }}>
-          <button
-            type="button"
-            onClick={() => setEditingAnnotation(annotation.id)}
-            title={t("ann.editTitle")}
-            data-testid="annotation-card-edit"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "3px",
-              padding: "2px 6px",
-              borderRadius: "4px",
-              border: "none",
-              backgroundColor: "transparent",
-              color: "var(--color-text-secondary)",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-              fontFamily: "var(--font-sans)",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--color-surface-hover)";
-              e.currentTarget.style.color = kindColor;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
-              e.currentTarget.style.color = "var(--color-text-secondary)";
-            }}
-          >
-            <Pencil style={{ width: "12px", height: "12px" }} />
-            {t("ann.edit")}
-          </button>
-          <button
-            type="button"
-            onClick={() => removeAnnotation(annotation.id)}
-            title={t("ann.deleteTitle")}
-            data-testid="annotation-card-delete"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "3px",
-              padding: "2px 6px",
-              borderRadius: "4px",
-              border: "none",
-              backgroundColor: "transparent",
-              color: "var(--color-text-secondary)",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-              fontFamily: "var(--font-sans)",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)";
-              e.currentTarget.style.color = "#ef4444";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
-              e.currentTarget.style.color = "var(--color-text-secondary)";
-            }}
-          >
-            <Trash2 style={{ width: "12px", height: "12px" }} />
-            {t("ann.delete")}
-          </button>
-        </div>
+        {!isReadOnly ? (
+          <div style={{ display: "flex", gap: "2px" }}>
+            <button
+              type="button"
+              onClick={() => setEditingAnnotation(annotation.id)}
+              title={t("ann.editTitle")}
+              data-testid="annotation-card-edit"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                border: "none",
+                backgroundColor: "transparent",
+                color: "var(--color-text-secondary)",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontFamily: "var(--font-sans)",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--color-surface-hover)";
+                e.currentTarget.style.color = kindColor;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "var(--color-text-secondary)";
+              }}
+            >
+              <Pencil style={{ width: "12px", height: "12px" }} />
+              {t("ann.edit")}
+            </button>
+            <button
+              type="button"
+              onClick={() => removeAnnotation(annotation.id)}
+              title={t("ann.deleteTitle")}
+              data-testid="annotation-card-delete"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                border: "none",
+                backgroundColor: "transparent",
+                color: "var(--color-text-secondary)",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontFamily: "var(--font-sans)",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.08)";
+                e.currentTarget.style.color = "#ef4444";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "var(--color-text-secondary)";
+              }}
+            >
+              <Trash2 style={{ width: "12px", height: "12px" }} />
+              {t("ann.delete")}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

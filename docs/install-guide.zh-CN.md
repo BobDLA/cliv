@@ -77,9 +77,10 @@ notify = ["cliv", "cache-codex"]
 **测试**：
 ```bash
 # 手动测试 cache-codex
-cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
-cat ~/.codex/reply_cache/test-123.md
-# 应该输出: # Hello\nTest reply.
+CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
+cat ~/.codex/reply_cache/424242.md
+cat ~/.codex/reply_cache/424242.meta.json
+# 这里的 424242 用来模拟 GUI 启动时使用的 pid 缓存键。
 ```
 
 **真实测试**：
@@ -169,7 +170,7 @@ cat ~/.gemini/reply_cache/test-789.md
 | EDITOR 设置 | `echo $EDITOR` | `cliv` |
 | Codex hook 配置 | `cat ~/.codex/config.toml` | 含 `notify = ["cliv", "cache-codex"]` |
 | Claude hook 配置 | `cat ~/.claude/settings.json` | 含 `"command": "cliv cache-claude"` |
-| Codex cache 测试 | 上面的手动命令 | 文件写入成功 |
+| Codex cache 测试 | 上面的手动命令 | 缓存和元数据写入成功 |
 | Claude cache 测试 | 上面的手动命令 | 文件写入成功 |
 | Ctrl+G 真实测试 | 在 agent 中按 Ctrl+G | cliV 窗口弹出 |
 

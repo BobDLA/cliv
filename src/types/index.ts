@@ -69,6 +69,60 @@ export interface SessionListItem {
   turnCount: number;
 }
 
+// ─── Review History ──────────────────────────────────────
+
+export interface SubmissionRecord {
+  createdAt: string;
+  method: "written" | "clipboard";
+  templateMode: string;
+  userText: string;
+  finalOutput: string;
+}
+
+export interface HistoryEntrySummary {
+  id: string;
+  workspaceKey: string;
+  workspaceLabel: string;
+  workspacePath: string;
+  archivedAt: string;
+  agent: string | null;
+  reviewPath: string | null;
+  replyPath: string | null;
+  targetPath: string | null;
+  submittedChars: number;
+  itemCount: number;
+  preview: string;
+  searchText: string;
+}
+
+export interface HistoryWorkspaceGroup {
+  key: string;
+  label: string;
+  path: string;
+  entries: HistoryEntrySummary[];
+}
+
+export interface ReviewArchiveData {
+  summary: HistoryEntrySummary;
+  replyContent: string;
+  annotations: Annotation[];
+  submission: SubmissionRecord | null;
+  targetBefore: string | null;
+}
+
+export interface SaveReviewArchiveInput {
+  workspacePath: string;
+  agent?: string | null;
+  reviewPath?: string | null;
+  replyPath?: string | null;
+  targetPath?: string | null;
+  replyContent: string;
+  annotations: Annotation[];
+  submission: SubmissionRecord;
+  targetBefore?: string | null;
+  itemCount: number;
+}
+
 // ─── CLI Args ─────────────────────────────────────────────
 
 export interface CliArgs {
@@ -76,6 +130,7 @@ export interface CliArgs {
   targetPath: string | null;
   metadataPath: string | null;
   filePath: string | null;
+  workspacePath: string | null;
   /** Which agent triggered the launch: "codex" | "claude" | "gemini" | "unknown" */
   agent: string | null;
   trustedCaller: string | null;
@@ -109,9 +164,14 @@ export interface SelectionInfo {
   rect: { top: number; left: number; bottom: number; width: number };
 }
 
-// ─── Theme ────────────────────────────────────────────────
+// ─── UI Preferences ───────────────────────────────────────
 
 export type Theme = "dark" | "dim" | "light";
+export type SidebarTab = "outline" | "history";
+export type ContentWidth = "narrow" | "standard" | "wide";
+export type PagePadding = "compact" | "comfortable" | "airy";
+export type ReadingDensity = "compact" | "comfortable" | "relaxed";
+export type HighlightStrength = "subtle" | "balanced" | "strong";
 
 // ─── Return / Write-back ──────────────────────────────────
 

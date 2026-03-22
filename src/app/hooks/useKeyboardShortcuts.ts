@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useUIStore, useSelectionStore } from "@/stores";
+import { useDocumentStore, useSelectionStore, useUIStore } from "@/stores";
 
 /**
  * Hook: register global keyboard shortcuts and Ctrl+Wheel zoom.
@@ -10,9 +10,9 @@ import { useUIStore, useSelectionStore } from "@/stores";
  *   Ctrl+O — open file
  */
 export function useKeyboardShortcuts(handleOpenFile: () => void) {
-  const { adjustFontSize } = useUIStore();
+  const adjustFontSize = useUIStore((state) => state.adjustFontSize);
+  const setFontSize = useUIStore((state) => state.setFontSize);
 
-  // Ctrl+Wheel zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -24,7 +24,6 @@ export function useKeyboardShortcuts(handleOpenFile: () => void) {
     return () => window.removeEventListener("wheel", handleWheel);
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -36,12 +35,14 @@ export function useKeyboardShortcuts(handleOpenFile: () => void) {
           adjustFontSize(-1);
         } else if (e.key === "0") {
           e.preventDefault();
-          useUIStore.getState().setFontSize(14);
+          setFontSize(18);
         } else if (e.key === "m" && e.altKey) {
-          // Ctrl+Alt+M → trigger comment
           e.preventDefault();
-          const sel = useSelectionStore.getState().selection;
-          if (sel) {
+          if (useDocumentStore.getState().isReadOnly) {
+            return;
+          }
+          const selection = useSelectionStore.getState().selection;
+          if (selection) {
             useSelectionStore.getState().openPopup();
           }
         } else if (e.key === "o") {
@@ -53,5 +54,5 @@ export function useKeyboardShortcuts(handleOpenFile: () => void) {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [adjustFontSize, handleOpenFile]);
+  }, [adjustFontSize, handleOpenFile, setFontSize]);
 }

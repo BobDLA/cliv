@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useUIStore, useDocumentStore } from "@/stores";
-import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
-import { Minimize2, AlertCircle, Loader2 } from "lucide-react";
+import { type HeadingInfo } from "@/features/documents";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useT } from "@/lib/useT";
+import { getPathInfo, resolveWorkspacePath } from "@/lib/pathUtils";
 
 import { useInitDocument, openFileFromTauri } from "./hooks/useInitDocument";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -10,24 +11,25 @@ import { useColumnResize } from "./hooks/useColumnResize";
 import { TopBar } from "./components/TopBar";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { DocumentArea } from "./components/DocumentArea";
+import { PersonalizationPanel } from "./components/PersonalizationPanel";
 
 /**
  * App shell — thin orchestrator.
  * All logic lives in extracted hooks; all UI in extracted components.
  */
 export function App() {
-  const { theme, isFullscreen, toggleFullscreen } = useUIStore();
-  const { replyContent, reviewPath, isLoading, error, setDocument, setError } =
+  const sidebarOpen = useUIStore((state) => state.sidebarOpen);
+  const toggleSidebarOpen = useUIStore((state) => state.toggleSidebarOpen);
+  const { replyContent, isLoading, error, setDocument, setError } =
     useDocumentStore();
   const t = useT();
 
   const [headings, setHeadings] = useState<HeadingInfo[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Custom hooks ──
   const { sidebarWidth, marginWidth, onSidebarDragStart, onMarginDragStart } =
     useColumnResize();
 
@@ -40,32 +42,39 @@ export function App() {
 
   useKeyboardShortcuts(handleOpenFile);
 
-  // Init theme on mount
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
-
-  const handleHeadingsChange = useCallback((h: HeadingInfo[]) => {
-    setHeadings(h);
+  const handleHeadingsChange = useCallback((nextHeadings: HeadingInfo[]) => {
+    setHeadings(nextHeadings);
   }, []);
 
-  // Browser file input change handler
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file) return;
+      if (file == null) return;
+      const rawPath =
+        (file as File & { path?: string; webkitRelativePath?: string }).path ??
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath ??
+        file.name;
 
       const reader = new FileReader();
       reader.onload = (ev) => {
         const content = ev.target?.result as string;
         if (content) {
+          const { baseName } = getPathInfo(rawPath);
           setDocument({
             reply: content,
             target: null,
             targetPath: null,
-            reviewPath: file.name,
-            replyPath: file.name,
-            documentId: file.name,
+            reviewPath: rawPath,
+            replyPath: rawPath,
+            workspacePath: resolveWorkspacePath({
+              workspacePath: null,
+              reviewPath: rawPath,
+              replyPath: rawPath,
+              targetPath: null,
+            }),
+            archivedSubmission: null,
+            documentId: baseName || file.name,
+            isReadOnly: false,
           });
         }
       };
@@ -74,25 +83,23 @@ export function App() {
       };
       reader.readAsText(file);
 
-      // Reset input so same file can be reopened
       e.target.value = "";
     },
     [setDocument, setError, t],
   );
 
-  // ─── Error State ────────────────────────────────────────
   if (error && !replyContent) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-surface-app">
         <div className="max-w-md space-y-4 text-center" data-testid="error-view">
           <AlertCircle className="mx-auto h-12 w-12 text-kind-challenge-text" />
-          <h2 className="text-lg font-semibold text-text-strong">{t("app.errorTitle")}</h2>
+          <h2 className="text-lg font-semibold text-text-strong">
+            {t("app.errorTitle")}
+          </h2>
           <p className="text-sm text-text-muted">{error}</p>
           <p className="text-xs text-text-subtle">
             {t("app.errorHint")}{" "}
-            <code className="bg-surface-card px-1 rounded">
-              cliv &lt;file.md&gt;
-            </code>{" "}
+            <code className="bg-surface-card px-1 rounded">cliv &lt;file.md&gt;</code>{" "}
             {t("app.errorHintOpen")}
           </p>
         </div>
@@ -100,7 +107,6 @@ export function App() {
     );
   }
 
-  // ─── Loading State ──────────────────────────────────────
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-surface-app">
@@ -112,35 +118,11 @@ export function App() {
     );
   }
 
-  // ─── Fullscreen mode ────────────────────────────────────
-  if (isFullscreen && replyContent) {
-    return (
-      <div
-        className="fixed inset-0 z-50 overflow-auto bg-surface-app"
-        data-testid="fullscreen-view"
-      >
-        <button
-          onClick={toggleFullscreen}
-          className="fixed right-4 top-4 z-50 rounded-lg border border-border-subtle bg-surface-popover p-2 text-text-muted shadow-lg hover:text-text-primary transition-colors"
-          title={t("app.exitFullscreen")}
-          data-testid="fullscreen-exit"
-        >
-          <Minimize2 className="h-4 w-4" />
-        </button>
-        <div className="mx-auto max-w-4xl px-8 py-6">
-          <MarkdownViewer content={replyContent} />
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Normal layout ──────────────────────────────────────
   return (
     <div
       className="flex h-screen w-screen flex-col overflow-hidden bg-surface-app text-text-primary"
       data-testid="app-shell"
     >
-      {/* Hidden file input for browser open */}
       <input
         ref={fileInputRef}
         type="file"
@@ -152,18 +134,18 @@ export function App() {
 
       <TopBar
         sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((s) => !s)}
+        onToggleSidebar={toggleSidebarOpen}
         onOpenFile={handleOpenFile}
         scrollContainerRef={scrollContainerRef}
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => setSettingsOpen((v) => !v)}
       />
 
-      {/* ─── Body: sidebar + content ─────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {sidebarOpen && (
           <LeftSidebar
             width={sidebarWidth}
             headings={headings}
-            reviewPath={reviewPath}
             onDragStart={onSidebarDragStart}
           />
         )}
@@ -176,6 +158,11 @@ export function App() {
           onMarginDragStart={onMarginDragStart}
           onHeadingsChange={handleHeadingsChange}
           onOpenFile={handleOpenFile}
+        />
+
+        <PersonalizationPanel
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
         />
       </div>
     </div>

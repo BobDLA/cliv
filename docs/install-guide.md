@@ -77,9 +77,10 @@ notify = ["cliv", "cache-codex"]
 **Test**:
 ```bash
 # Manual test
-cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
-cat ~/.codex/reply_cache/test-123.md
-# Should output: # Hello\nTest reply.
+CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
+cat ~/.codex/reply_cache/424242.md
+cat ~/.codex/reply_cache/424242.meta.json
+# 424242 simulates the pid-keyed cache entry used during GUI launches.
 ```
 
 **Live test**:
@@ -169,7 +170,7 @@ cat ~/.gemini/reply_cache/test-789.md
 | EDITOR is set | `echo $EDITOR` | `cliv` |
 | Codex hook config | `cat ~/.codex/config.toml` | Contains `notify = ["cliv", "cache-codex"]` |
 | Claude hook config | `cat ~/.claude/settings.json` | Contains `"command": "cliv cache-claude"` |
-| Codex cache test | Manual command above | File written successfully |
+| Codex cache test | Manual command above | Cache and metadata written successfully |
 | Claude cache test | Manual command above | File written successfully |
 | Ctrl+G live test | Press Ctrl+G in an agent | cliV window opens |
 

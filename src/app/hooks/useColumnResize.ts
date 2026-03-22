@@ -1,4 +1,9 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
+import {
+  clampMarginWidth,
+  clampSidebarWidth,
+  useUIStore,
+} from "@/stores/uiStore";
 
 /**
  * Hook: manage resizable column widths for sidebar and annotation margin.
@@ -6,8 +11,10 @@ import { useState, useCallback, useRef } from "react";
  * Returns current widths + mousedown handlers for the resize handles.
  */
 export function useColumnResize() {
-  const [sidebarWidth, setSidebarWidth] = useState(224); // w-56 = 14rem
-  const [marginWidth, setMarginWidth] = useState(256); // w-64 = 16rem
+  const sidebarWidth = useUIStore((state) => state.sidebarWidth);
+  const marginWidth = useUIStore((state) => state.marginWidth);
+  const setSidebarWidth = useUIStore((state) => state.setSidebarWidth);
+  const setMarginWidth = useUIStore((state) => state.setMarginWidth);
 
   const sidebarDragRef = useRef<{ startX: number; startW: number } | null>(
     null,
@@ -20,44 +27,46 @@ export function useColumnResize() {
     (e: React.MouseEvent) => {
       e.preventDefault();
       sidebarDragRef.current = { startX: e.clientX, startW: sidebarWidth };
+
       const onMove = (ev: MouseEvent) => {
-        if (!sidebarDragRef.current) return;
+        if (sidebarDragRef.current == null) return;
         const delta = ev.clientX - sidebarDragRef.current.startX;
-        setSidebarWidth(
-          Math.max(120, Math.min(400, sidebarDragRef.current.startW + delta)),
-        );
+        setSidebarWidth(clampSidebarWidth(sidebarDragRef.current.startW + delta));
       };
+
       const onUp = () => {
         sidebarDragRef.current = null;
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
       };
+
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [sidebarWidth],
+    [setSidebarWidth, sidebarWidth],
   );
 
   const onMarginDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       marginDragRef.current = { startX: e.clientX, startW: marginWidth };
+
       const onMove = (ev: MouseEvent) => {
-        if (!marginDragRef.current) return;
+        if (marginDragRef.current == null) return;
         const delta = marginDragRef.current.startX - ev.clientX;
-        setMarginWidth(
-          Math.max(150, Math.min(500, marginDragRef.current.startW + delta)),
-        );
+        setMarginWidth(clampMarginWidth(marginDragRef.current.startW + delta));
       };
+
       const onUp = () => {
         marginDragRef.current = null;
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
       };
+
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [marginWidth],
+    [marginWidth, setMarginWidth],
   );
 
   return {

@@ -85,8 +85,7 @@ export EDITOR="cliv"
 - 🔄 **多 Agent 支持** — 尽力自动识别 Codex / Claude / Gemini，也可用 `CLIV_AGENT` 强制指定
 - 📂 **打开本地 Markdown** — 既能审阅缓存回复，也能直接打开 `.md` 文件，且默认按只读审阅处理
 - 🗂️ **保存会话** — 在本地保留审阅快照和批注（目前仅做本地持久化）
-- 🌙 **主题切换** — 深色 / 柔和 / 浅色
-- 🔍 **字体缩放** — 调整阅读舒适度
+- 🎛️ **阅读设置** — 在统一设置面里调整主题、字号、语言、布局记忆和阅读预设
 
 ## 说明
 
@@ -124,7 +123,7 @@ iterate_header_en = "Please make incremental revisions based on the following an
 - [x] 独立审阅完善（`cliv <file.md>` 默认只读审阅，支持安全回退）
 - [x] 跨平台构建（macOS、Windows）
 - [ ] 自定义 Agent 插件系统
-- [ ] 审阅历史
+- [x] 审阅历史（按项目分组归档，并支持只读回放）
 - [ ] 收藏夹
 - [ ] 迭代编辑模式
 

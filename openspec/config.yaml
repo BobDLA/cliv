@@ -13,6 +13,7 @@ context: |
   文档约定：
   - 仓库文档以中文为主；OpenSpec 结构标记、代码、路径、命令名保持 English
   - 修改公开使用方式时，注意对应中英文文档是否需要同步
+  - 测试与回归基线参考：`docs/testing-standard.md`、`docs/regression-cases.md`、`docs/testing-doc-linkage.md`
 
 rules:
   proposal:
@@ -32,6 +33,11 @@ rules:
 
   tasks:
     - 按依赖顺序拆分，并覆盖 implementation、tests/verification、docs。
+    - tests/verification 任务不要只写笼统的 “run tests”；优先写具体测试文件、命令或明确的手动验证场景。
+    - 新需求默认补自动化测试；不要把 manual verification 当成默认交付。
     - 变更涉及用户可见流程、agent integration 或持久化行为时，必须包含验证工作。
     - 文档或公开使用方式变化时，明确是否同步对应中英文文档。
-    - bug fix 在可行时补回归保护；若缺少自动化测试，记录可复现的手动验证方式。
+    - bug fix 在可行时补 automated regression；若暂时无法自动化，更新 `docs/regression-cases.md`。
+    - `Coverage: manual` 的回归 case 需要 `Manual verification:`；若当前还不适合自动化，再补 `Reason:`。
+    - `Coverage: pending` 的回归 case 需要 `Reason:`。
+    - 变更影响测试标准、回归 case 或 CI 覆盖声明时，纳入 `pnpm test:docs` 验证。
