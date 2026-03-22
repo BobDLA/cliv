@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect, useState, useCallback } from "react";
+import { memo, useRef, useEffect, useState, useCallback, isValidElement } from "react";
 import MarkdownPreview from "@uiw/react-markdown-preview";
 import { useUIStore } from "@/stores/uiStore";
 import { MermaidBlock } from "./MermaidBlock";
@@ -118,13 +118,18 @@ export const MarkdownViewer = memo(function MarkdownViewer({
   );
 });
 
-function findCodeChild(children: React.ReactNode): any | null {
+type CodeChildElement = React.ReactElement<{
+  className?: string;
+  children?: React.ReactNode;
+}>;
+
+function isCodeChild(node: React.ReactNode): node is CodeChildElement {
+  return isValidElement(node) && node.type === "code";
+}
+
+function findCodeChild(children: React.ReactNode): CodeChildElement | null {
   if (children == null) return null;
-  if (
-    typeof children === "object" &&
-    "type" in children &&
-    (children as { type: unknown }).type === "code"
-  ) {
+  if (isCodeChild(children)) {
     return children;
   }
   if (Array.isArray(children)) {
