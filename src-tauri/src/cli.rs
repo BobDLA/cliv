@@ -275,6 +275,19 @@ fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) ->
             return Some(canonical_name);
         }
 
+        // Fallback: when comm is a generic interpreter (e.g. "node"), check
+        // cmdline which contains the full invocation path.
+        if let Some(ref cmdline) = process.cmdline {
+            let canonical_cmdline = canonicalize_process_name(cmdline);
+            if matches_any(&canonical_cmdline, &config.launch.trusted_callers) {
+                logging::log(&format!(
+                    "  trust[{}]: matched trusted caller via cmdline '{}' (canonical='{}') at pid={}",
+                    process.level, cmdline, canonical_cmdline, process.pid
+                ));
+                return Some(canonical_cmdline);
+            }
+        }
+
         logging::debug(&format!(
             "  trust[{}]: first non-wrapper caller '{}' (canonical='{}') is not trusted",
             process.level, process.name, canonical_name
