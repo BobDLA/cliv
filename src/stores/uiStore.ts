@@ -397,8 +397,18 @@ let hasDocumentPreferenceSubscription = false;
 
 if (typeof document !== "undefined" && !hasDocumentPreferenceSubscription) {
   hasDocumentPreferenceSubscription = true;
+
+  // Apply immediately on load to prevent FOUC.
   applyUIPreferencesToDocument(useUIStore.getState());
+
+  // Debounce subsequent updates via rAF to coalesce rapid state changes
+  // (e.g. holding font-size +/- button) into one reflow per frame.
+  let rafId: number | null = null;
   useUIStore.subscribe((state) => {
-    applyUIPreferencesToDocument(state);
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      applyUIPreferencesToDocument(state);
+    });
   });
 }

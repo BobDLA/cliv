@@ -45,6 +45,11 @@ async function loadUIStoreModule() {
   return import("../uiStore");
 }
 
+/** Flush pending requestAnimationFrame callbacks (jsdom uses setTimeout(cb,0)). */
+function flushRAF(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 describe("uiStore", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -94,6 +99,9 @@ describe("uiStore", () => {
       state.setReadingDensity("compact");
       state.setHighlightStrength("subtle");
     });
+
+    // Subscriber uses rAF to debounce DOM updates — flush it.
+    await flushRAF();
 
     const root = document.documentElement;
     expect(root.style.getPropertyValue("--content-max-width")).toBe("48rem");
