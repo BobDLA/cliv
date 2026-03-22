@@ -237,19 +237,17 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const [submitSuccessMethod, setSubmitSuccessMethod] = useState<"written" | "clipboard" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitLocked, setSubmitLocked] = useState(false);
+  const [lastSubmittedFingerprint, setLastSubmittedFingerprint] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const submitLockedRef = useRef(false);
-  const submitUnlockTimeoutRef = useRef<number | null>(null);
-  const submitSuccessTimeoutRef = useRef<number | null>(null);
   const closeWindowTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    clearTimeoutRef(submitUnlockTimeoutRef);
-    clearTimeoutRef(submitSuccessTimeoutRef);
     clearTimeoutRef(closeWindowTimeoutRef);
     submitLockedRef.current = false;
     setSubmitSuccessMethod(null);
+    setLastSubmittedFingerprint(null);
     setIsSubmitting(false);
     setSubmitLocked(false);
     setWriteError(null);
@@ -257,8 +255,6 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
 
   useEffect(() => {
     return () => {
-      clearTimeoutRef(submitUnlockTimeoutRef);
-      clearTimeoutRef(submitSuccessTimeoutRef);
       clearTimeoutRef(closeWindowTimeoutRef);
     };
   }, []);
@@ -335,6 +331,46 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
       }),
     [workspacePath, reviewPath, replyPath, targetPath],
   );
+  const submissionFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        documentId,
+        targetPath: targetPath ?? "",
+        reviewPath: reviewPath ?? "",
+        replyPath: replyPath ?? "",
+        workspacePath: effectiveWorkspacePath ?? "",
+        templateMode,
+        finalOutput,
+        replyContent: replyContent ?? "",
+        targetBefore: targetContent ?? "",
+        itemCount,
+      }),
+    [
+      documentId,
+      effectiveWorkspacePath,
+      finalOutput,
+      itemCount,
+      replyContent,
+      replyPath,
+      reviewPath,
+      targetContent,
+      targetPath,
+      templateMode,
+    ],
+  );
+  const hasSubmittedCurrentOutput =
+    lastSubmittedFingerprint !== null &&
+    lastSubmittedFingerprint === submissionFingerprint;
+
+  useEffect(() => {
+    if (
+      !isSubmitting &&
+      lastSubmittedFingerprint !== null &&
+      !hasSubmittedCurrentOutput
+    ) {
+      setSubmitSuccessMethod(null);
+    }
+  }, [hasSubmittedCurrentOutput, isSubmitting, lastSubmittedFingerprint]);
 
   const handleToggleAll = useCallback(() => {
     if (isReadOnly) return;
@@ -343,10 +379,15 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   }, [allSelected, annotations, deselectAll, isReadOnly, selectAll]);
 
   const handleSubmit = useCallback(async () => {
-    if (!hasContent || isReadOnly || submitLockedRef.current) return;
+    if (
+      !hasContent ||
+      isReadOnly ||
+      submitLockedRef.current ||
+      hasSubmittedCurrentOutput
+    ) {
+      return;
+    }
 
-    clearTimeoutRef(submitUnlockTimeoutRef);
-    clearTimeoutRef(submitSuccessTimeoutRef);
     clearTimeoutRef(closeWindowTimeoutRef);
     submitLockedRef.current = true;
     setIsSubmitting(true);
@@ -379,6 +420,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
         void useHistoryStore.getState().refreshHistory();
       }
 
+      setLastSubmittedFingerprint(submissionFingerprint);
       setSubmitSuccessMethod(method);
       if (method === "written") {
         // Auto-close window after successful file write-back (Codex flow)
@@ -389,15 +431,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           void closeWindow();
         }, 800);
       } else {
-        submitUnlockTimeoutRef.current = window.setTimeout(() => {
-          submitLockedRef.current = false;
-          setSubmitLocked(false);
-          submitUnlockTimeoutRef.current = null;
-        }, 800);
-        submitSuccessTimeoutRef.current = window.setTimeout(() => {
-          setSubmitSuccessMethod(null);
-          submitSuccessTimeoutRef.current = null;
-        }, 2500);
+        submitLockedRef.current = false;
+        setSubmitLocked(false);
       }
     } catch (e) {
       submitLockedRef.current = false;
@@ -420,7 +455,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     templateMode,
     userText,
     effectiveWorkspacePath,
+    hasSubmittedCurrentOutput,
     isReadOnly,
+    submissionFingerprint,
   ]);
 
   // ── Ctrl+Enter global shortcut for submit ──
@@ -906,7 +943,11 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           {!isReadOnly ? (
             <button
               type="button"
-              disabled={!hasContent || submitLocked}
+              disabled={
+                !hasContent ||
+                submitLocked ||
+                hasSubmittedCurrentOutput
+              }
               onClick={handleSubmit}
               data-testid="return-submit"
               aria-busy={isSubmitting}
@@ -924,8 +965,18 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 fontSize: "0.9rem",
                 fontWeight: 600,
                 fontFamily: "var(--font-sans)",
-                cursor: !hasContent || submitLocked ? "not-allowed" : "pointer",
-                opacity: !hasContent || submitLocked ? 0.6 : 1,
+                cursor:
+                  !hasContent ||
+                  submitLocked ||
+                  hasSubmittedCurrentOutput
+                    ? "not-allowed"
+                    : "pointer",
+                opacity:
+                  !hasContent ||
+                  submitLocked ||
+                  hasSubmittedCurrentOutput
+                    ? 0.6
+                    : 1,
                 transition: "all 0.15s",
               }}
             >

@@ -203,6 +203,51 @@ describe("ReturnBuilder", () => {
     });
   });
 
+  it("keeps the same output locked after a successful clipboard submit until content changes", async () => {
+    writeBackMock.mockResolvedValue("clipboard");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        reply: "# Current reply",
+        target: null,
+        targetPath: null,
+        reviewPath: "/tmp/reply.md",
+        replyPath: "/tmp/reply.md",
+        workspacePath: "/tmp/workspace",
+      });
+    });
+
+    render(<ReturnBuilder />);
+
+    const submitButton = screen.getByTestId("return-submit");
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(writeBackMock).toHaveBeenCalledTimes(1);
+      expect(saveReviewArchiveMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(submitButton).toBeDisabled();
+    expect(screen.getByTestId("return-status-success")).toHaveTextContent(
+      "Copied to clipboard",
+    );
+
+    fireEvent.click(submitButton);
+
+    expect(writeBackMock).toHaveBeenCalledTimes(1);
+    expect(saveReviewArchiveMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByTestId("return-free-edit"), {
+      target: { value: "Adjusted after the first submit" },
+    });
+
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId("return-status-success")).not.toBeInTheDocument();
+  });
+
   it("archives standalone open-file reviews under the opened file folder", async () => {
     writeBackMock.mockResolvedValue("clipboard");
     saveReviewArchiveMock.mockResolvedValue(undefined);
