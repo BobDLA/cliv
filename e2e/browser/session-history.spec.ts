@@ -24,7 +24,7 @@ test("allows switching the sidebar default tab from settings", async ({ page }) 
   await gotoApp(page);
 
   await page.getByTestId("topbar-settings-toggle").click();
-  await page.getByTestId("settings-tab-layout").click();
+  await page.getByTestId("settings-tab-reading").click();
   await page.getByTestId("settings-sidebar-tab-history").click();
 
   await expect(page.getByTestId("history-tree-empty")).toBeVisible();

@@ -53,7 +53,8 @@ pub fn extract_gemini_reply(session_id: Option<String>) -> Result<String, String
 /// Fallback chain:
 /// 1. PID cache hit — if session_id looks like a numeric PID, try `{pid}.md`
 /// 2. Session-id direct hit — try `{session_id}.md`
-/// 3. Newest file scan — pick the newest `.md` in `reply_cache/`
+/// 3. Newest file scan — only when no session_id was provided, pick the
+///    newest `.md` in `reply_cache/`
 pub fn extract_gemini_reply_from(
     gemini_home: &Path,
     session_id: Option<String>,
@@ -98,15 +99,18 @@ pub fn extract_gemini_reply_from(
         }
     }
 
-    // Strategy 3: Newest .md file in the cache directory (last resort)
-    if let Some(newest) = find_newest_md(&cache_dir) {
-        logging::log(&format!(
-            "  extract gemini: HIT newest cache file={} size={}",
-            newest.display(),
-            fs::metadata(&newest).map(|m| m.len()).unwrap_or(0)
-        ));
-        return fs::read_to_string(&newest)
-            .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
+    // Strategy 3: Newest .md file in the cache directory (last resort) only
+    // when the caller did not request a specific session key.
+    if session_id.is_none() {
+        if let Some(newest) = find_newest_md(&cache_dir) {
+            logging::log(&format!(
+                "  extract gemini: HIT newest cache file={} size={}",
+                newest.display(),
+                fs::metadata(&newest).map(|m| m.len()).unwrap_or(0)
+            ));
+            return fs::read_to_string(&newest)
+                .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
+        }
     }
 
     Err(format!(
@@ -206,5 +210,16 @@ mod tests {
         let result = extract_gemini_reply_from(home.path(), Some("nonexistent".into()));
         assert!(result.is_err());
     }
-}
 
+    #[test]
+    fn requested_session_miss_does_not_fall_back_to_newest_file() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("other-session.md");
+        fs::write(&cache_path, "Other session reply").unwrap();
+
+        let result = extract_gemini_reply_from(home.path(), Some("missing-session".into()));
+        let err = result.expect_err("expected a cache miss for the requested session");
+
+        assert!(err.contains("missing-session"));
+    }
+}

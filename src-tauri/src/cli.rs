@@ -276,9 +276,19 @@ fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) ->
         }
 
         // Fallback: when comm is a generic interpreter (e.g. "node"), check
-        // cmdline which contains the full invocation path.
+        // the invoked executable token from cmdline which contains the full
+        // command plus its arguments.
         if let Some(ref cmdline) = process.cmdline {
-            let canonical_cmdline = canonicalize_process_name(cmdline);
+            let canonical_cmdline = match canonicalize_cmdline_executable(cmdline) {
+                Some(name) => name,
+                None => {
+                    logging::debug(&format!(
+                        "  trust[{}]: cmdline present but no executable token parsed from '{}'",
+                        process.level, cmdline
+                    ));
+                    continue;
+                }
+            };
             if matches_any(&canonical_cmdline, &config.launch.trusted_callers) {
                 logging::log(&format!(
                     "  trust[{}]: matched trusted caller via cmdline '{}' (canonical='{}') at pid={}",
@@ -297,6 +307,49 @@ fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) ->
 
     logging::debug("  trust: no trusted caller matched");
     None
+}
+
+fn canonicalize_cmdline_executable(cmdline: &str) -> Option<String> {
+    let mut tokens = cmdline
+        .split_whitespace()
+        .map(|token| token.trim_matches(|ch| ch == '"' || ch == '\''))
+        .filter(|token| !token.is_empty());
+
+    let first = tokens.next()?;
+    let canonical_first = canonicalize_process_name(first);
+    if !is_generic_interpreter(&canonical_first) {
+        return Some(canonical_first);
+    }
+
+    for token in tokens {
+        if token.starts_with('-') {
+            continue;
+        }
+
+        let canonical = canonicalize_process_name(token);
+        if !canonical.is_empty() {
+            return Some(canonical);
+        }
+    }
+
+    None
+}
+
+fn is_generic_interpreter(name: &str) -> bool {
+    matches!(
+        name,
+        "node"
+            | "bun"
+            | "deno"
+            | "python"
+            | "python3"
+            | "ruby"
+            | "bash"
+            | "sh"
+            | "zsh"
+            | "fish"
+            | "pwsh"
+    )
 }
 
 /// Given a matched agent and its PID, set the appropriate lookup env var.
@@ -796,6 +849,21 @@ mod tests {
         );
 
         assert_eq!(caller, None);
+    }
+
+    #[test]
+    fn trusted_caller_matches_executable_token_from_interpreter_cmdline() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[ParentProcess {
+                pid: 18,
+                name: "node".into(),
+                cmdline: Some("node --no-warnings /usr/local/bin/mycli /tmp/file.md".into()),
+                level: 0,
+            }],
+        );
+
+        assert_eq!(caller.as_deref(), Some("mycli"));
     }
 
     #[test]

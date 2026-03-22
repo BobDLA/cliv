@@ -217,3 +217,16 @@ fn missing_cache_returns_error_with_path() {
     assert!(msg.contains("phantom-thread"));
     assert!(msg.contains("metadata match"));
 }
+
+#[test]
+fn gemini_requested_key_miss_does_not_return_other_session_cache() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path();
+
+    write_cache(home, "other-session", "This should not leak");
+
+    let err =
+        cliv_lib::extract::gemini::extract_gemini_reply_from(home, Some("missing-key".to_string()));
+    assert!(err.is_err(), "Gemini should not fall back to another cache file");
+    assert!(err.unwrap_err().contains("missing-key"));
+}
