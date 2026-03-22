@@ -117,6 +117,26 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             return Some(pid);
         }
 
+        // Fallback: when comm is a generic interpreter (e.g. "node"),
+        // read /proc/PID/cmdline for the full invocation path.
+        if !comm.contains(agent_name) {
+            if let Ok(raw) = std::fs::read(format!("/proc/{}/cmdline", pid)) {
+                let cmdline = raw
+                    .split(|&b| b == 0)
+                    .map(|seg| String::from_utf8_lossy(seg))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .to_lowercase();
+                if cmdline.contains(agent_name) {
+                    logging::debug(&format!(
+                        "  ancestor: matched {} in cmdline at pid={}",
+                        agent_name, pid
+                    ));
+                    return Some(pid);
+                }
+            }
+        }
+
         // Read PPID from /proc/PID/stat
         let stat = match std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
             Ok(s) => s,
@@ -438,16 +458,11 @@ pub fn cache_claude() {
 // ─── Gemini ───────────────────────────────────────────────
 
 pub fn cache_gemini() {
-    let session_id = match std::env::var("GEMINI_SESSION_ID") {
-        Ok(id) if !id.is_empty() => {
-            logging::log(&format!("cache-gemini: session_id={}", id));
-            id
-        }
-        _ => {
-            logging::log("cache-gemini: no GEMINI_SESSION_ID");
-            return;
-        }
-    };
+    // Session ID is optional — Gemini CLI may not inject GEMINI_SESSION_ID.
+    let session_id = std::env::var("GEMINI_SESSION_ID")
+        .ok()
+        .filter(|s| !s.is_empty());
+    logging::log(&format!("cache-gemini: session_id={:?}", session_id));
 
     logging::debug("cache-gemini: reading stdin...");
     let input = match read_stdin() {
@@ -492,7 +507,7 @@ pub fn cache_gemini() {
                 source: "pid".to_string(),
                 key: pid.to_string(),
                 agent: "gemini".to_string(),
-                real_session_id: Some(session_id.clone()),
+                real_session_id: session_id.clone(),
                 pid: Some(pid),
                 cached_at: now_iso8601(),
                 size_bytes: message.len(),
@@ -500,19 +515,26 @@ pub fn cache_gemini() {
         );
     }
 
-    // Also write by session_id as fallback
-    let cache_path = cache_dir.join(format!("{}.md", session_id));
-    atomic_write_cache(&cache_path, message);
-    write_cache_meta(
-        &cache_path,
-        &CacheMeta {
-            source: "real_id".to_string(),
-            key: session_id.clone(),
-            agent: "gemini".to_string(),
-            real_session_id: Some(session_id),
-            pid: gemini_pid,
-            cached_at: now_iso8601(),
-            size_bytes: message.len(),
-        },
-    );
+    // Also write by session_id as fallback (if available)
+    if let Some(ref sid) = session_id {
+        let cache_path = cache_dir.join(format!("{}.md", sid));
+        atomic_write_cache(&cache_path, message);
+        write_cache_meta(
+            &cache_path,
+            &CacheMeta {
+                source: "real_id".to_string(),
+                key: sid.clone(),
+                agent: "gemini".to_string(),
+                real_session_id: session_id.clone(),
+                pid: gemini_pid,
+                cached_at: now_iso8601(),
+                size_bytes: message.len(),
+            },
+        );
+    }
+
+    // If neither PID nor session_id was available, log a warning.
+    if gemini_pid.is_none() && session_id.is_none() {
+        logging::log("cache-gemini: WARNING — no PID or session_id resolved; cache not written");
+    }
 }
