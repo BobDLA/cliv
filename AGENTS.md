@@ -53,6 +53,32 @@ pnpm tauri:build      # Production build
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
+## Branch And Worktree Rules
+
+- Use a dedicated git worktree for code changes by default. Do not develop features or fixes directly in the main repository checkout unless the task is purely coordination, inspection, or cleanup.
+- Keep all temporary worktrees under `./.worktrees/`. Do not create ad-hoc worktrees in random directories such as `/tmp`, sibling folders, or tool-specific hidden paths.
+- Use one task per branch and one branch per worktree. Do not reuse an old worktree for unrelated work.
+- Name branches with a stable prefix plus slug, for example `fix/prompt-header-reseed`, `feat/history-replay`, `docs/worktree-policy`.
+- Derive the worktree directory name mechanically from the branch name by replacing `/` with `--`.
+  - Branch: `fix/prompt-header-reseed`
+  - Worktree: `./.worktrees/fix--prompt-header-reseed`
+- If the branch already exists, reuse the same derived worktree path instead of inventing a new directory name.
+- Remove merged or abandoned worktrees promptly, then delete the corresponding local branch. If the remote branch is no longer needed, delete it too.
+
+### Standard Commands
+
+```bash
+# create a new branch + worktree from the default base ref
+scripts/new_worktree.sh fix/prompt-header-reseed
+
+# attach an existing branch to its canonical worktree path
+scripts/new_worktree.sh fix/prompt-header-reseed
+
+# clean up after merge
+scripts/cleanup_worktree.sh fix/prompt-header-reseed
+scripts/cleanup_worktree.sh fix/prompt-header-reseed --remote
+```
+
 ## Testing & Validation
 
 See also:

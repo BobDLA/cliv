@@ -2,6 +2,64 @@
 
 Use this default stage split unless the repository has a strong reason to differ.
 
+## Branch And Worktree Policy
+
+Use a consistent worktree workflow for implementation work.
+
+Required defaults:
+
+- Open a dedicated git worktree for code changes.
+- Keep worktrees under `./.worktrees/` only.
+- Use one task, one branch, one worktree.
+- Do not create ad-hoc worktrees in random filesystem locations.
+- Name branches as `<type>/<slug>`.
+- Name worktree directories from the branch name by replacing `/` with `--`.
+
+Examples:
+
+- Branch `fix/prompt-header-reseed` -> worktree `./.worktrees/fix--prompt-header-reseed`
+- Branch `feat/history-replay` -> worktree `./.worktrees/feat--history-replay`
+- Branch `docs/worktree-policy` -> worktree `./.worktrees/docs--worktree-policy`
+
+Recommended commands:
+
+```bash
+scripts/new_worktree.sh fix/prompt-header-reseed
+scripts/new_worktree.sh fix/prompt-header-reseed
+scripts/cleanup_worktree.sh fix/prompt-header-reseed
+scripts/cleanup_worktree.sh fix/prompt-header-reseed --remote
+```
+
+Cleanup rule:
+
+- Remove the worktree as soon as the branch is merged or abandoned.
+- Delete the local branch after removing the worktree.
+- Delete the remote branch when it is no longer needed.
+
+## Standard Delivery Loop
+
+Recommended default loop for implementation work:
+
+1. Sync the base branch you want to start from.
+2. Create a canonical worktree with `scripts/new_worktree.sh <type>/<slug>`.
+3. Implement in that worktree only.
+4. Run the minimum validation set required by the changed area.
+5. Record validation in PR or review notes using a `Ran / Not run` block.
+6. Open or update the PR.
+7. After merge, run `scripts/cleanup_worktree.sh <type>/<slug> --remote`.
+
+Validation guidance:
+
+- Small UI changes: prefer targeted Vitest first, not full CI locally.
+- Cross-boundary changes: promote to the next validation layer instead of guessing.
+- Bug fixes: prefer automated regression coverage; if not possible yet, record manual verification and the reason.
+
+CI failure triage:
+
+- Check the latest failed GitHub Actions run first, not only local assumptions.
+- Identify the exact failing step before changing code or workflow files.
+- If the failure is CI-only, record the root cause in the PR before merging.
+
 ## `pre-commit`
 
 Keep it fast. Target sub-second to low-single-digit seconds.
