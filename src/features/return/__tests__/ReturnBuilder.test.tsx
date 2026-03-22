@@ -42,6 +42,7 @@ describe("ReturnBuilder", () => {
       reviewPath: null,
       replyPath: null,
       workspacePath: "/tmp/workspace",
+      archivedSubmission: null,
       documentId: "doc-1",
       isReadOnly: false,
       isLoading: false,
@@ -151,5 +152,97 @@ describe("ReturnBuilder", () => {
     });
 
     expect(saveReviewArchiveMock).not.toHaveBeenCalled();
+  });
+
+  it("archives standalone open-file reviews under the opened file folder", async () => {
+    writeBackMock.mockResolvedValue("clipboard");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        reply: "# Opened file reply",
+        target: null,
+        targetPath: null,
+        reviewPath: "/tmp/other-project/reply.md",
+        replyPath: "/tmp/other-project/reply.md",
+        workspacePath: "/tmp/current-launch",
+      });
+      useAnnotationStore.getState().addAnnotation({
+        id: "ann-standalone",
+        documentId: "doc-1",
+        quote: "reply",
+        comment: "group by file folder",
+        kind: "comment",
+        status: "open",
+        createdAt: new Date().toISOString(),
+        range: {
+          startOffset: 2,
+          endOffset: 7,
+        },
+      });
+    });
+
+    render(<ReturnBuilder />);
+    fireEvent.click(screen.getByTestId("return-submit"));
+
+    await waitFor(() => {
+      expect(saveReviewArchiveMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspacePath: "/tmp/other-project",
+          reviewPath: "/tmp/other-project/reply.md",
+          replyPath: "/tmp/other-project/reply.md",
+          targetPath: null,
+        }),
+      );
+    });
+  });
+
+  it("restores archived free-edit text and keeps replay read-only", async () => {
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        reply: "# Archived reply",
+        target: "This should not replace the archive snapshot.",
+        reviewPath: "/tmp/reply.md",
+        replyPath: "/tmp/reply.md",
+        archivedSubmission: {
+          createdAt: "2026-03-22T10:01:00.000Z",
+          method: "written",
+          templateMode: "iterate",
+          userText: "Archived custom input",
+          finalOutput: "Archived custom input\n\n---\n\nArchived aggregate",
+        },
+        documentId: "arch-1",
+        isReadOnly: true,
+      });
+      useAnnotationStore.getState().addAnnotation({
+        id: "ann-1",
+        documentId: "arch-1",
+        quote: "reply",
+        comment: "preserved",
+        kind: "comment",
+        status: "open",
+        createdAt: new Date().toISOString(),
+        range: {
+          startOffset: 2,
+          endOffset: 7,
+        },
+      });
+    });
+
+    render(<ReturnBuilder />);
+
+    const textarea = screen.getByTestId("return-free-edit");
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("Archived custom input");
+    });
+
+    expect(textarea).toHaveAttribute("readonly");
+    expect(screen.getByTestId("return-template-iterate")).toBeDisabled();
+    expect(screen.queryByTestId("return-submit")).not.toBeInTheDocument();
+    expect(screen.getByText("Viewing read-only archived review")).toBeInTheDocument();
+
+    fireEvent.change(textarea, { target: { value: "mutated" } });
+    expect(textarea).toHaveValue("Archived custom input");
   });
 });

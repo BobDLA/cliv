@@ -35,7 +35,15 @@ const zh = {
   "history.noMatchHint": "换个关键词试试",
   "history.charsSuffix": "字",
   "history.itemsSuffix": "条",
+  "history.pathLabel": "项目路径",
+  "history.copyPath": "复制路径",
+  "history.pathCopied": "已复制",
+  "history.groupCount": "{n} 条",
+  "history.expandGroup": "展开项目",
+  "history.collapseGroup": "收起项目",
+  "history.readOnlyMode": "历史回看",
   "history.readOnlyBadge": "当前正在查看只读历史归档",
+  "history.readOnlyHint": "当前内容是历史归档快照，仅供回看与对照，不会写回原文件。",
 
   // ── DocumentArea ──
   "docarea.hint": "或点击下方按钮打开文件。",
@@ -196,7 +204,15 @@ const en: Record<keyof typeof zh, string> = {
   "history.noMatchHint": "Try a different keyword",
   "history.charsSuffix": " chars",
   "history.itemsSuffix": " items",
+  "history.pathLabel": "Project path",
+  "history.copyPath": "Copy path",
+  "history.pathCopied": "Copied",
+  "history.groupCount": "{n} items",
+  "history.expandGroup": "Expand project",
+  "history.collapseGroup": "Collapse project",
+  "history.readOnlyMode": "History Replay",
   "history.readOnlyBadge": "Viewing read-only archived review",
+  "history.readOnlyHint": "You are viewing an archived snapshot for review only. Changes here will not write back to the source file.",
 
   // ── DocumentArea ──
   "docarea.hint": "or click the button below to open a file.",

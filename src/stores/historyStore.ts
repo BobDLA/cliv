@@ -68,6 +68,7 @@ export const useHistoryStore = create<HistoryState>((set) => ({
           archive.summary.workspacePath,
         replyPath: archive.summary.replyPath ?? archive.summary.reviewPath,
         workspacePath: archive.summary.workspacePath,
+        archivedSubmission: archive.submission,
         documentId: archive.summary.id,
         isReadOnly: true,
       });

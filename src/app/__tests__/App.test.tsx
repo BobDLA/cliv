@@ -17,7 +17,10 @@ describe("App", () => {
       targetPath: null,
       reviewPath: "demo.md",
       replyPath: "demo.md",
+      workspacePath: null,
+      archivedSubmission: null,
       documentId: "test-doc",
+      isReadOnly: false,
       isLoading: false,
       error: null,
     });
@@ -57,6 +60,41 @@ describe("App", () => {
     const githubLink = screen.getByTestId("topbar-github-link");
     expect(githubLink).toHaveTextContent("GitHub");
     expect(githubLink).toHaveAttribute("href", "https://github.com/BobDLA/cliv");
+  });
+
+  it("shows archived free-edit content while viewing read-only history", () => {
+    useDocumentStore.setState({
+      replyContent: "# Archived reply\n\nHistory replay",
+      targetContent: null,
+      targetPath: null,
+      reviewPath: "archived.md",
+      replyPath: "archived.md",
+      workspacePath: "/tmp/workspace",
+      archivedSubmission: {
+        createdAt: "2026-03-22T10:01:00.000Z",
+        method: "written",
+        templateMode: "reply",
+        userText: "Archived custom input",
+        finalOutput: "Archived custom input",
+      },
+      documentId: "archived-doc",
+      isReadOnly: true,
+      isLoading: false,
+      error: null,
+    });
+
+    render(<App />);
+
+    const textarea = screen.getByTestId("return-free-edit");
+    expect(textarea).toHaveValue("Archived custom input");
+    expect(textarea).toHaveAttribute("readonly");
+    expect(screen.getByTestId("topbar-readonly-badge")).toHaveTextContent(
+      "History Replay",
+    );
+    expect(screen.getByTestId("history-readonly-banner")).toHaveTextContent(
+      "You are viewing an archived snapshot for review only.",
+    );
+    expect(screen.getByText("Viewing read-only archived review")).toBeInTheDocument();
   });
 
   it("opens the personalization panel from the top bar", () => {

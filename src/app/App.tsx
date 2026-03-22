@@ -3,6 +3,7 @@ import { useUIStore, useDocumentStore } from "@/stores";
 import { type HeadingInfo } from "@/features/documents";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useT } from "@/lib/useT";
+import { getPathInfo, resolveWorkspacePath } from "@/lib/pathUtils";
 
 import { useInitDocument, openFileFromTauri } from "./hooks/useInitDocument";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -47,18 +48,31 @@ export function App() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file == null) return;
+      const rawPath =
+        (file as File & { path?: string; webkitRelativePath?: string }).path ??
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath ??
+        file.name;
 
       const reader = new FileReader();
       reader.onload = (ev) => {
         const content = ev.target?.result as string;
         if (content) {
+          const { baseName } = getPathInfo(rawPath);
           setDocument({
             reply: content,
             target: null,
             targetPath: null,
-            reviewPath: file.name,
-            replyPath: file.name,
-            documentId: file.name,
+            reviewPath: rawPath,
+            replyPath: rawPath,
+            workspacePath: resolveWorkspacePath({
+              workspacePath: null,
+              reviewPath: rawPath,
+              replyPath: rawPath,
+              targetPath: null,
+            }),
+            archivedSubmission: null,
+            documentId: baseName || file.name,
+            isReadOnly: false,
           });
         }
       };

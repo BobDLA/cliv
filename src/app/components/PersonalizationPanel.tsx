@@ -22,6 +22,28 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
 }
 
+function SectionCard({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[22px] border border-border-subtle/70 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_38%),var(--color-surface-panel)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="mb-4 space-y-1">
+        <div className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-accent/80">
+          {eyebrow}
+        </div>
+        <h3 className="text-sm font-semibold text-text-strong">{title}</h3>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
 function SettingRow({
   label,
   children,
@@ -30,8 +52,8 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="text-xs font-medium uppercase tracking-[0.14em] text-text-subtle">
+    <div className="space-y-2.5">
+      <div className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-text-subtle">
         {label}
       </div>
       {children}
@@ -45,18 +67,13 @@ function SegmentedControl<T extends string>({
   onChange,
 }: SegmentedControlProps<T>) {
   return (
-    <div
-      className="grid gap-1 rounded-xl bg-surface-app p-1"
-      style={{
-        gridTemplateColumns: "repeat(" + options.length + ", minmax(0, 1fr))",
-      }}
-    >
+    <div className="flex flex-wrap gap-2 rounded-2xl border border-border-subtle/60 bg-surface-app/80 p-1.5">
       {options.map((option) => {
         const active = option.value === value;
         const className = [
-          "rounded-lg px-2.5 py-2 text-xs font-medium transition-colors",
+          "min-h-10 flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-all",
           active
-            ? "bg-accent text-white shadow-sm"
+            ? "bg-accent text-white shadow-[0_10px_24px_rgba(59,130,246,0.28)]"
             : "text-text-muted hover:bg-surface-hover hover:text-text-primary",
         ].join(" ");
 
@@ -193,92 +210,112 @@ export function PersonalizationPanel() {
 
   return (
     <div
-      className="absolute right-0 top-[calc(100%+12px)] z-30 w-[380px] rounded-2xl border border-border-strong/70 bg-surface-popover p-4 shadow-2xl shadow-black/20"
+      className="absolute right-0 top-[calc(100%+14px)] z-30 w-[420px] max-w-[calc(100vw-24px)] rounded-[30px] border border-border-strong/70 bg-surface-popover/95 p-3 shadow-[0_28px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl"
       role="dialog"
       aria-label={t("settings.title")}
       data-testid="personalization-panel"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-text-strong">
-            {t("settings.title")}
-          </h2>
-          <p className="text-xs text-text-muted">{t("settings.subtitle")}</p>
+      <div className="rounded-[24px] border border-border-subtle/70 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_35%),var(--color-surface-panel)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="inline-flex items-center rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-accent/80">
+              cliV
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold tracking-tight text-text-strong">
+                {t("settings.title")}
+              </h2>
+              <p className="max-w-[16rem] text-sm leading-6 text-text-muted">
+                {t("settings.subtitle")}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={resetPreferences}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle/70 bg-surface-app/80 px-3 py-2 text-xs font-medium text-text-subtle transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-primary"
+            data-testid="settings-reset"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {t("settings.reset")}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={resetPreferences}
-          className="inline-flex items-center gap-1 rounded-lg border border-border-subtle/70 px-2.5 py-1.5 text-xs font-medium text-text-subtle transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-primary"
-          data-testid="settings-reset"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          {t("settings.reset")}
-        </button>
       </div>
 
-      <div className="mt-4 space-y-4">
-        <section className="space-y-3">
-          <div className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-text-faint">
-            {t("settings.appearance")}
-          </div>
+      <div className="mt-3 max-h-[calc(100vh-136px)] space-y-3 overflow-y-auto pr-1">
+        <SectionCard
+          eyebrow={t("settings.appearance")}
+          title={t("settings.theme")}
+        >
           <SettingRow label={t("settings.theme")}>
-            <ThemeSwitcher />
-          </SettingRow>
-          <SettingRow label={t("settings.fontSize")}>
-            <div
-              className="inline-flex items-center gap-1 rounded-xl border border-border-subtle/60 bg-surface-app px-2 py-1"
-              data-testid="settings-font-controls"
-            >
-              <button
-                type="button"
-                onClick={() => adjustFontSize(-1)}
-                className="rounded p-1 text-text-subtle transition-colors hover:bg-surface-hover hover:text-text-primary"
-                title={t("topbar.zoomOut")}
-                data-testid="settings-font-decrease"
-              >
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <span
-                className="min-w-[2.5rem] text-center font-mono text-sm text-text-primary"
-                data-testid="settings-font-size"
-              >
-                {fontSize}
-              </span>
-              <button
-                type="button"
-                onClick={() => adjustFontSize(1)}
-                className="rounded p-1 text-text-subtle transition-colors hover:bg-surface-hover hover:text-text-primary"
-                title={t("topbar.zoomIn")}
-                data-testid="settings-font-increase"
-              >
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
+            <div className="rounded-2xl border border-border-subtle/60 bg-surface-app/80 p-2">
+              <ThemeSwitcher />
             </div>
           </SettingRow>
-          <SettingRow label={t("settings.language")}>
-            <SegmentedControl
-              options={[
-                {
-                  value: "zh",
-                  label: t("settings.localeZh"),
-                  testId: "settings-locale-zh",
-                },
-                {
-                  value: "en",
-                  label: t("settings.localeEn"),
-                  testId: "settings-locale-en",
-                },
-              ]}
-              value={locale}
-              onChange={setLocale}
-            />
-          </SettingRow>
-        </section>
 
-        <section className="space-y-3">
-          <div className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-text-faint">
-            {t("settings.layout")}
+          <div className="grid gap-4 sm:grid-cols-[1.1fr_1fr]">
+            <SettingRow label={t("settings.fontSize")}>
+              <div
+                className="flex items-center justify-between rounded-2xl border border-border-subtle/60 bg-surface-app/80 px-3 py-2.5"
+                data-testid="settings-font-controls"
+              >
+                <button
+                  type="button"
+                  onClick={() => adjustFontSize(-1)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-text-subtle transition-colors hover:bg-surface-hover hover:text-text-primary"
+                  title={t("topbar.zoomOut")}
+                  data-testid="settings-font-decrease"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <div className="text-center">
+                  <div className="text-[0.68rem] uppercase tracking-[0.22em] text-text-faint">
+                    {t("settings.fontSize")}
+                  </div>
+                  <span
+                    className="font-mono text-lg font-semibold text-text-primary"
+                    data-testid="settings-font-size"
+                  >
+                    {fontSize}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => adjustFontSize(1)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-text-subtle transition-colors hover:bg-surface-hover hover:text-text-primary"
+                  title={t("topbar.zoomIn")}
+                  data-testid="settings-font-increase"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+              </div>
+            </SettingRow>
+
+            <SettingRow label={t("settings.language")}>
+              <SegmentedControl
+                options={[
+                  {
+                    value: "zh",
+                    label: t("settings.localeZh"),
+                    testId: "settings-locale-zh",
+                  },
+                  {
+                    value: "en",
+                    label: t("settings.localeEn"),
+                    testId: "settings-locale-en",
+                  },
+                ]}
+                value={locale}
+                onChange={setLocale}
+              />
+            </SettingRow>
           </div>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow={t("settings.layout")}
+          title={t("settings.sidebar")}
+        >
           <SettingRow label={t("settings.sidebar")}>
             <SegmentedControl
               options={sidebarOptions}
@@ -293,12 +330,12 @@ export function PersonalizationPanel() {
               onChange={setSidebarTab}
             />
           </SettingRow>
-        </section>
+        </SectionCard>
 
-        <section className="space-y-3">
-          <div className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-text-faint">
-            {t("settings.reading")}
-          </div>
+        <SectionCard
+          eyebrow={t("settings.reading")}
+          title={t("settings.contentWidth")}
+        >
           <SettingRow label={t("settings.contentWidth")}>
             <SegmentedControl
               options={contentWidthOptions}
@@ -327,7 +364,7 @@ export function PersonalizationPanel() {
               onChange={setHighlightStrength}
             />
           </SettingRow>
-        </section>
+        </SectionCard>
       </div>
     </div>
   );

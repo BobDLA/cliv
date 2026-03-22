@@ -1,5 +1,12 @@
-import { memo, useEffect, useMemo } from "react";
-import { Clock, Search } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Copy,
+  Search,
+} from "lucide-react";
 import { useHistoryStore } from "@/stores";
 import type { HistoryWorkspaceGroup } from "@/types";
 import { useT } from "@/lib/useT";
@@ -15,17 +22,50 @@ export const HistoryTree = memo(function HistoryTree() {
     openArchive,
   } = useHistoryStore();
   const t = useT();
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [hoveredGroupKey, setHoveredGroupKey] = useState<string | null>(null);
+  const [copiedGroupKey, setCopiedGroupKey] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshHistory();
   }, [refreshHistory]);
+
+  useEffect(() => {
+    if (!copiedGroupKey) return;
+    const timeoutId = window.setTimeout(() => {
+      setCopiedGroupKey((current) =>
+        current === copiedGroupKey ? null : current,
+      );
+    }, 1400);
+    return () => window.clearTimeout(timeoutId);
+  }, [copiedGroupKey]);
 
   const filteredGroups = useMemo(
     () => filterGroups(groups, query),
     [groups, query],
   );
 
+  const isFiltering = query.trim().length > 0;
   const hasEntries = filteredGroups.some((group) => group.entries.length > 0);
+
+  const toggleGroup = useCallback((groupKey: string) => {
+    setCollapsedGroups((current) => ({
+      ...current,
+      [groupKey]: !current[groupKey],
+    }));
+  }, []);
+
+  const handleCopyPath = useCallback(async (groupKey: string, path: string) => {
+    try {
+      if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+        return;
+      }
+      await navigator.clipboard.writeText(path);
+      setCopiedGroupKey(groupKey);
+    } catch {
+      // Ignore clipboard failures in the hover card.
+    }
+  }, []);
 
   if (!isLoading && groups.length === 0) {
     return (
@@ -37,69 +77,305 @@ export const HistoryTree = memo(function HistoryTree() {
   }
 
   return (
-    <div
-      className="flex h-full flex-col"
-      data-testid="history-tree"
-    >
-      <div className="border-b border-border-subtle/50 p-2">
+    <div className="flex h-full flex-col" data-testid="history-tree">
+      <div
+        className="border-b border-border-subtle/50"
+        style={{ padding: "8px" }}
+      >
         <label className="relative block">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-subtle" />
+          <Search
+            className="pointer-events-none absolute text-text-subtle"
+            style={{
+              left: "10px",
+              top: "50%",
+              width: "14px",
+              height: "14px",
+              transform: "translateY(-50%)",
+            }}
+          />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("history.searchPlaceholder")}
-            className="w-full rounded-md border border-border-subtle/70 bg-surface-panel py-1.5 pl-8 pr-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-subtle focus:border-accent/60"
+            className="w-full border border-border-subtle/70 bg-surface-panel text-sm text-text-primary outline-none transition-colors placeholder:text-text-subtle focus:border-accent/60"
+            style={{
+              borderRadius: "6px",
+              padding: "8px 12px 8px 32px",
+              lineHeight: 1.25,
+            }}
             data-testid="history-search-input"
           />
         </label>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1 py-2">
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ padding: "12px 8px" }}
+      >
         {hasEntries ? (
-          filteredGroups.map((group) => (
-            <section key={group.key} className="mb-4" data-testid="history-group">
-              <div className="px-2 pb-1">
-                <div className="truncate text-sm font-semibold text-text-primary">
-                  {group.label}
-                </div>
-                <div className="truncate text-[0.75rem] text-text-subtle">
-                  {group.path}
-                </div>
-              </div>
+          filteredGroups.map((group) => {
+            const isExpanded = isFiltering || !collapsedGroups[group.key];
 
-              <div className="space-y-1">
-                {group.entries.map((entry) => {
-                  const isActive =
-                    currentArchiveRef?.workspaceKey === entry.workspaceKey &&
-                    currentArchiveRef.archiveId === entry.id;
-
-                  return (
+            return (
+              <section
+                key={group.key}
+                style={{ marginBottom: "12px" }}
+                data-testid="history-group"
+              >
+                <div
+                  className="border border-border-subtle/55 bg-surface-panel/80 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
+                  style={{ borderRadius: "8px", padding: "6px" }}
+                >
+                  <div
+                    className="relative min-w-0"
+                    onMouseEnter={() => setHoveredGroupKey(group.key)}
+                    onMouseLeave={() =>
+                      setHoveredGroupKey((current) =>
+                        current === group.key ? null : current,
+                      )
+                    }
+                  >
                     <button
-                      key={entry.id}
                       type="button"
-                      onClick={() => void openArchive(entry.workspaceKey, entry.id)}
-                      className={`block w-full rounded-md border-l-2 px-3 py-2 text-left transition-colors ${
-                        isActive
-                          ? "border-accent bg-surface-hover"
-                          : "border-transparent hover:bg-surface-hover"
-                      }`}
-                      data-testid="history-entry"
-                      data-archive-id={entry.id}
+                      onClick={() => toggleGroup(group.key)}
+                      className="w-full text-left transition-colors hover:bg-surface-hover/80"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        borderRadius: "7px",
+                        padding: "8px 10px",
+                      }}
+                      aria-expanded={isExpanded}
+                      aria-label={`${isExpanded ? t("history.collapseGroup") : t("history.expandGroup")}: ${group.label}`}
+                      data-testid="history-group-toggle"
                     >
-                      <div className="text-sm font-medium text-text-primary">
-                        {formatSummary(entry.archivedAt, entry.submittedChars, entry.itemCount, t)}
-                      </div>
-                      {entry.preview ? (
-                        <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-subtle">
-                          {entry.preview}
+                      <span
+                        className="shrink-0 text-text-subtle"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "14px",
+                          height: "14px",
+                        }}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </span>
+                      <div
+                        className="min-w-0"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          minWidth: 0,
+                          flex: 1,
+                        }}
+                        data-testid="history-group-label"
+                        title={group.path}
+                      >
+                        <div
+                          className="truncate text-text-primary"
+                          style={{
+                            fontSize: "0.93rem",
+                            fontWeight: 600,
+                            lineHeight: 1.2,
+                            minWidth: 0,
+                            flex: 1,
+                          }}
+                        >
+                          {group.label}
                         </div>
-                      ) : null}
+                        <div
+                          className="shrink-0 text-text-subtle"
+                          style={{
+                            display: "inline-flex",
+                            justifyContent: "flex-end",
+                            fontSize: "0.74rem",
+                            fontWeight: 500,
+                            lineHeight: 1,
+                            minWidth: "2.6rem",
+                            textAlign: "right",
+                            fontVariantNumeric: "tabular-nums",
+                            whiteSpace: "nowrap",
+                          }}
+                          data-testid="history-group-count"
+                        >
+                          {t("history.groupCount", group.entries.length)}
+                        </div>
+                      </div>
                     </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))
+
+                    {hoveredGroupKey === group.key ? (
+                      <div
+                        className="border-t border-border-subtle/60"
+                        style={{ marginTop: "4px", padding: "10px 10px 8px" }}
+                        data-testid="history-group-path-popover"
+                      >
+                        <div
+                          className="text-text-subtle uppercase"
+                          style={{
+                            fontSize: "0.64rem",
+                            fontWeight: 600,
+                            letterSpacing: "0.14em",
+                          }}
+                        >
+                          {t("history.pathLabel")}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginTop: "6px",
+                          }}
+                        >
+                          <div
+                            className="text-text-primary"
+                            style={{
+                              minWidth: 0,
+                              flex: 1,
+                              fontSize: "0.74rem",
+                              lineHeight: 1.35,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={group.path}
+                          >
+                            {group.path}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyPath(group.key, group.path)}
+                            className="border border-border-subtle/70 bg-surface-app/80 text-text-subtle transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-primary"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              flexShrink: 0,
+                              borderRadius: "6px",
+                              padding: "6px 8px",
+                              fontSize: "0.72rem",
+                              fontWeight: 500,
+                            }}
+                            data-testid="history-group-copy-path"
+                          >
+                            {copiedGroupKey === group.key ? (
+                              <Check className="h-3.5 w-3.5" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                            {copiedGroupKey === group.key
+                              ? t("history.pathCopied")
+                              : t("history.copyPath")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {isExpanded ? (
+                  <div
+                    className="relative"
+                    style={{
+                      marginTop: "8px",
+                      marginLeft: "22px",
+                      paddingLeft: "20px",
+                    }}
+                    data-testid="history-group-children"
+                  >
+                    <div
+                      aria-hidden="true"
+                      className="bg-border-subtle/80"
+                      style={{
+                        position: "absolute",
+                        left: "5px",
+                        top: "0px",
+                        bottom: "8px",
+                        width: "1px",
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "4px",
+                      }}
+                    >
+                      {group.entries.map((entry) => {
+                        const isActive =
+                          currentArchiveRef?.workspaceKey === entry.workspaceKey &&
+                          currentArchiveRef.archiveId === entry.id;
+                        const summary = formatSummary(
+                          entry.archivedAt,
+                          entry.submittedChars,
+                          entry.itemCount,
+                          t,
+                        );
+
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => void openArchive(entry.workspaceKey, entry.id)}
+                            className={`group relative block w-full text-left transition-colors ${
+                              isActive ? "" : "hover:bg-surface-hover/70"
+                            }`}
+                            style={{
+                              borderRadius: "6px",
+                              padding: "8px 10px 8px 14px",
+                              backgroundColor: isActive
+                                ? "var(--color-accent-glow)"
+                                : "transparent",
+                            }}
+                            title={summary}
+                            data-testid="history-entry"
+                            data-archive-id={entry.id}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="bg-border-subtle/80"
+                              style={{
+                                position: "absolute",
+                                left: "-14px",
+                                top: "50%",
+                                width: "14px",
+                                height: "1px",
+                                transform: "translateY(-50%)",
+                              }}
+                            />
+                            <div
+                              className={`min-w-0 tabular-nums ${
+                                isActive
+                                  ? "font-medium text-text-primary"
+                                  : "font-normal text-text-muted"
+                              }`}
+                              style={{
+                                fontSize: "0.82rem",
+                                lineHeight: 1.45,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {summary}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })
         ) : (
           <EmptyHistoryState
             title={t("history.noMatch")}

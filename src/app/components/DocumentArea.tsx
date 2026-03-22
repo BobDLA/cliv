@@ -1,4 +1,4 @@
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, History } from "lucide-react";
 import { useDocumentStore } from "@/stores";
 import { MarkdownViewer, type HeadingInfo } from "@/features/documents";
 import {
@@ -50,6 +50,59 @@ export function DocumentArea({
                 ref={viewerRef}
                 data-viewer-root
               >
+                {isReadOnly ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "12px",
+                      margin: "18px 0 16px",
+                      padding: "12px 14px",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(245, 158, 11, 0.28)",
+                      backgroundColor: "rgba(245, 158, 11, 0.1)",
+                      color: "var(--color-text-strong)",
+                    }}
+                    data-testid="history-readonly-banner"
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "999px",
+                        backgroundColor: "rgba(245, 158, 11, 0.18)",
+                        color: "#b45309",
+                      }}
+                    >
+                      <History className="h-4 w-4" />
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: "0.95rem",
+                          fontWeight: 700,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {t("history.readOnlyMode")}
+                      </div>
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "0.84rem",
+                          lineHeight: 1.5,
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {t("history.readOnlyHint")}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <MarkdownViewer
                   content={replyContent}
                   containerRef={viewerRef}
@@ -107,20 +160,18 @@ export function DocumentArea({
         </div>
       </div>
 
-      {!isReadOnly ? (
-        <div style={{ display: "flex", flexShrink: 0 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <ReturnBuilder />
-          </div>
-          <div
-            style={{
-              width: `${marginWidth + 6}px`,
-              borderLeft: "1px solid var(--color-border-subtle)",
-            }}
-            className="shrink-0"
-          />
+      <div style={{ display: "flex", flexShrink: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <ReturnBuilder />
         </div>
-      ) : null}
+        <div
+          style={{
+            width: `${marginWidth + 6}px`,
+            borderLeft: "1px solid var(--color-border-subtle)",
+          }}
+          className="shrink-0"
+        />
+      </div>
     </main>
   );
 }

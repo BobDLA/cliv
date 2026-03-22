@@ -111,7 +111,10 @@ describe("annotation selection flow", () => {
       target: null,
       targetPath: null,
       replyPath: null,
+      workspacePath: null,
+      archivedSubmission: null,
       documentId: "test-doc",
+      isReadOnly: false,
     });
     useDocumentStore.getState().setLoading(false);
     useDocumentStore.getState().setError(null);

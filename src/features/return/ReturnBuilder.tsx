@@ -23,6 +23,7 @@ import { saveReviewArchive } from "@/services/historyService";
 import { writeBack, closeWindow } from "@/services/writeBack";
 import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
+import { resolveWorkspacePath } from "@/lib/pathUtils";
 import { resolvePromptHeader } from "@/lib/promptTemplates";
 import type { PromptConfig } from "@/types";
 
@@ -73,6 +74,10 @@ function resolveUserTextSeed(
   return `${header}\n\n${existingTargetText}`;
 }
 
+function normalizeTemplateMode(mode: string | null | undefined): TemplateMode {
+  return mode === "iterate" ? "iterate" : "reply";
+}
+
 /**
  * ReturnBuilder — bottom split panel.
  * Left: user custom editing area (global comments, free-form text).
@@ -91,6 +96,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const reviewPath = useDocumentStore((s) => s.reviewPath);
   const replyPath = useDocumentStore((s) => s.replyPath);
   const workspacePath = useDocumentStore((s) => s.workspacePath);
+  const archivedSubmission = useDocumentStore((s) => s.archivedSubmission);
+  const isReadOnly = useDocumentStore((s) => s.isReadOnly);
   const t = useT();
   const uiLocale = useUIStore((s) => s.locale);
 
@@ -115,23 +122,32 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   useEffect(() => {
     const documentChanged = previousDocumentIdRef.current !== documentId;
     const previousSeed = previousUserTextSeedRef.current;
+    const nextSeed =
+      isReadOnly && archivedSubmission
+        ? archivedSubmission.userText
+        : userTextSeed;
 
     previousDocumentIdRef.current = documentId;
-    previousUserTextSeedRef.current = userTextSeed;
+    previousUserTextSeedRef.current = nextSeed;
+
+    if (isReadOnly && archivedSubmission) {
+      setTemplateMode(normalizeTemplateMode(archivedSubmission.templateMode));
+    }
 
     setUserText((prev) => {
       if (documentChanged || prev === previousSeed) {
-        return userTextSeed;
+        return nextSeed;
       }
       return prev;
     });
-  }, [documentId, userTextSeed]);
+  }, [archivedSubmission, documentId, isReadOnly, userTextSeed]);
 
   // Switch template → reseed editor from the current target content
   const handleSetTemplate = useCallback((mode: TemplateMode) => {
+    if (isReadOnly) return;
     setTemplateMode(mode);
     setUserText(resolveUserTextSeed(contentLocale, mode, promptConfig, targetContent));
-  }, [contentLocale, promptConfig, targetContent]);
+  }, [contentLocale, isReadOnly, promptConfig, targetContent]);
 
   // Auto-select all annotations on mount and when annotations change
   useEffect(() => {
@@ -188,6 +204,11 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCopySuccess(false);
+    setWriteError(null);
+  }, [documentId]);
 
   // Selected annotations sorted by document position
   const selectedAnns = useMemo(() => {
@@ -251,21 +272,32 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const itemCount = hasContent
     ? Math.max(selectedAnns.length + (freeInputAddsItem ? 1 : 0), 1)
     : 0;
+  const effectiveWorkspacePath = useMemo(
+    () =>
+      resolveWorkspacePath({
+        workspacePath,
+        reviewPath,
+        replyPath,
+        targetPath,
+      }),
+    [workspacePath, reviewPath, replyPath, targetPath],
+  );
 
   const handleToggleAll = useCallback(() => {
+    if (isReadOnly) return;
     if (allSelected) deselectAll();
     else selectAll(annotations.map((a) => a.id));
-  }, [allSelected, annotations, selectAll, deselectAll]);
+  }, [allSelected, annotations, deselectAll, isReadOnly, selectAll]);
 
   const handleSubmit = useCallback(async () => {
-    if (!hasContent) return;
+    if (!hasContent || isReadOnly) return;
     try {
       setWriteError(null);
       const createdAt = new Date().toISOString();
       const method = await writeBack(finalOutput, targetPath);
-      if (workspacePath && replyContent) {
+      if (effectiveWorkspacePath && replyContent) {
         await saveReviewArchive({
-          workspacePath,
+          workspacePath: effectiveWorkspacePath,
           agent: null,
           reviewPath,
           replyPath,
@@ -309,12 +341,13 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     targetPath,
     templateMode,
     userText,
-    workspacePath,
+    effectiveWorkspacePath,
+    isReadOnly,
   ]);
 
   // ── Ctrl+Enter global shortcut for submit ──
   useEffect(() => {
-    if (collapsed) return;
+    if (collapsed || isReadOnly) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
@@ -323,7 +356,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [collapsed, handleSubmit]);
+  }, [collapsed, handleSubmit, isReadOnly]);
 
   return (
     <div
@@ -417,6 +450,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
               <button
                 key={mode}
                 type="button"
+                disabled={isReadOnly}
                 onClick={() => handleSetTemplate(mode)}
                 title={t(TEMPLATE_LABELS[mode].descKey)}
                 data-testid={`return-template-${mode}`}
@@ -429,7 +463,8 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   border: "none",
                   fontSize: "0.85rem",
                   fontFamily: "var(--font-sans)",
-                  cursor: "pointer",
+                  cursor: isReadOnly ? "default" : "pointer",
+                  opacity: isReadOnly ? 0.6 : 1,
                   transition: "all 0.12s",
                   backgroundColor:
                     templateMode === mode
@@ -510,7 +545,12 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
             </div>
             <textarea
               value={userText}
-              onChange={(e) => setUserText(e.target.value)}
+              onChange={(e) => {
+                if (!isReadOnly) {
+                  setUserText(e.target.value);
+                }
+              }}
+              readOnly={isReadOnly}
               placeholder={t("return.freeEditPlaceholder")}
               data-testid="return-free-edit"
               style={{
@@ -523,7 +563,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 lineHeight: 1.6,
                 fontFamily: "var(--font-sans)",
                 color: "var(--color-text-primary)",
-                backgroundColor: "transparent",
+                backgroundColor: isReadOnly
+                  ? "var(--color-surface-hover)"
+                  : "transparent",
               }}
             />
           </div>
@@ -565,9 +607,9 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 alignItems: "center",
                 flexShrink: 0,
               }}
-            >
+              >
               <span>{t("return.aggregatePreview")}</span>
-              {annotations.length > 0 && (
+              {annotations.length > 0 && !isReadOnly && (
                 <button
                   type="button"
                   onClick={handleToggleAll}
@@ -637,19 +679,19 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                           alignItems: "flex-start",
                           padding: "4px 4px",
                           borderRadius: "4px",
-                          cursor: "pointer",
+                          cursor: isReadOnly ? "default" : "pointer",
                           transition: "background 0.1s",
                           backgroundColor: isSelected
                             ? "var(--color-surface-hover)"
                             : "transparent",
                         }}
                         onMouseEnter={(e) => {
-                          if (!isSelected)
+                          if (!isReadOnly && !isSelected)
                             e.currentTarget.style.backgroundColor =
                               "var(--color-surface-hover)";
                         }}
                         onMouseLeave={(e) => {
-                          if (!isSelected)
+                          if (!isReadOnly && !isSelected)
                             e.currentTarget.style.backgroundColor =
                               "transparent";
                         }}
@@ -657,12 +699,17 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => toggleSelect(ann.id)}
+                          disabled={isReadOnly}
+                          onChange={() => {
+                            if (!isReadOnly) {
+                              toggleSelect(ann.id);
+                            }
+                          }}
                           data-testid="return-annotation-checkbox"
                           style={{
                             accentColor: "var(--color-accent)",
                             marginTop: "2px",
-                            cursor: "pointer",
+                            cursor: isReadOnly ? "default" : "pointer",
                             flexShrink: 0,
                           }}
                         />
@@ -753,42 +800,48 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                   color: "var(--color-text-secondary)",
                 }}
               >
-                {templateMode === "reply" ? t("return.replyModeStatus") : t("return.iterateModeStatus")}
-                {selectedAnns.length > 0 &&
+                {isReadOnly
+                  ? t("history.readOnlyBadge")
+                  : templateMode === "reply"
+                    ? t("return.replyModeStatus")
+                    : t("return.iterateModeStatus")}
+                {!isReadOnly && selectedAnns.length > 0 &&
                   t("return.selectedCount", selectedAnns.length)}
               </span>
             )}
           </div>
-          <button
-            type="button"
-            disabled={!hasContent}
-            onClick={handleSubmit}
-            data-testid="return-submit"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "6px 16px",
-              borderRadius: "6px",
-              border: "none",
-              backgroundColor: hasContent
-                ? targetPath && isTauri ? "#10b981" : "#3b82f6"
-                : "var(--color-text-faint)",
-              color: "#fff",
-              fontSize: "0.9rem",
-              fontWeight: 600,
-              fontFamily: "var(--font-sans)",
-              cursor: hasContent ? "pointer" : "not-allowed",
-              opacity: hasContent ? 1 : 0.5,
-              transition: "all 0.15s",
-            }}
-          >
-            {targetPath && isTauri ? (
-              <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
-            ) : (
-              <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
-            )}
-          </button>
+          {!isReadOnly ? (
+            <button
+              type="button"
+              disabled={!hasContent}
+              onClick={handleSubmit}
+              data-testid="return-submit"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 16px",
+                borderRadius: "6px",
+                border: "none",
+                backgroundColor: hasContent
+                  ? targetPath && isTauri ? "#10b981" : "#3b82f6"
+                  : "var(--color-text-faint)",
+                color: "#fff",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                fontFamily: "var(--font-sans)",
+                cursor: hasContent ? "pointer" : "not-allowed",
+                opacity: hasContent ? 1 : 0.5,
+                transition: "all 0.15s",
+              }}
+            >
+              {targetPath && isTauri ? (
+                <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
+              ) : (
+                <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
+              )}
+            </button>
+          ) : null}
         </div>
       )}
     </div>

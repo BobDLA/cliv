@@ -12,6 +12,7 @@ import {
 
 const listReviewHistoryMock = vi.fn();
 const loadReviewArchiveMock = vi.fn();
+const writeTextMock = vi.fn();
 
 vi.mock("@/services/historyService", () => ({
   listReviewHistory: (...args: unknown[]) => listReviewHistoryMock(...args),
@@ -21,6 +22,13 @@ vi.mock("@/services/historyService", () => ({
 describe("HistoryTree", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    writeTextMock.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
 
     useHistoryStore.setState({
       groups: [],
@@ -39,6 +47,7 @@ describe("HistoryTree", () => {
       reviewPath: "/tmp/live.md",
       replyPath: "/tmp/live.md",
       workspacePath: "/tmp/live",
+      archivedSubmission: null,
       documentId: "doc-1",
       isReadOnly: false,
       isLoading: false,
@@ -108,13 +117,23 @@ describe("HistoryTree", () => {
           },
         },
       ],
-      submission: null,
+      submission: {
+        createdAt: "2026-03-22T10:01:00.000Z",
+        method: "written",
+        templateMode: "reply",
+        userText: "Archived custom input",
+        finalOutput: "Archived custom input",
+      },
       targetBefore: null,
     });
 
     render(<HistoryTree />);
 
     await screen.findByText("project");
+    expect(screen.getByTestId("history-entry")).toHaveAttribute(
+      "title",
+      expect.stringContaining("128 chars · 3 items"),
+    );
     fireEvent.click(screen.getByTestId("history-entry"));
 
     await waitFor(() => {
@@ -123,11 +142,16 @@ describe("HistoryTree", () => {
 
     expect(useDocumentStore.getState().replyContent).toBe("# Archived reply\n\nBody");
     expect(useDocumentStore.getState().isReadOnly).toBe(true);
+    expect(useDocumentStore.getState().archivedSubmission?.userText).toBe("Archived custom input");
     expect(useAnnotationStore.getState().annotations).toHaveLength(1);
     expect(useHistoryStore.getState().currentArchiveRef).toEqual({
       workspaceKey: "ws_project",
       archiveId: "arch_1",
     });
+    expect(
+      screen.getByText((text) => text.includes("128 chars · 3 items")),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Review feedback")).not.toBeInTheDocument();
   });
 
   it("filters entries by archived search text", async () => {
@@ -179,6 +203,65 @@ describe("HistoryTree", () => {
     });
 
     expect(screen.getAllByTestId("history-entry")).toHaveLength(1);
-    expect(screen.getByText("Detail review")).toBeInTheDocument();
+    expect(
+      screen.getByText((text) => text.includes("128 chars · 3 items")),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Detail review")).not.toBeInTheDocument();
+    expect(screen.queryByText((text) => text.includes("64 chars · 1 items"))).not.toBeInTheDocument();
+  });
+
+  it("shows the workspace path only on hover, supports copy, and allows collapsing", async () => {
+    const longPath =
+      "/mnt/hdd/work/temp/cliv/.worktrees/integration-worktree-batch-20260322/src-tauri";
+
+    listReviewHistoryMock.mockResolvedValue([
+      {
+        key: "ws_src_tauri",
+        label: "src-tauri",
+        path: longPath,
+        entries: [
+          {
+            id: "arch_1",
+            workspaceKey: "ws_src_tauri",
+            workspaceLabel: "src-tauri",
+            workspacePath: longPath,
+            archivedAt: "2026-03-22T10:01:00.000Z",
+            agent: "codex",
+            reviewPath: null,
+            replyPath: null,
+            targetPath: null,
+            submittedChars: 367,
+            itemCount: 1,
+            preview: "",
+            searchText: "",
+          },
+        ],
+      },
+    ]);
+
+    render(<HistoryTree />);
+
+    await screen.findByText("src-tauri");
+    expect(screen.getByTestId("history-group-count")).toHaveTextContent("1 items");
+
+    expect(screen.queryByTestId("history-group-path-popover")).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByTestId("history-group-label"));
+
+    const popover = await screen.findByTestId("history-group-path-popover");
+    expect(popover).toHaveTextContent(longPath);
+
+    fireEvent.click(screen.getByTestId("history-group-copy-path"));
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith(longPath);
+    });
+    expect(screen.getByText("Copied")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("history-group-toggle"));
+    expect(screen.queryByTestId("history-group-children")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("history-group-toggle"));
+    expect(screen.getByTestId("history-group-children")).toBeInTheDocument();
   });
 });

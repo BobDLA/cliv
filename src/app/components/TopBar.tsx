@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, FolderOpen, Github, SlidersHorizontal } from "lucide-react";
+import {
+  BookOpen,
+  FolderOpen,
+  Github,
+  History,
+  SlidersHorizontal,
+} from "lucide-react";
 import { DocumentSearch } from "@/features/documents";
 import { useT } from "@/lib/useT";
+import { useDocumentStore } from "@/stores";
 import { PersonalizationPanel } from "./PersonalizationPanel";
 
 interface TopBarProps {
@@ -18,6 +25,7 @@ export function TopBar({
   scrollContainerRef,
 }: TopBarProps) {
   const t = useT();
+  const isReadOnly = useDocumentStore((state) => state.isReadOnly);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
@@ -62,6 +70,23 @@ export function TopBar({
         <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[0.7rem] font-medium text-accent/80">
           v0.2
         </span>
+        {isReadOnly ? (
+          <span
+            className="inline-flex items-center text-xs font-semibold"
+            style={{
+              gap: "6px",
+              borderRadius: "999px",
+              padding: "4px 10px",
+              backgroundColor: "rgba(245, 158, 11, 0.14)",
+              border: "1px solid rgba(245, 158, 11, 0.32)",
+              color: "#b45309",
+            }}
+            data-testid="topbar-readonly-badge"
+          >
+            <History className="h-3.5 w-3.5" />
+            <span>{t("history.readOnlyMode")}</span>
+          </span>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3">
@@ -97,11 +122,26 @@ export function TopBar({
           href="https://github.com/BobDLA/cliv"
           target="_blank"
           rel="noopener noreferrer"
-          className="mr-1 inline-flex items-center gap-1.5 rounded-md border border-border-strong/70 bg-surface-panel px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-strong"
+          className="inline-flex items-center rounded-md border border-border-strong/70 bg-surface-panel text-xs font-medium text-text-primary transition-colors hover:border-accent/30 hover:bg-surface-hover hover:text-text-strong"
+          style={{
+            gap: "8px",
+            marginLeft: "2px",
+            marginRight: "4px",
+            padding: "5px 12px 5px 10px",
+          }}
           title="View on GitHub"
           data-testid="topbar-github-link"
         >
-          <Github className="h-3.5 w-3.5 text-accent/90" />
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingLeft: "1px",
+            }}
+          >
+            <Github className="h-3.5 w-3.5 text-accent/90" />
+          </span>
           <span>GitHub</span>
         </a>
       </div>
