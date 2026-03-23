@@ -64,6 +64,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
   - Worktree: `./.worktrees/fix--prompt-header-reseed`
 - If the branch already exists, reuse the same derived worktree path instead of inventing a new directory name.
 - Remove merged or abandoned worktrees promptly, then delete the corresponding local branch. If the remote branch is no longer needed, delete it too.
+- To save disk space across worktrees, share cache layers instead of sharing one `node_modules` tree. Use `scripts/setup_shared_worktree_cache.sh <shared-root>` and keep each worktree's `node_modules/` isolated.
+- Prefer placing the shared cache root on the same filesystem as `./.worktrees/` so `pnpm` can hardlink from its store efficiently.
 
 ### Standard Commands
 
@@ -73,6 +75,9 @@ scripts/new_worktree.sh fix/prompt-header-reseed
 
 # attach an existing branch to its canonical worktree path
 scripts/new_worktree.sh fix/prompt-header-reseed
+
+# prepare shared pnpm/Cargo/Playwright caches for all worktrees
+scripts/setup_shared_worktree_cache.sh /mnt/hdd/dev-cache/cliv
 
 # clean up after merge
 scripts/cleanup_worktree.sh fix/prompt-header-reseed
