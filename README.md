@@ -56,9 +56,12 @@ cp cliv ~/.local/bin/
 git clone https://github.com/BobDLA/cliv.git
 cd cliv
 pnpm install
-pnpm tauri build
+pnpm tauri:build
+# Local package build; on Linux this uses the deb-only profile
 # Binary at src-tauri/target/release/cliv
 ```
+
+For release-style packaging or custom bundle targets, use `pnpm tauri:build:release -- --bundles deb` (or pass a different Tauri build flag set as needed).
 
 ### Set up as your `$EDITOR`
 
