@@ -1,0 +1,4 @@
+interface:
+  display_name: "Worktree PR Flow"
+  short_description: "Integrate worktrees and manage PR lifecycle"
+  default_prompt: "Use $worktree-pr-flow to integrate selected worktree branches, create or rebuild the PR, inspect reviews and Actions, and land follow-up fixes."

@@ -19,6 +19,12 @@ docs/doc/*
 docs/doc
 handoffs/*
 .codex/
+!.codex/
+.codex/*
+!.codex/skills/
+.codex/skills/*
+!.codex/skills/worktree-pr-flow/
+!.codex/skills/worktree-pr-flow/**
 .agent/
 .claude/
 /temp/
