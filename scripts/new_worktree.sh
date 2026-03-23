@@ -105,6 +105,7 @@ main() {
     echo "Attached existing branch:"
     echo "  branch: $branch"
     echo "  path:   $worktree_path"
+    echo "  cache:  scripts/setup_shared_worktree_cache.sh <shared-root>"
     exit 0
   fi
 
@@ -117,6 +118,7 @@ main() {
   echo "  branch: $branch"
   echo "  base:   $base_ref"
   echo "  path:   $worktree_path"
+  echo "  cache:  scripts/setup_shared_worktree_cache.sh <shared-root>"
 }
 
 main "$@"
