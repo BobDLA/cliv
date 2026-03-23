@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback } from "react";
 import {
   useAnnotationStore,
   useConfigStore,
@@ -61,114 +61,114 @@ export function useInitDocument() {
   const { setDocument, setLoading, setError } = useDocumentStore();
   const setAppConfig = useConfigStore((s) => s.setAppConfig);
   const locale = useUIStore((s) => s.locale);
-  const hydratedRef = useRef(false);
 
-  const loadDocument = useCallback(async () => {
+  const loadTauriDocument = useCallback(async () => {
     setLoading(true);
 
-    if (isTauri) {
-      try {
-        const {
-          getAppConfig,
-          getCliArgs,
-          loadFiles,
-          extractCodexReply,
-          extractClaudeReply,
-          extractGeminiReply,
-        } = await import("@/services/tauri-ipc");
-        const appConfig = await getAppConfig();
-        setAppConfig(appConfig);
-        // Only hydrate UI preferences from config on the very first load.
-        // Subsequent calls (e.g. triggered by locale change) must not
-        // re-apply the config, otherwise the user's in-session locale
-        // change gets reverted before the debounced persist has flushed.
-        if (!hydratedRef.current) {
-          hydrateUIFromAppConfig(appConfig);
-          hydratedRef.current = true;
-        }
-        const args = await getCliArgs();
-        const result = await loadFiles(
-          args.reviewPath,
-          args.targetPath,
-          args.metadataPath,
+    try {
+      const {
+        getAppConfig,
+        getCliArgs,
+        loadFiles,
+        extractCodexReply,
+        extractClaudeReply,
+        extractGeminiReply,
+      } = await import("@/services/tauri-ipc");
+      const appConfig = await getAppConfig();
+      setAppConfig(appConfig);
+      hydrateUIFromAppConfig(appConfig);
+      const args = await getCliArgs();
+      const result = await loadFiles(
+        args.reviewPath,
+        args.targetPath,
+        args.metadataPath,
+      );
+
+      if (result.error && !result.reply) {
+        setError(result.error);
+        return;
+      }
+
+      // Try to extract the last reply using cached hooks
+      let replyContent = result.reply;
+      if (
+        (!replyContent || replyContent.trim() === "") &&
+        shouldUseReplyExtractionFallback(args)
+      ) {
+        const plan = buildExtractionPlan(
+          args.agent,
+          () => extractCodexReply(null, args.workspacePath),
+          () => extractClaudeReply(null),
+          () => extractGeminiReply(null),
         );
 
-        if (result.error && !result.reply) {
-          setError(result.error);
-          setLoading(false);
-          return;
-        }
-
-        // Try to extract the last reply using cached hooks
-        let replyContent = result.reply;
-        if (
-          (!replyContent || replyContent.trim() === "") &&
-          shouldUseReplyExtractionFallback(args)
-        ) {
-          const plan = buildExtractionPlan(
-            args.agent,
-            () => extractCodexReply(null, args.workspacePath),
-            () => extractClaudeReply(null),
-            () => extractGeminiReply(null),
-          );
-
-          for (const attempt of plan) {
-            const reply = await attempt();
-            if (reply) {
-              replyContent = reply;
-              break;
-            }
+        for (const attempt of plan) {
+          const reply = await attempt();
+          if (reply) {
+            replyContent = reply;
+            break;
           }
         }
-
-        // Clear previous annotations on reload
-        useAnnotationStore.getState().clearAnnotations();
-        const workspacePath = resolveWorkspacePath({
-          workspacePath: args.workspacePath,
-          reviewPath: result.reviewPath ?? args.reviewPath ?? args.filePath,
-          replyPath: result.replyPath,
-          targetPath: result.targetPath,
-        });
-
-        setDocument({
-          reply: replyContent,
-          target: result.target,
-          targetPath: result.targetPath,
-          reviewPath: result.reviewPath ?? args.reviewPath,
-          replyPath: result.replyPath,
-          workspacePath,
-          archivedSubmission: null,
-          documentId:
-            result.metadata?.turn?.id ??
-            result.reviewPath ??
-            result.replyPath ??
-            "default",
-          isReadOnly: false,
-        });
-      } catch (e) {
-        setError(
-          `加载失败: ${e instanceof Error ? e.message : String(e)}`,
-        );
       }
-    } else {
-      // Browser dev mode: use the docs-backed demo content
-      const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
+
+      // Clear previous annotations on reload
       useAnnotationStore.getState().clearAnnotations();
+      const workspacePath = resolveWorkspacePath({
+        workspacePath: args.workspacePath,
+        reviewPath: result.reviewPath ?? args.reviewPath ?? args.filePath,
+        replyPath: result.replyPath,
+        targetPath: result.targetPath,
+      });
+
       setDocument({
-        reply: demoContent,
-        workspacePath: null,
+        reply: replyContent,
+        target: result.target,
+        targetPath: result.targetPath,
+        reviewPath: result.reviewPath ?? args.reviewPath,
+        replyPath: result.replyPath,
+        workspacePath,
         archivedSubmission: null,
-        documentId: "demo",
+        documentId:
+          result.metadata?.turn?.id ??
+          result.reviewPath ??
+          result.replyPath ??
+          "default",
         isReadOnly: false,
       });
+    } catch (e) {
+      setError(
+        `加载失败: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  }, [setAppConfig, setDocument, setLoading, setError, locale]);
+  }, [setAppConfig, setDocument, setLoading, setError]);
 
   useEffect(() => {
-    loadDocument();
-  }, [loadDocument]);
+    if (!isTauri) {
+      return;
+    }
+
+    void loadTauriDocument();
+  }, [loadTauriDocument]);
+
+  useEffect(() => {
+    if (isTauri) {
+      return;
+    }
+
+    setLoading(true);
+    const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
+    useAnnotationStore.getState().clearAnnotations();
+    setDocument({
+      reply: demoContent,
+      workspacePath: null,
+      archivedSubmission: null,
+      documentId: "demo",
+      isReadOnly: false,
+    });
+    setLoading(false);
+  }, [locale, setDocument, setLoading]);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { useInitDocument } from "@/app/hooks/useInitDocument";
 import { DEFAULT_SHORTCUTS } from "@/lib/shortcuts";
 import {
@@ -43,7 +43,12 @@ function InitDocumentHarness() {
   return null;
 }
 
-function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
+type AppConfigOverrides = Partial<Omit<AppConfig, "ui" | "status">> & {
+  ui?: Partial<AppConfig["ui"]>;
+  status?: Partial<AppConfig["status"]>;
+};
+
+function makeAppConfig(overrides?: AppConfigOverrides): AppConfig {
   const defaults: AppConfig = {
     launch: {
       scanDepth: 5,
@@ -261,5 +266,88 @@ describe("useInitDocument in Tauri mode", () => {
       tauriIpc.extractGeminiReply.mock.invocationCallOrder[0],
     ).toBeLessThan(tauriIpc.extractClaudeReply.mock.invocationCallOrder[0]);
     expect(tauriIpc.extractCodexReply).not.toHaveBeenCalled();
+  });
+
+  it("does not reload the Tauri document when locale changes locally", async () => {
+    tauriIpc.getCliArgs.mockResolvedValue(
+      makeCliArgs({
+        reviewPath: "/tmp/review.md",
+      }),
+    );
+    tauriIpc.loadFiles.mockResolvedValue(
+      makeLoadResult({
+        reviewPath: "/tmp/review.md",
+        reply: "Initial reply",
+      }),
+    );
+
+    render(<InitDocumentHarness />);
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().replyContent).toBe("Initial reply");
+    });
+
+    expect(tauriIpc.getAppConfig).toHaveBeenCalledTimes(1);
+    expect(tauriIpc.loadFiles).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      useUIStore.getState().setLocale("zh");
+    });
+
+    await waitFor(() => {
+      expect(useUIStore.getState().locale).toBe("zh");
+    });
+
+    expect(tauriIpc.getAppConfig).toHaveBeenCalledTimes(1);
+    expect(tauriIpc.loadFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("rehydrates fetched UI config when the Tauri view remounts", async () => {
+    tauriIpc.getCliArgs.mockResolvedValue(
+      makeCliArgs({
+        reviewPath: "/tmp/review.md",
+      }),
+    );
+    tauriIpc.loadFiles.mockResolvedValue(
+      makeLoadResult({
+        reviewPath: "/tmp/review.md",
+        reply: "Initial reply",
+      }),
+    );
+    tauriIpc.getAppConfig
+      .mockResolvedValueOnce(
+        makeAppConfig({
+          ui: {
+            theme: "light",
+            locale: "en",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeAppConfig({
+          ui: {
+            theme: "dark",
+            locale: "zh",
+          },
+        }),
+      );
+
+    const firstRender = render(<InitDocumentHarness />);
+
+    await waitFor(() => {
+      expect(useUIStore.getState().theme).toBe("light");
+    });
+
+    firstRender.unmount();
+
+    render(<InitDocumentHarness />);
+
+    await waitFor(() => {
+      expect(useUIStore.getState().theme).toBe("dark");
+    });
+
+    expect(useUIStore.getState().locale).toBe("zh");
+    expect(tauriIpc.getAppConfig).toHaveBeenCalledTimes(2);
+    expect(tauriIpc.loadFiles).toHaveBeenCalledTimes(2);
   });
 });
