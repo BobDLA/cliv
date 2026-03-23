@@ -2,7 +2,7 @@ use crate::logging;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use toml::map::Map;
 use toml::Value;
 
@@ -22,6 +22,7 @@ const DEFAULT_SHORTCUT_ADD_ANNOTATION: &str = "Mod+Alt+M";
 const DEFAULT_SHORTCUT_FONT_INCREASE: &str = "Mod+=";
 const DEFAULT_SHORTCUT_FONT_DECREASE: &str = "Mod+-";
 const DEFAULT_SHORTCUT_FONT_RESET: &str = "Mod+0";
+static CONFIG_SAVE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[derive(Debug)]
 pub struct AppConfigState {
@@ -42,8 +43,29 @@ impl AppConfigState {
             .clone()
     }
 
-    pub fn replace(&self, config: AppConfig) {
-        *self.inner.lock().expect("app config mutex poisoned") = config;
+    pub fn persist(&self, input: SaveAppConfigInput) -> Result<AppConfig, String> {
+        let mut current = self
+            .inner
+            .lock()
+            .map_err(|_| "app config mutex poisoned".to_string())?;
+        let saved = save(input)?;
+        *current = saved.clone();
+        Ok(saved)
+    }
+
+    #[cfg(test)]
+    pub fn persist_at_path(
+        &self,
+        path: &Path,
+        input: SaveAppConfigInput,
+    ) -> Result<AppConfig, String> {
+        let mut current = self
+            .inner
+            .lock()
+            .map_err(|_| "app config mutex poisoned".to_string())?;
+        let saved = save_to_path(path, input)?;
+        *current = saved.clone();
+        Ok(saved)
     }
 }
 
@@ -528,6 +550,9 @@ pub fn save(input: SaveAppConfigInput) -> Result<AppConfig, String> {
 }
 
 pub fn save_to_path(path: &Path, input: SaveAppConfigInput) -> Result<AppConfig, String> {
+    let _save_guard = config_save_lock()
+        .lock()
+        .map_err(|_| "config save mutex poisoned".to_string())?;
     let mut root = load_root_for_save(path)?;
 
     if let Some(prompts) = input.prompts {
@@ -562,6 +587,10 @@ fn load_root_for_save(path: &Path) -> Result<Value, String> {
     }
 }
 
+fn config_save_lock() -> &'static Mutex<()> {
+    CONFIG_SAVE_LOCK.get_or_init(|| Mutex::new(()))
+}
+
 fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -570,17 +599,48 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
 
     let tmp = tmp_path(path);
     fs::write(&tmp, content).map_err(|err| format!("Failed to write config: {}", err))?;
-    if let Err(err) = fs::rename(&tmp, path) {
+    if let Err(err) = replace_existing_file(&tmp, path) {
         let _ = fs::remove_file(&tmp);
-        return Err(format!("Failed to rename config temp file: {}", err));
+        return Err(format!("Failed to replace config temp file: {}", err));
     }
 
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn replace_existing_file(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    fs::rename(tmp, path)
+}
+
+#[cfg(windows)]
+fn replace_existing_file(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    use std::iter::once;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    fn to_wide(path: &Path) -> Vec<u16> {
+        path.as_os_str().encode_wide().chain(once(0)).collect()
+    }
+
+    let tmp = to_wide(tmp);
+    let path = to_wide(path);
+    let flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
+    let result = unsafe { MoveFileExW(tmp.as_ptr(), path.as_ptr(), flags) };
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 fn tmp_path(target: &Path) -> PathBuf {
     let mut tmp = target.to_path_buf();
-    let ext = target.extension().and_then(|value| value.to_str()).unwrap_or("");
+    let ext = target
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
     if ext.is_empty() {
         tmp.set_extension("tmp");
     } else {
@@ -593,10 +653,26 @@ fn merge_prompt_config(root: &mut Value, prompts: &PromptConfig) {
     let root_table = ensure_root_table(root);
     let prompts_table = ensure_child_table(root_table, "prompts");
 
-    set_optional_string(prompts_table, "reply_header_zh", prompts.reply_header_zh.clone());
-    set_optional_string(prompts_table, "reply_header_en", prompts.reply_header_en.clone());
-    set_optional_string(prompts_table, "iterate_header_zh", prompts.iterate_header_zh.clone());
-    set_optional_string(prompts_table, "iterate_header_en", prompts.iterate_header_en.clone());
+    set_optional_string(
+        prompts_table,
+        "reply_header_zh",
+        prompts.reply_header_zh.clone(),
+    );
+    set_optional_string(
+        prompts_table,
+        "reply_header_en",
+        prompts.reply_header_en.clone(),
+    );
+    set_optional_string(
+        prompts_table,
+        "iterate_header_zh",
+        prompts.iterate_header_zh.clone(),
+    );
+    set_optional_string(
+        prompts_table,
+        "iterate_header_en",
+        prompts.iterate_header_en.clone(),
+    );
 
     if prompts_table.is_empty() {
         root_table.remove("prompts");
@@ -611,7 +687,11 @@ fn merge_ui_config(root: &mut Value, ui: &UiConfig) {
     set_string(
         ui_table,
         "theme",
-        normalize_choice(Some(ui.theme.clone()), &["dark", "dim", "light"], &defaults.theme),
+        normalize_choice(
+            Some(ui.theme.clone()),
+            &["dark", "dim", "light"],
+            &defaults.theme,
+        ),
     );
     set_integer(ui_table, "font_size", ui.font_size.clamp(10, 24));
     set_string(
@@ -676,7 +756,10 @@ fn merge_ui_config(root: &mut Value, ui: &UiConfig) {
     set_string(
         shortcuts_table,
         "open_file",
-        normalize_shortcut_or_default(Some(ui.shortcuts.open_file.clone()), DEFAULT_SHORTCUT_OPEN_FILE),
+        normalize_shortcut_or_default(
+            Some(ui.shortcuts.open_file.clone()),
+            DEFAULT_SHORTCUT_OPEN_FILE,
+        ),
     );
     set_string(
         shortcuts_table,
@@ -726,7 +809,10 @@ fn merge_ui_config(root: &mut Value, ui: &UiConfig) {
     set_string(
         shortcuts_table,
         "font_reset",
-        normalize_shortcut_or_default(Some(ui.shortcuts.font_reset.clone()), DEFAULT_SHORTCUT_FONT_RESET),
+        normalize_shortcut_or_default(
+            Some(ui.shortcuts.font_reset.clone()),
+            DEFAULT_SHORTCUT_FONT_RESET,
+        ),
     );
 }
 
@@ -820,17 +906,24 @@ fn set_integer(table: &mut Map<String, Value>, key: &str, value: usize) {
 mod tests {
     use super::{
         canonicalize_process_name, config_status_from_root, load_from_path, normalize_shortcut,
-        save_to_path, AppConfig, SaveAppConfigInput, UiConfig,
+        save_to_path, AppConfig, PromptConfig, SaveAppConfigInput, UiConfig,
     };
     use std::path::Path;
+    use std::sync::{Arc, Barrier};
     use toml::Value;
 
     #[test]
     fn defaults_include_known_trusted_callers() {
         let config = AppConfig::default();
         assert!(config.launch.trusted_callers.contains(&"codex".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"claude".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"gemini".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"claude".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"gemini".to_string()));
     }
 
     #[test]
@@ -874,8 +967,14 @@ submit_annotation = "ctrl+enter"
         assert_eq!(config.launch.scan_depth, 7);
         assert_eq!(config.launch.trusted_callers, vec!["mycli"]);
         assert_eq!(config.launch.ignored_callers, vec!["wrapper"]);
-        assert_eq!(config.prompts.reply_header_zh.as_deref(), Some("自定义回复"));
-        assert_eq!(config.prompts.iterate_header_en.as_deref(), Some("custom iterate"));
+        assert_eq!(
+            config.prompts.reply_header_zh.as_deref(),
+            Some("自定义回复")
+        );
+        assert_eq!(
+            config.prompts.iterate_header_en.as_deref(),
+            Some("custom iterate")
+        );
         assert_eq!(config.ui.theme, "dim");
         assert_eq!(config.ui.font_size, 19);
         assert_eq!(config.ui.locale, "zh");
@@ -909,8 +1008,14 @@ trusted_callers = ["   "]
         let config = load_from_path(&path);
 
         assert!(config.launch.trusted_callers.contains(&"codex".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"claude".to_string()));
-        assert!(config.launch.trusted_callers.contains(&"gemini".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"claude".to_string()));
+        assert!(config
+            .launch
+            .trusted_callers
+            .contains(&"gemini".to_string()));
     }
 
     #[test]
@@ -934,7 +1039,10 @@ iterate_header_zh = "\n\t "
 
         assert_eq!(config.launch.scan_depth, 1);
         assert_eq!(config.prompts.reply_header_zh, None);
-        assert_eq!(config.prompts.reply_header_en.as_deref(), Some("Custom reply"));
+        assert_eq!(
+            config.prompts.reply_header_en.as_deref(),
+            Some("Custom reply")
+        );
         assert_eq!(config.prompts.iterate_header_zh, None);
     }
 
@@ -1047,10 +1155,72 @@ reply_header_zh = "自定义"
     }
 
     #[test]
+    fn concurrent_saves_preserve_prompt_and_ui_updates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        for _ in 0..32 {
+            std::fs::write(&path, "[launch]\nscan_depth = 9\n").unwrap();
+
+            let barrier = Arc::new(Barrier::new(3));
+
+            let prompt_path = path.clone();
+            let prompt_barrier = Arc::clone(&barrier);
+            let prompt_save = std::thread::spawn(move || {
+                prompt_barrier.wait();
+                save_to_path(
+                    &prompt_path,
+                    SaveAppConfigInput {
+                        prompts: Some(PromptConfig {
+                            reply_header_en: Some("Updated".to_string()),
+                            ..PromptConfig::default()
+                        }),
+                        ui: None,
+                    },
+                )
+            });
+
+            let ui_path = path.clone();
+            let ui_barrier = Arc::clone(&barrier);
+            let ui_save = std::thread::spawn(move || {
+                let mut ui = UiConfig::default();
+                ui.theme = "dim".to_string();
+
+                ui_barrier.wait();
+                save_to_path(
+                    &ui_path,
+                    SaveAppConfigInput {
+                        prompts: None,
+                        ui: Some(ui),
+                    },
+                )
+            });
+
+            barrier.wait();
+            prompt_save.join().unwrap().unwrap();
+            ui_save.join().unwrap().unwrap();
+
+            let saved = load_from_path(&path);
+            assert_eq!(saved.launch.scan_depth, 9);
+            assert_eq!(saved.prompts.reply_header_en.as_deref(), Some("Updated"));
+            assert_eq!(saved.ui.theme, "dim");
+        }
+    }
+
+    #[test]
     fn normalize_shortcut_canonicalizes_supported_values() {
-        assert_eq!(normalize_shortcut("ctrl+shift+p").as_deref(), Some("Mod+Shift+P"));
-        assert_eq!(normalize_shortcut("cmd+enter").as_deref(), Some("Mod+Enter"));
-        assert_eq!(normalize_shortcut("mod+alt+m").as_deref(), Some("Mod+Alt+M"));
+        assert_eq!(
+            normalize_shortcut("ctrl+shift+p").as_deref(),
+            Some("Mod+Shift+P")
+        );
+        assert_eq!(
+            normalize_shortcut("cmd+enter").as_deref(),
+            Some("Mod+Enter")
+        );
+        assert_eq!(
+            normalize_shortcut("mod+alt+m").as_deref(),
+            Some("Mod+Alt+M")
+        );
         assert_eq!(normalize_shortcut("Enter"), None);
         assert_eq!(normalize_shortcut("Ctrl++"), None);
     }
