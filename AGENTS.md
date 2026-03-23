@@ -49,9 +49,17 @@ pnpm tauri:dev        # Dev mode (hot reload)
 pnpm test             # Run Vitest suite
 pnpm lint             # Lint frontend code
 pnpm typecheck        # TypeScript typecheck
-pnpm tauri:build      # Production build
+pnpm tauri:build      # Local package build (Linux defaults to deb-only)
+pnpm tauri:build:release  # Release-oriented package build
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
+
+Build workflow rules:
+- Use `pnpm tauri:dev` for day-to-day local UI / desktop debugging.
+- On Linux, use `pnpm tauri:build` for local package smoke checks; it intentionally defaults to a deb-only bundle profile.
+- Use `pnpm tauri:build:install-deb` only when you need an install-level validation on the local Linux machine.
+- Use `pnpm tauri:build:release -- <tauri args>` for release-parity packaging or custom bundle / target combinations.
+- Keep detailed platform-specific build steps in `docs/build-workflows.md`; do not expand `AGENTS.md` into a full build manual.
 
 ## Branch And Worktree Rules
 
@@ -64,6 +72,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
   - Worktree: `./.worktrees/fix--prompt-header-reseed`
 - If the branch already exists, reuse the same derived worktree path instead of inventing a new directory name.
 - Remove merged or abandoned worktrees promptly, then delete the corresponding local branch. If the remote branch is no longer needed, delete it too.
+- To save disk space across worktrees, share cache layers instead of sharing one `node_modules` tree. Use `scripts/setup_shared_worktree_cache.sh <shared-root>` and keep each worktree's `node_modules/` isolated.
+- Prefer placing the shared cache root on the same filesystem as `./.worktrees/` so `pnpm` can hardlink from its store efficiently.
 
 ### Standard Commands
 
@@ -73,6 +83,9 @@ scripts/new_worktree.sh fix/prompt-header-reseed
 
 # attach an existing branch to its canonical worktree path
 scripts/new_worktree.sh fix/prompt-header-reseed
+
+# prepare shared pnpm/Playwright caches for all worktrees
+scripts/setup_shared_worktree_cache.sh /mnt/hdd/dev-cache/cliv
 
 # clean up after merge
 scripts/cleanup_worktree.sh fix/prompt-header-reseed

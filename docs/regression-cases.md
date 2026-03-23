@@ -115,6 +115,18 @@
 
 ---
 
+## Worktree Tooling
+
+### WT-001 — shared-cache helper 不得让默认 Rust 安装失效
+- **Area:** worktree-tooling
+- **Scenario:** 已有默认 `~/.cargo` / `~/.rustup` 安装的机器运行 `scripts/setup_shared_worktree_cache.sh <shared-root>` 并 `source` 生成的 env 脚本
+- **Expected:** `cargo --version` 仍可正常运行；helper 不会把 `CARGO_HOME` / `RUSTUP_HOME` 改到新的空目录
+- **Coverage:** manual
+- **Manual verification:** 运行 helper，`source` 生成的 env 文件，再执行 `cargo --version`；确认命令成功且 shell 中未新增 `CARGO_HOME` / `RUSTUP_HOME`
+- **Reason:** 当前仓库还没有 shell 脚本测试 harness，这类环境变量副作用更适合先用命名 manual regression 约束
+
+---
+
 ## 维护规则
 
 新增真实 bug 或关键用户反馈时：

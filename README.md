@@ -56,9 +56,12 @@ cp cliv ~/.local/bin/
 git clone https://github.com/BobDLA/cliv.git
 cd cliv
 pnpm install
-pnpm tauri build
+pnpm tauri:build
+# Local package build; on Linux this uses the deb-only profile
 # Binary at src-tauri/target/release/cliv
 ```
+
+For release-style packaging or custom bundle targets, use `pnpm tauri:build:release -- --bundles deb` (or pass a different Tauri build flag set as needed).
 
 ### Set up as your `$EDITOR`
 
@@ -85,16 +88,12 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
 - 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
-- 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
 
 ## Notes
 
 - **Launch semantics** — `cliv <file.md>` opens that file for review. `cliv --target <file>`, `cliv -t <file>`, and the compatibility alias `cliv --compose <file>` treat the file as the write target.
 - **Write-back behavior** — cliV writes back directly only when an explicit target is present or the launch comes from a trusted caller; otherwise it falls back to clipboard.
 - **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
-- **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
-- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
-- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory.
 - **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
 - **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
 - **Logging** — on non-Windows systems, cliV may write diagnostic logs to `/tmp/cliv.log`.

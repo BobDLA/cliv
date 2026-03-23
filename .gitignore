@@ -1,23 +1,22 @@
 # dependencies
 /node_modules
+
 # build output
 /dist
-# Tauri
 /src-tauri/target
-# IDE
-.vscode
-.idea
-# logs
+
+# reports and logs
 *.log
 /playwright-report
 /test-results
-# OS
-.DS_Store
-Thumbs.db
 
+# local docs and handoff scratch
 docs/doc/*
 docs/doc
 handoffs/*
+/temp/
+
+# local agent and workspace state
 .codex/
 !.codex/
 .codex/*
@@ -27,8 +26,14 @@ handoffs/*
 !.codex/skills/worktree-pr-flow/**
 .agent/
 .claude/
-/temp/
 .github/*
 !.github/workflows/
 !.github/workflows/*.yml
-/temp/
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db

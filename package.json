@@ -21,7 +21,9 @@
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "bash ./scripts/tauri_build.sh local",
+    "tauri:build:local": "bash ./scripts/tauri_build.sh local",
+    "tauri:build:release": "bash ./scripts/tauri_build.sh release",
     "tauri:build:install-deb": "bash ./scripts/build_install_deb.sh"
   },
   "dependencies": {
