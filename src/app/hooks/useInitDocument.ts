@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import {
   useAnnotationStore,
   useConfigStore,
@@ -61,6 +61,7 @@ export function useInitDocument() {
   const { setDocument, setLoading, setError } = useDocumentStore();
   const setAppConfig = useConfigStore((s) => s.setAppConfig);
   const locale = useUIStore((s) => s.locale);
+  const hydratedRef = useRef(false);
 
   const loadDocument = useCallback(async () => {
     setLoading(true);
@@ -77,7 +78,14 @@ export function useInitDocument() {
         } = await import("@/services/tauri-ipc");
         const appConfig = await getAppConfig();
         setAppConfig(appConfig);
-        hydrateUIFromAppConfig(appConfig);
+        // Only hydrate UI preferences from config on the very first load.
+        // Subsequent calls (e.g. triggered by locale change) must not
+        // re-apply the config, otherwise the user's in-session locale
+        // change gets reverted before the debounced persist has flushed.
+        if (!hydratedRef.current) {
+          hydrateUIFromAppConfig(appConfig);
+          hydratedRef.current = true;
+        }
         const args = await getCliArgs();
         const result = await loadFiles(
           args.reviewPath,
