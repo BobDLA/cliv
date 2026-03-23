@@ -1,7 +1,6 @@
+use super::common;
 use crate::logging;
-use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
 
 /// Read the cached Gemini CLI reply for a given session-id.
 /// The cache is populated by `cliv cache-gemini` (called from Gemini AfterAgent hook).
@@ -10,33 +9,9 @@ use std::path::PathBuf;
 pub fn extract_gemini_reply(session_id: Option<String>) -> Result<String, String> {
     logging::timing("extract_gemini_reply: start");
 
-    let gemini_home = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".gemini");
-
-    let param_source = if session_id.is_some() {
-        "parameter"
-    } else {
-        "none"
-    };
-
-    let resolved_session_id = session_id.or_else(|| {
-        let env_val = std::env::var("GEMINI_SESSION_ID")
-            .ok()
-            .filter(|s| !s.is_empty());
-        if env_val.is_some() {
-            logging::log("  extract gemini: resolved key from GEMINI_SESSION_ID env var");
-        }
-        env_val
-    });
-
-    let source = if param_source == "parameter" {
-        "parameter"
-    } else if resolved_session_id.is_some() {
-        "env_var"
-    } else {
-        "none"
-    };
+    let gemini_home = common::default_agent_home(".gemini");
+    let (resolved_session_id, source) =
+        common::resolve_lookup_key("extract gemini", session_id, "GEMINI_SESSION_ID", "env_var");
 
     logging::log(&format!(
         "  extract gemini: resolved_key={:?} source={}",
@@ -63,18 +38,12 @@ pub fn extract_gemini_reply_from(
     if let Some(ref key) = session_id {
         if is_pid_like(key) {
             let cache_path = cache_dir.join(format!("{}.md", key));
-            logging::log(&format!(
-                "  extract gemini: trying PID cache path={}",
-                cache_path.display()
-            ));
-            if cache_path.exists() {
-                logging::log(&format!(
-                    "  extract gemini: HIT PID cache file={} size={}",
-                    cache_path.display(),
-                    fs::metadata(&cache_path).map(|m| m.len()).unwrap_or(0)
-                ));
-                return fs::read_to_string(&cache_path)
-                    .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
+            if let Some(reply) = common::read_cached_reply(
+                "extract gemini",
+                &cache_path,
+                "Failed to read Gemini reply cache",
+            ) {
+                return reply;
             }
         }
     }
@@ -82,18 +51,12 @@ pub fn extract_gemini_reply_from(
     // Strategy 2: Session-id direct hit ({session_id}.md)
     if let Some(ref key) = session_id {
         let cache_path = cache_dir.join(format!("{}.md", key));
-        logging::log(&format!(
-            "  extract gemini: trying session cache path={}",
-            cache_path.display()
-        ));
-        if cache_path.exists() {
-            logging::log(&format!(
-                "  extract gemini: HIT session cache file={} size={}",
-                cache_path.display(),
-                fs::metadata(&cache_path).map(|m| m.len()).unwrap_or(0)
-            ));
-            return fs::read_to_string(&cache_path)
-                .map_err(|e| format!("Failed to read Gemini reply cache: {}", e));
+        if let Some(reply) = common::read_cached_reply(
+            "extract gemini",
+            &cache_path,
+            "Failed to read Gemini reply cache",
+        ) {
+            return reply;
         }
     }
 

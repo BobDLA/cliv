@@ -1,3 +1,4 @@
+use super::common;
 use crate::logging;
 use serde::Deserialize;
 use std::fs;
@@ -21,38 +22,9 @@ pub fn extract_codex_reply(
 ) -> Result<String, String> {
     logging::timing("extract_codex_reply: start");
 
-    let codex_home = std::env::var("CODEX_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".codex")
-        });
-
-    let param_source = if thread_id.is_some() {
-        "parameter"
-    } else {
-        "none"
-    };
-
-    let resolved_thread_id = thread_id
-        .or_else(|| {
-            let env_val = std::env::var("CODEX_THREAD_ID")
-                .ok()
-                .filter(|s| !s.is_empty());
-            if env_val.is_some() {
-                logging::log("  extract codex: resolved key from CODEX_THREAD_ID env var");
-            }
-            env_val
-        });
-
-    let source = if param_source == "parameter" {
-        "parameter"
-    } else if resolved_thread_id.is_some() {
-        "env"
-    } else {
-        "none"
-    };
+    let codex_home = common::env_or_default_agent_home("CODEX_HOME", ".codex");
+    let (resolved_thread_id, source) =
+        common::resolve_lookup_key("extract codex", thread_id, "CODEX_THREAD_ID", "env");
 
     logging::log(&format!(
         "  extract codex: resolved_key={:?} source={}",
@@ -119,22 +91,7 @@ fn is_pid_like(value: &str) -> bool {
 }
 
 fn read_cached_reply(cache_path: &Path) -> Option<Result<String, String>> {
-    logging::log(&format!(
-        "  extract codex: trying cache path={}",
-        cache_path.display()
-    ));
-    if cache_path.exists() {
-        logging::log(&format!(
-            "  extract codex: HIT cache file={} size={}",
-            cache_path.display(),
-            fs::metadata(cache_path).map(|m| m.len()).unwrap_or(0)
-        ));
-        return Some(
-            fs::read_to_string(cache_path)
-                .map_err(|e| format!("Failed to read reply cache: {}", e)),
-        );
-    }
-    None
+    common::read_cached_reply("extract codex", cache_path, "Failed to read reply cache")
 }
 
 fn resolve_cache_path_from_meta(codex_home: &Path, lookup_key: &str) -> Option<PathBuf> {
