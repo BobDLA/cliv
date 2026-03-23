@@ -1,6 +1,4 @@
-use crate::config::{save, AppConfig, AppConfigState, SaveAppConfigInput};
-#[cfg(test)]
-use crate::config::save_to_path;
+use crate::config::{AppConfig, AppConfigState, SaveAppConfigInput};
 #[cfg(test)]
 use std::path::Path;
 
@@ -21,9 +19,7 @@ fn persist_and_update_state(
     state: &AppConfigState,
     input: SaveAppConfigInput,
 ) -> Result<AppConfig, String> {
-    let saved = save(input)?;
-    state.replace(saved.clone());
-    Ok(saved)
+    state.persist(input)
 }
 
 #[cfg(test)]
@@ -32,9 +28,7 @@ fn persist_and_update_state_at_path(
     state: &AppConfigState,
     input: SaveAppConfigInput,
 ) -> Result<AppConfig, String> {
-    let saved = save_to_path(path, input)?;
-    state.replace(saved.clone());
-    Ok(saved)
+    state.persist_at_path(path, input)
 }
 
 #[cfg(test)]
