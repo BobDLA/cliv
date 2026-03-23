@@ -1,9 +1,11 @@
 import { memo, useEffect, useCallback } from "react";
 import { Clock, Trash2, FileText, MessageSquare } from "lucide-react";
-import { useSessionStore } from "@/stores";
+import { useHistoryStore, useSessionStore } from "@/stores";
 import {
   applyReviewSnapshot,
+  beginReviewRestoreRequest,
   buildSessionReviewSnapshot,
+  isCurrentReviewRestoreRequest,
 } from "@/services/reviewSnapshot";
 import type { SessionSummary } from "@/services/sessionService";
 import { useT } from "@/lib/useT";
@@ -33,7 +35,15 @@ export const SessionTree = memo(function SessionTree() {
       const session = openSession(id);
       if (!session) return;
 
-      applyReviewSnapshot(await buildSessionReviewSnapshot(session));
+      useHistoryStore.setState({ currentArchiveRef: null });
+      const requestId = beginReviewRestoreRequest();
+
+      const snapshot = await buildSessionReviewSnapshot(session);
+      if (!isCurrentReviewRestoreRequest(requestId)) {
+        return;
+      }
+
+      applyReviewSnapshot(snapshot);
     },
     [openSession],
   );

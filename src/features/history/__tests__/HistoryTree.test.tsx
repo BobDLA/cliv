@@ -1,18 +1,30 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HistoryTree } from "@/features/history";
+import * as reviewSnapshotModule from "@/services/reviewSnapshot";
 import {
   useAnnotationStore,
   useDocumentStore,
   useHistoryStore,
   useReturnStore,
   useSelectionStore,
+  useSessionStore,
   useUIStore,
 } from "@/stores";
 
 const listReviewHistoryMock = vi.fn();
 const loadReviewArchiveMock = vi.fn();
 const writeTextMock = vi.fn();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 vi.mock("@/services/historyService", () => ({
   listReviewHistory: (...args: unknown[]) => listReviewHistoryMock(...args),
@@ -36,6 +48,10 @@ describe("HistoryTree", () => {
       isLoading: false,
       error: null,
       currentArchiveRef: null,
+    });
+    useSessionStore.setState({
+      currentSessionId: "sess_existing",
+      sessions: [],
     });
     useAnnotationStore.getState().clearAnnotations();
     useSelectionStore.getState().reset();
@@ -148,6 +164,7 @@ describe("HistoryTree", () => {
     expect(useDocumentStore.getState().isReadOnly).toBe(true);
     expect(useDocumentStore.getState().archivedSubmission?.userText).toBe("Archived custom input");
     expect(useAnnotationStore.getState().annotations).toHaveLength(1);
+    expect(useSessionStore.getState().currentSessionId).toBeNull();
     expect(useHistoryStore.getState().currentArchiveRef).toEqual({
       workspaceKey: "ws_project",
       archiveId: "arch_1",
@@ -329,6 +346,97 @@ describe("HistoryTree", () => {
 
     fireEvent.click(screen.getByTestId("history-group-toggle"));
     expect(screen.queryByTestId("history-group-children")).not.toBeInTheDocument();
+  });
+
+  it("ignores a stale archive load after a newer review restore request starts", async () => {
+    const archiveLoad = deferred<Awaited<ReturnType<typeof loadReviewArchiveMock>>>();
+    listReviewHistoryMock.mockResolvedValue([
+      {
+        key: "ws_project",
+        label: "project",
+        path: "/tmp/project",
+        entries: [
+          {
+            id: "arch_1",
+            workspaceKey: "ws_project",
+            workspaceLabel: "project",
+            workspacePath: "/tmp/project",
+            archivedAt: "2026-03-22T10:01:00.000Z",
+            agent: "codex",
+            reviewPath: "/tmp/project/reply.md",
+            replyPath: "/tmp/project/reply.md",
+            targetPath: "/tmp/project/compose.md",
+            submittedChars: 128,
+            itemCount: 3,
+            preview: "Review feedback",
+            searchText: "review feedback",
+          },
+        ],
+      },
+    ]);
+    loadReviewArchiveMock.mockReturnValue(archiveLoad.promise);
+
+    render(<HistoryTree />);
+
+    await screen.findByText("project");
+    fireEvent.click(screen.getByTestId("history-group-toggle"));
+    fireEvent.click(screen.getByTestId("history-entry"));
+
+    const newerRequestId = reviewSnapshotModule.beginReviewRestoreRequest();
+    expect(reviewSnapshotModule.isCurrentReviewRestoreRequest(newerRequestId)).toBe(true);
+
+    await act(async () => {
+      archiveLoad.resolve({
+        summary: {
+          id: "arch_1",
+          workspaceKey: "ws_project",
+          workspaceLabel: "project",
+          workspacePath: "/tmp/project",
+          archivedAt: "2026-03-22T10:01:00.000Z",
+          agent: "codex",
+          reviewPath: "/tmp/project/reply.md",
+          replyPath: "/tmp/project/reply.md",
+          targetPath: "/tmp/project/compose.md",
+          submittedChars: 128,
+          itemCount: 3,
+          preview: "Review feedback",
+          searchText: "review feedback",
+        },
+        replyContent: "# Archived reply\n\nBody",
+        annotations: [
+          {
+            id: "ann-1",
+            documentId: "arch_1",
+            quote: "Body",
+            comment: "Need more detail",
+            kind: "comment",
+            status: "open",
+            createdAt: "2026-03-22T10:00:00.000Z",
+            range: {
+              startOffset: 17,
+              endOffset: 21,
+            },
+          },
+        ],
+        submission: {
+          createdAt: "2026-03-22T10:01:00.000Z",
+          method: "written",
+          templateMode: "reply",
+          userText: "Archived custom input",
+          finalOutput: "Archived custom input",
+        },
+        targetBefore: null,
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(useHistoryStore.getState().currentArchiveRef).toBeNull();
+      expect(useHistoryStore.getState().isLoading).toBe(false);
+      expect(useDocumentStore.getState().replyContent).toBe("# live document");
+      expect(useDocumentStore.getState().isReadOnly).toBe(false);
+      expect(useSessionStore.getState().currentSessionId).toBe("sess_existing");
+    });
   });
 
   it("surfaces load failures instead of showing the generic empty history state", async () => {

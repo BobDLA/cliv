@@ -26,6 +26,17 @@ interface ReviewSnapshot {
   resetAnnotationUiState?: boolean;
 }
 
+let currentReviewRestoreRequestId = 0;
+
+export function beginReviewRestoreRequest(): number {
+  currentReviewRestoreRequestId += 1;
+  return currentReviewRestoreRequestId;
+}
+
+export function isCurrentReviewRestoreRequest(requestId: number): boolean {
+  return currentReviewRestoreRequestId === requestId;
+}
+
 export function applyReviewSnapshot(snapshot: ReviewSnapshot): void {
   if (snapshot.resetSelection) {
     useSelectionStore.getState().reset();
@@ -73,15 +84,40 @@ export function buildArchiveReviewSnapshot(
 export async function buildSessionReviewSnapshot(
   session: SessionRecord,
 ): Promise<ReviewSnapshot> {
+  const baseSnapshot = {
+    annotations: session.annotations,
+    resetSelection: true,
+    resetReturnState: true,
+    resetAnnotationUiState: true,
+  } satisfies Pick<
+    ReviewSnapshot,
+    "annotations" | "resetSelection" | "resetReturnState" | "resetAnnotationUiState"
+  >;
+
   if (!session.documentPath) {
     return {
-      annotations: session.annotations,
+      ...baseSnapshot,
+      document: {
+        reply: null,
+        target: null,
+        targetPath: null,
+        reviewPath: null,
+        replyPath: null,
+        workspacePath: null,
+        archivedSubmission: null,
+        documentId: session.id,
+        isReadOnly: false,
+      },
     };
   }
 
   const { baseName, parentPath } = getPathInfo(session.documentPath);
   const baseDocument = {
+    reply: null,
+    target: null,
+    targetPath: null,
     reviewPath: session.documentPath,
+    replyPath: null,
     workspacePath: parentPath,
     archivedSubmission: null,
     documentId: baseName || session.documentPath,
@@ -90,7 +126,7 @@ export async function buildSessionReviewSnapshot(
 
   if (!isTauriRuntime()) {
     return {
-      annotations: session.annotations,
+      ...baseSnapshot,
       document: baseDocument,
     };
   }
@@ -99,7 +135,7 @@ export async function buildSessionReviewSnapshot(
     const { readFile } = await import("@/services/tauri-ipc");
     const content = await readFile(session.documentPath);
     return {
-      annotations: session.annotations,
+      ...baseSnapshot,
       document: {
         reply: content,
         target: null,
@@ -114,7 +150,7 @@ export async function buildSessionReviewSnapshot(
     };
   } catch {
     return {
-      annotations: session.annotations,
+      ...baseSnapshot,
       document: baseDocument,
     };
   }
