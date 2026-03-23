@@ -43,7 +43,7 @@ AI 编程 Agent（Codex、Claude Code、Gemini CLI）经常产出长篇结构化
 
 ```bash
 # 安装 .deb 包
-sudo dpkg -i cliv_0.2.0_amd64.deb
+sudo dpkg -i cliv_0.2.1_amd64.deb
 
 # 或直接拷贝二进制到 PATH
 cp cliv ~/.local/bin/

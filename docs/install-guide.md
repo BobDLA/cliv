@@ -12,7 +12,7 @@ pnpm tauri:build
 
 Build artifacts:
 - **Binary**: `src-tauri/target/release/cliv`
-- **deb package**: `src-tauri/target/release/bundle/deb/cliv_0.2.0_amd64.deb`
+- **deb package**: `src-tauri/target/release/bundle/deb/cliv_0.2.1_amd64.deb`
 
 `pnpm tauri:build` is the local packaging path. On Linux it loads a deb-only Tauri override so day-to-day debug builds do not also generate extra bundle formats. Use `pnpm tauri:build:release -- <tauri args>` when you need release-parity packaging.
 

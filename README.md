@@ -43,7 +43,7 @@ Grab the latest release from [GitHub Releases](https://github.com/BobDLA/cliv/re
 
 ```bash
 # Install .deb
-sudo dpkg -i cliv_0.2.0_amd64.deb
+sudo dpkg -i cliv_0.2.1_amd64.deb
 
 # Or copy the binary directly
 cp cliv ~/.local/bin/

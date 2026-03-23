@@ -135,7 +135,7 @@ function Counter({ initialCount = 0 }) {
 ```json
 {
   "name": "cliv",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "dependencies": {
     "@uiw/react-markdown-preview": "^5.0.0",
     "mermaid": "^11.0.0",

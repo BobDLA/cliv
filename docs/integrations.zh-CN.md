@@ -39,7 +39,7 @@ Agent 完成一次回复
 ```bash
 # 从 GitHub Release 下载
 cp cliv ~/.local/bin/
-# 或：sudo dpkg -i cliv_0.2.0_amd64.deb
+# 或：sudo dpkg -i cliv_0.2.1_amd64.deb
 ```
 
 ### 第 2 步：设置 $EDITOR

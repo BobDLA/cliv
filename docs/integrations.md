@@ -39,7 +39,7 @@ You press Ctrl+G
 ```bash
 # From GitHub Release
 cp cliv ~/.local/bin/
-# Or: sudo dpkg -i cliv_0.2.0_amd64.deb
+# Or: sudo dpkg -i cliv_0.2.1_amd64.deb
 ```
 
 ### Step 2: Set $EDITOR

@@ -1,6 +1,6 @@
 [package]
 name = "cliv"
-version = "0.2.0"
+version = "0.2.1"
 description = "A GUI reviewer for AI agent replies, triggered from your CLI"
 authors = ["TwoMonkeys"]
 edition = "2021"
