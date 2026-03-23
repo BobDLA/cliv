@@ -1,8 +1,9 @@
 import { memo, useState, useRef, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
-import { useSelectionStore, useAnnotationStore } from "@/stores";
+import { useSelectionStore, useAnnotationStore, useUIStore } from "@/stores";
 import type { AnnotationKind } from "@/types";
 import { useT } from "@/lib/useT";
+import { matchShortcut } from "@/lib/shortcuts";
 import { createAnnotationFromSelection } from "./createAnnotation";
 
 const KIND_OPTIONS: {
@@ -40,6 +41,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
     setEditingAnnotation,
   } = useAnnotationStore();
   const t = useT();
+  const submitAnnotationShortcut = useUIStore((state) => state.shortcuts.submitAnnotation);
 
   const editingAnnotation = editingAnnotationId
     ? annotations.find((a) => a.id === editingAnnotationId) ?? null
@@ -170,7 +172,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      if (matchShortcut(e.nativeEvent, submitAnnotationShortcut)) {
         e.preventDefault();
         handleSubmit();
       } else if (e.key === "Escape") {
@@ -179,7 +181,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
       }
       e.stopPropagation();
     },
-    [handleSubmit, handleClose],
+    [handleSubmit, handleClose, submitAnnotationShortcut],
   );
 
   if (!isVisible) return null;
@@ -330,7 +332,7 @@ export const AnnotationPopup = memo(function AnnotationPopup() {
               color: "var(--color-text-faint)",
             }}
           >
-            {t("annPopup.submitHint")}
+            {submitAnnotationShortcut}
           </span>
           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
             <button

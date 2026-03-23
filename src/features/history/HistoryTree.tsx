@@ -51,10 +51,13 @@ export const HistoryTree = memo(function HistoryTree() {
   const hasEntries = filteredGroups.some((group) => group.entries.length > 0);
 
   const toggleGroup = useCallback((groupKey: string) => {
-    setCollapsedGroups((current) => ({
-      ...current,
-      [groupKey]: !current[groupKey],
-    }));
+    setCollapsedGroups((current) => {
+      const isCollapsed = current[groupKey] ?? true;
+      return {
+        ...current,
+        [groupKey]: !isCollapsed,
+      };
+    });
   }, []);
 
   const handleCopyPath = useCallback(async (groupKey: string, path: string) => {
@@ -134,7 +137,7 @@ export const HistoryTree = memo(function HistoryTree() {
       >
         {hasEntries ? (
           filteredGroups.map((group) => {
-            const isExpanded = isFiltering || !collapsedGroups[group.key];
+            const isExpanded = isFiltering || !(collapsedGroups[group.key] ?? true);
 
             return (
               <section

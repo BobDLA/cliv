@@ -25,6 +25,7 @@ import { useT } from "@/lib/useT";
 import { messages, type Locale, detectContentLocale } from "@/lib/locales";
 import { resolveWorkspacePath } from "@/lib/pathUtils";
 import { resolvePromptHeader } from "@/lib/promptTemplates";
+import { matchShortcut } from "@/lib/shortcuts";
 import type { PromptConfig } from "@/types";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -105,6 +106,12 @@ function normalizeTemplateMode(mode: string | null | undefined): TemplateMode {
   return mode === "iterate" ? "iterate" : "reply";
 }
 
+function clearTimeoutRef(ref: { current: number | null }) {
+  if (ref.current == null) return;
+  window.clearTimeout(ref.current);
+  ref.current = null;
+}
+
 /**
  * ReturnBuilder — bottom split panel.
  * Left: user custom editing area (global comments, free-form text).
@@ -127,6 +134,7 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   const isReadOnly = useDocumentStore((s) => s.isReadOnly);
   const t = useT();
   const uiLocale = useUIStore((s) => s.locale);
+  const submitReturnShortcut = useUIStore((s) => s.shortcuts.submitReturn);
 
   // Content locale dynamically detected from selected annotations
   const contentLocale = useMemo(() => {
@@ -228,14 +236,30 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }, [splitRatio]);
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [submitSuccessMethod, setSubmitSuccessMethod] = useState<"written" | "clipboard" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitLocked, setSubmitLocked] = useState(false);
+  const [lastSubmittedFingerprint, setLastSubmittedFingerprint] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const submitLockedRef = useRef(false);
+  const closeWindowTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setCopySuccess(false);
+    clearTimeoutRef(closeWindowTimeoutRef);
+    submitLockedRef.current = false;
+    setSubmitSuccessMethod(null);
+    setLastSubmittedFingerprint(null);
+    setIsSubmitting(false);
+    setSubmitLocked(false);
     setWriteError(null);
   }, [documentId]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeoutRef(closeWindowTimeoutRef);
+    };
+  }, []);
 
   // Selected annotations sorted by document position
   const selectedAnns = useMemo(() => {
@@ -309,6 +333,46 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
       }),
     [workspacePath, reviewPath, replyPath, targetPath],
   );
+  const submissionFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        documentId,
+        targetPath: targetPath ?? "",
+        reviewPath: reviewPath ?? "",
+        replyPath: replyPath ?? "",
+        workspacePath: effectiveWorkspacePath ?? "",
+        templateMode,
+        finalOutput,
+        replyContent: replyContent ?? "",
+        targetBefore: targetContent ?? "",
+        itemCount,
+      }),
+    [
+      documentId,
+      effectiveWorkspacePath,
+      finalOutput,
+      itemCount,
+      replyContent,
+      replyPath,
+      reviewPath,
+      targetContent,
+      targetPath,
+      templateMode,
+    ],
+  );
+  const hasSubmittedCurrentOutput =
+    lastSubmittedFingerprint !== null &&
+    lastSubmittedFingerprint === submissionFingerprint;
+
+  useEffect(() => {
+    if (
+      !isSubmitting &&
+      lastSubmittedFingerprint !== null &&
+      !hasSubmittedCurrentOutput
+    ) {
+      setSubmitSuccessMethod(null);
+    }
+  }, [hasSubmittedCurrentOutput, isSubmitting, lastSubmittedFingerprint]);
 
   const handleToggleAll = useCallback(() => {
     if (isReadOnly) return;
@@ -317,7 +381,21 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
   }, [allSelected, annotations, deselectAll, isReadOnly, selectAll]);
 
   const handleSubmit = useCallback(async () => {
-    if (!hasContent || isReadOnly) return;
+    if (
+      !hasContent ||
+      isReadOnly ||
+      submitLockedRef.current ||
+      hasSubmittedCurrentOutput
+    ) {
+      return;
+    }
+
+    clearTimeoutRef(closeWindowTimeoutRef);
+    submitLockedRef.current = true;
+    setIsSubmitting(true);
+    setSubmitLocked(true);
+    setSubmitSuccessMethod(null);
+
     try {
       setWriteError(null);
       const createdAt = new Date().toISOString();
@@ -344,16 +422,26 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
         void useHistoryStore.getState().refreshHistory();
       }
 
+      setLastSubmittedFingerprint(submissionFingerprint);
+      setSubmitSuccessMethod(method);
       if (method === "written") {
-        setCopySuccess(true);
         // Auto-close window after successful file write-back (Codex flow)
-        setTimeout(() => closeWindow(), 800);
+        closeWindowTimeoutRef.current = window.setTimeout(() => {
+          submitLockedRef.current = false;
+          setSubmitLocked(false);
+          closeWindowTimeoutRef.current = null;
+          void closeWindow();
+        }, 800);
       } else {
-        setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2500);
+        submitLockedRef.current = false;
+        setSubmitLocked(false);
       }
     } catch (e) {
+      submitLockedRef.current = false;
+      setSubmitLocked(false);
       setWriteError(e instanceof Error ? e.message : t("return.writeFail"));
+    } finally {
+      setIsSubmitting(false);
     }
   }, [
     finalOutput,
@@ -369,21 +457,22 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
     templateMode,
     userText,
     effectiveWorkspacePath,
+    hasSubmittedCurrentOutput,
     isReadOnly,
+    submissionFingerprint,
   ]);
 
-  // ── Ctrl+Enter global shortcut for submit ──
   useEffect(() => {
     if (collapsed || isReadOnly) return;
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      if (matchShortcut(e, submitReturnShortcut)) {
         e.preventDefault();
         handleSubmit();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [collapsed, handleSubmit, isReadOnly]);
+  }, [collapsed, handleSubmit, isReadOnly, submitReturnShortcut]);
 
   return (
     <div
@@ -805,7 +894,20 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 {writeError}
               </span>
             )}
-            {copySuccess && (
+            {!writeError && isSubmitting && (
+              <span
+                style={{
+                  fontSize: "0.85rem",
+                  color: "var(--color-text-secondary)",
+                }}
+                data-testid="return-status-pending"
+              >
+                {targetPath && isTauri
+                  ? t("return.submittingWriteBack")
+                  : t("return.submittingCopy")}
+              </span>
+            )}
+            {!writeError && !isSubmitting && submitSuccessMethod && (
               <span
                 style={{
                   fontSize: "0.85rem",
@@ -817,10 +919,12 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 data-testid="return-status-success"
               >
                 <Check style={{ width: "12px", height: "12px" }} />
-                {t("return.copied")}
+                {submitSuccessMethod === "written"
+                  ? t("return.written")
+                  : t("return.copied")}
               </span>
             )}
-            {!writeError && !copySuccess && (
+            {!writeError && !isSubmitting && !submitSuccessMethod && (
               <span
                 style={{
                   fontSize: "0.85rem",
@@ -840,9 +944,14 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
           {!isReadOnly ? (
             <button
               type="button"
-              disabled={!hasContent}
+              disabled={
+                !hasContent ||
+                submitLocked ||
+                hasSubmittedCurrentOutput
+              }
               onClick={handleSubmit}
               data-testid="return-submit"
+              aria-busy={isSubmitting}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -857,12 +966,24 @@ export const ReturnBuilder = memo(function ReturnBuilder() {
                 fontSize: "0.9rem",
                 fontWeight: 600,
                 fontFamily: "var(--font-sans)",
-                cursor: hasContent ? "pointer" : "not-allowed",
-                opacity: hasContent ? 1 : 0.5,
+                cursor:
+                  !hasContent ||
+                  submitLocked ||
+                  hasSubmittedCurrentOutput
+                    ? "not-allowed"
+                    : "pointer",
+                opacity:
+                  !hasContent ||
+                  submitLocked ||
+                  hasSubmittedCurrentOutput
+                    ? 0.6
+                    : 1,
                 transition: "all 0.15s",
               }}
             >
-              {targetPath && isTauri ? (
+              {isSubmitting ? (
+                <>{targetPath && isTauri ? t("return.submittingWriteBack") : t("return.submittingCopy")}</>
+              ) : targetPath && isTauri ? (
                 <><LogOut style={{ width: "13px", height: "13px" }} />{t("return.writeBackClose")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>
               ) : (
                 <><Copy style={{ width: "13px", height: "13px" }} />{t("return.copySubmit")}<span style={{ opacity: 0.7, fontSize: "0.75rem", marginLeft: "4px" }}>Ctrl+↵</span></>

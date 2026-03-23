@@ -5,8 +5,10 @@ import {
   useDocumentStore,
   useUIStore,
 } from "@/stores";
+import { hydrateUIFromAppConfig } from "@/stores/uiStore";
 import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
 import { getPathInfo, resolveWorkspacePath } from "@/lib/pathUtils";
+import type { CliArgs } from "@/types";
 
 // Check if running inside Tauri
 const isTauri =
@@ -43,6 +45,16 @@ function buildExtractionPlan(
 }
 
 /**
+ * Only use cached agent-reply fallback when the launch clearly came from an
+ * integrated agent/editor flow. A plain `cliv` launch should stay blank.
+ */
+export function shouldUseReplyExtractionFallback(
+  args: Pick<CliArgs, "agent" | "trustedCaller">,
+): boolean {
+  return Boolean(args.agent || args.trustedCaller);
+}
+
+/**
  * Hook: initialize document from CLI args (Tauri) or demo content (browser dev).
  */
 export function useInitDocument() {
@@ -65,6 +77,7 @@ export function useInitDocument() {
         } = await import("@/services/tauri-ipc");
         const appConfig = await getAppConfig();
         setAppConfig(appConfig);
+        hydrateUIFromAppConfig(appConfig);
         const args = await getCliArgs();
         const result = await loadFiles(
           args.reviewPath,
@@ -80,7 +93,10 @@ export function useInitDocument() {
 
         // Try to extract the last reply using cached hooks
         let replyContent = result.reply;
-        if (!replyContent || replyContent.trim() === "") {
+        if (
+          (!replyContent || replyContent.trim() === "") &&
+          shouldUseReplyExtractionFallback(args)
+        ) {
           const plan = buildExtractionPlan(
             args.agent,
             () => extractCodexReply(null, args.workspacePath),
@@ -127,8 +143,9 @@ export function useInitDocument() {
         );
       }
     } else {
-      // Browser dev mode: use demo content
+      // Browser dev mode: use the docs-backed demo content
       const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
+      useAnnotationStore.getState().clearAnnotations();
       setDocument({
         reply: demoContent,
         workspacePath: null,

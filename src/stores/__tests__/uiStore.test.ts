@@ -1,5 +1,7 @@
 import { act } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SHORTCUTS } from "@/lib/shortcuts";
+import type { AppConfig } from "@/types";
 
 const STORAGE_KEYS = {
   theme: "cliv:theme",
@@ -45,10 +47,82 @@ async function loadUIStoreModule() {
   return import("../uiStore");
 }
 
+async function loadUIStoreTauriModules() {
+  Object.defineProperty(window, "__TAURI_INTERNALS__", {
+    value: {},
+    configurable: true,
+  });
+  vi.resetModules();
+  const uiStoreModule = await import("../uiStore");
+  const { useConfigStore } = await import("../configStore");
+  return { ...uiStoreModule, useConfigStore };
+}
+
+function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
+  const defaults: AppConfig = {
+    launch: {
+      scanDepth: 5,
+      trustedCallers: ["codex", "claude", "gemini"],
+      ignoredCallers: ["bash", "sh"],
+    },
+    prompts: {
+      replyHeaderZh: null,
+      replyHeaderEn: null,
+      iterateHeaderZh: null,
+      iterateHeaderEn: null,
+    },
+    ui: {
+      theme: "light",
+      fontSize: 18,
+      locale: "en",
+      sidebarOpen: true,
+      sidebarTab: "outline",
+      sidebarWidth: 224,
+      annotationMarginWidth: 256,
+      contentWidth: "standard",
+      pagePadding: "comfortable",
+      readingDensity: "comfortable",
+      highlightStrength: "balanced",
+      shortcuts: { ...DEFAULT_SHORTCUTS },
+    },
+    status: {
+      path: "~/.cliv/config.toml",
+      exists: true,
+      launchConfigured: true,
+      promptsConfigured: true,
+      uiConfigured: true,
+    },
+  };
+
+  return {
+    ...defaults,
+    ...overrides,
+    ui: {
+      ...defaults.ui,
+      ...overrides?.ui,
+    },
+    status: {
+      ...defaults.status,
+      ...overrides?.status,
+    },
+  };
+}
+
+/** Flush pending requestAnimationFrame callbacks (jsdom uses setTimeout(cb,0)). */
+function flushRAF(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 describe("uiStore", () => {
   beforeEach(() => {
     localStorage.clear();
     clearDocumentPreferenceState();
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
   });
 
   it("restores persisted preferences with safe clamping and enum fallbacks", async () => {
@@ -94,6 +168,9 @@ describe("uiStore", () => {
       state.setReadingDensity("compact");
       state.setHighlightStrength("subtle");
     });
+
+    // Subscriber uses rAF to debounce DOM updates — flush it.
+    await flushRAF();
 
     const root = document.documentElement;
     expect(root.style.getPropertyValue("--content-max-width")).toBe("48rem");
@@ -157,5 +234,49 @@ describe("uiStore", () => {
     expect(localStorage.getItem(STORAGE_KEYS.pagePadding)).toBe("comfortable");
     expect(localStorage.getItem(STORAGE_KEYS.readingDensity)).toBe("comfortable");
     expect(localStorage.getItem(STORAGE_KEYS.highlightStrength)).toBe("balanced");
+  });
+
+  it("persists debounced UI config snapshots after hydrated changes in Tauri mode", async () => {
+    vi.useFakeTimers();
+
+    const {
+      hydrateUIFromAppConfig,
+      useConfigStore,
+      useUIStore,
+    } = await loadUIStoreTauriModules();
+    const saveUiConfig = vi.fn().mockResolvedValue(null);
+
+    useConfigStore.setState({
+      appConfig: null,
+      promptConfig: null,
+      configStatus: null,
+      saveUiConfig,
+    });
+
+    hydrateUIFromAppConfig(makeAppConfig());
+
+    act(() => {
+      const state = useUIStore.getState();
+      state.setReadingDensity("compact");
+      state.setHighlightStrength("strong");
+    });
+
+    expect(saveUiConfig).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(160);
+    });
+
+    expect(saveUiConfig).toHaveBeenCalledTimes(1);
+    expect(saveUiConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        theme: "light",
+        fontSize: 18,
+        locale: "en",
+        annotationMarginWidth: 256,
+        readingDensity: "compact",
+        highlightStrength: "strong",
+      }),
+    );
   });
 });

@@ -151,7 +151,7 @@ fn no_session_returns_error_not_random_data() {
     let tmp = TempDir::new().unwrap();
     let home = tmp.path();
 
-    // Plant some cache files — none should be returned without a session ID
+    // Plant some cache files — none should be returned without a session key.
     write_cache(home, "orphan-session", "This should never be returned");
 
     let claude_err = cliv_lib::extract::claude::extract_claude_reply_from(home, None);
@@ -164,10 +164,10 @@ fn no_session_returns_error_not_random_data() {
         "Error message should be specific"
     );
 
-    let gemini_err = cliv_lib::extract::gemini::extract_gemini_reply_from(home, None);
+    let gemini_result = cliv_lib::extract::gemini::extract_gemini_reply_from(home, None);
     assert!(
-        gemini_err.is_err(),
-        "Gemini should error without session ID"
+        gemini_result.is_err(),
+        "Gemini should error without a cache key"
     );
 
     let codex_err = cliv_lib::extract::codex::extract_codex_reply_from(home, None);
@@ -212,4 +212,17 @@ fn missing_cache_returns_error_with_path() {
     let msg = err.unwrap_err();
     assert!(msg.contains("phantom-thread"));
     assert!(msg.contains("metadata match"));
+}
+
+#[test]
+fn gemini_requested_key_miss_does_not_return_other_session_cache() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path();
+
+    write_cache(home, "other-session", "This should not leak");
+
+    let err =
+        cliv_lib::extract::gemini::extract_gemini_reply_from(home, Some("missing-key".to_string()));
+    assert!(err.is_err(), "Gemini should not fall back to another cache file");
+    assert!(err.unwrap_err().contains("missing-key"));
 }

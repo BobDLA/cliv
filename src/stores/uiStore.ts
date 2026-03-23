@@ -1,13 +1,19 @@
 import { create } from "zustand";
 import type {
+  AppConfig,
   ContentWidth,
   HighlightStrength,
   PagePadding,
   ReadingDensity,
+  ShortcutCommand,
+  ShortcutConfig,
   SidebarTab,
   Theme,
+  UiConfig,
 } from "@/types";
 import { type Locale, detectLocale } from "@/lib/locales";
+import { getDefaultShortcuts, resolveShortcutConfig } from "@/lib/shortcuts";
+import { useConfigStore } from "./configStore";
 
 const STORAGE_PREFIX = "cliv:";
 const KEY_FONT_SIZE = `${STORAGE_PREFIX}fontSize`;
@@ -21,6 +27,19 @@ const KEY_CONTENT_WIDTH = `${STORAGE_PREFIX}contentWidth`;
 const KEY_PAGE_PADDING = `${STORAGE_PREFIX}pagePadding`;
 const KEY_READING_DENSITY = `${STORAGE_PREFIX}readingDensity`;
 const KEY_HIGHLIGHT_STRENGTH = `${STORAGE_PREFIX}highlightStrength`;
+const LEGACY_UI_KEYS = [
+  KEY_FONT_SIZE,
+  KEY_THEME,
+  KEY_LOCALE,
+  KEY_SIDEBAR_OPEN,
+  KEY_SIDEBAR_TAB,
+  KEY_SIDEBAR_WIDTH,
+  KEY_MARGIN_WIDTH,
+  KEY_CONTENT_WIDTH,
+  KEY_PAGE_PADDING,
+  KEY_READING_DENSITY,
+  KEY_HIGHLIGHT_STRENGTH,
+] as const;
 
 const FONT_SIZE_MIN = 10;
 const FONT_SIZE_MAX = 24;
@@ -44,6 +63,8 @@ const HIGHLIGHT_STRENGTHS: readonly HighlightStrength[] = [
   "balanced",
   "strong",
 ];
+const isTauri =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 interface UIPreferences {
   theme: Theme;
@@ -57,6 +78,7 @@ interface UIPreferences {
   pagePadding: PagePadding;
   readingDensity: ReadingDensity;
   highlightStrength: HighlightStrength;
+  shortcuts: ShortcutConfig;
 }
 
 export interface UIState extends UIPreferences {
@@ -74,6 +96,9 @@ export interface UIState extends UIPreferences {
   setPagePadding: (pagePadding: PagePadding) => void;
   setReadingDensity: (readingDensity: ReadingDensity) => void;
   setHighlightStrength: (highlightStrength: HighlightStrength) => void;
+  setShortcut: (command: ShortcutCommand, shortcut: string) => void;
+  resetReadingPreferences: () => void;
+  resetShortcuts: () => void;
   resetPreferences: () => void;
 }
 
@@ -218,7 +243,12 @@ function getDefaultPreferences(): UIPreferences {
     pagePadding: "comfortable",
     readingDensity: "comfortable",
     highlightStrength: "balanced",
+    shortcuts: getDefaultShortcuts(),
   };
+}
+
+function cloneShortcuts(shortcuts: ShortcutConfig): ShortcutConfig {
+  return { ...shortcuts };
 }
 
 function loadPreferences(): UIPreferences {
@@ -254,7 +284,75 @@ function loadPreferences(): UIPreferences {
       HIGHLIGHT_STRENGTHS,
       defaults.highlightStrength,
     ),
+    shortcuts: cloneShortcuts(defaults.shortcuts),
   };
+}
+
+function toUiConfig(state: UIPreferences): UiConfig {
+  return {
+    theme: state.theme,
+    fontSize: clampFontSize(state.fontSize),
+    locale: state.locale,
+    sidebarOpen: state.sidebarOpen,
+    sidebarTab: state.sidebarTab,
+    sidebarWidth: clampSidebarWidth(state.sidebarWidth),
+    annotationMarginWidth: clampMarginWidth(state.marginWidth),
+    contentWidth: state.contentWidth,
+    pagePadding: state.pagePadding,
+    readingDensity: state.readingDensity,
+    highlightStrength: state.highlightStrength,
+    shortcuts: resolveShortcutConfig(state.shortcuts),
+  };
+}
+
+function fromUiConfig(ui: UiConfig): UIPreferences {
+  return {
+    theme: THEMES.includes(ui.theme) ? ui.theme : "light",
+    fontSize: clampFontSize(ui.fontSize),
+    locale: LOCALES.includes(ui.locale) ? ui.locale : detectLocale(),
+    sidebarOpen: ui.sidebarOpen,
+    sidebarTab: SIDEBAR_TABS.includes(ui.sidebarTab) ? ui.sidebarTab : "outline",
+    sidebarWidth: clampSidebarWidth(ui.sidebarWidth),
+    marginWidth: clampMarginWidth(ui.annotationMarginWidth),
+    contentWidth: CONTENT_WIDTHS.includes(ui.contentWidth)
+      ? ui.contentWidth
+      : "standard",
+    pagePadding: PAGE_PADDINGS.includes(ui.pagePadding)
+      ? ui.pagePadding
+      : "comfortable",
+    readingDensity: READING_DENSITIES.includes(ui.readingDensity)
+      ? ui.readingDensity
+      : "comfortable",
+    highlightStrength: HIGHLIGHT_STRENGTHS.includes(ui.highlightStrength)
+      ? ui.highlightStrength
+      : "balanced",
+    shortcuts: resolveShortcutConfig(ui.shortcuts),
+  };
+}
+
+function getReadingDefaults(): Omit<UIPreferences, "shortcuts"> {
+  const defaults = getDefaultPreferences();
+  return {
+    theme: defaults.theme,
+    fontSize: defaults.fontSize,
+    locale: defaults.locale,
+    sidebarOpen: defaults.sidebarOpen,
+    sidebarTab: defaults.sidebarTab,
+    sidebarWidth: defaults.sidebarWidth,
+    marginWidth: defaults.marginWidth,
+    contentWidth: defaults.contentWidth,
+    pagePadding: defaults.pagePadding,
+    readingDensity: defaults.readingDensity,
+    highlightStrength: defaults.highlightStrength,
+  };
+}
+
+function hasLegacyUIPreferences(): boolean {
+  try {
+    return LEGACY_UI_KEYS.some((key) => localStorage.getItem(key) !== null);
+  } catch {
+    return false;
+  }
 }
 
 function applyUIPreferencesToDocument(state: UIState): void {
@@ -386,6 +484,25 @@ export const useUIStore = create<UIState>((set) => ({
     set({ highlightStrength });
   },
 
+  setShortcut: (command, shortcut) =>
+    set((state) => {
+      const nextShortcuts = resolveShortcutConfig({
+        ...state.shortcuts,
+        [command]: shortcut,
+      });
+      return { shortcuts: nextShortcuts };
+    }),
+
+  resetReadingPreferences: () => {
+    const defaults = getReadingDefaults();
+    persistPreferencePatch(defaults);
+    set(defaults);
+  },
+
+  resetShortcuts: () => {
+    set({ shortcuts: getDefaultShortcuts() });
+  },
+
   resetPreferences: () => {
     const defaults = getDefaultPreferences();
     persistPreferencePatch(defaults);
@@ -394,11 +511,57 @@ export const useUIStore = create<UIState>((set) => ({
 }));
 
 let hasDocumentPreferenceSubscription = false;
+let hasUiConfig = false;
+let isApplyingConfig = false;
+let pendingPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleUiConfigPersist(): void {
+  if (!isTauri || !hasUiConfig || isApplyingConfig) return;
+
+  if (pendingPersistTimer != null) {
+    clearTimeout(pendingPersistTimer);
+  }
+
+  pendingPersistTimer = setTimeout(() => {
+    pendingPersistTimer = null;
+    const snapshot = toUiConfig(useUIStore.getState());
+    void useConfigStore.getState().saveUiConfig(snapshot).catch((error) => {
+      console.error("Failed to persist UI settings", error);
+    });
+  }, 150);
+}
+
+export function hydrateUIFromAppConfig(appConfig: AppConfig): void {
+  if (appConfig.status.uiConfigured) {
+    isApplyingConfig = true;
+    const nextPreferences = fromUiConfig(appConfig.ui);
+    persistPreferencePatch(nextPreferences);
+    useUIStore.setState(nextPreferences);
+    isApplyingConfig = false;
+  }
+
+  hasUiConfig = true;
+
+  if (!appConfig.status.uiConfigured && hasLegacyUIPreferences()) {
+    scheduleUiConfigPersist();
+  }
+}
 
 if (typeof document !== "undefined" && !hasDocumentPreferenceSubscription) {
   hasDocumentPreferenceSubscription = true;
+
+  // Apply immediately on load to prevent FOUC.
   applyUIPreferencesToDocument(useUIStore.getState());
+
+  // Debounce subsequent updates via rAF to coalesce rapid state changes
+  // (e.g. holding font-size +/- button) into one reflow per frame.
+  let rafId: number | null = null;
   useUIStore.subscribe((state) => {
-    applyUIPreferencesToDocument(state);
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      applyUIPreferencesToDocument(state);
+    });
+    scheduleUiConfigPersist();
   });
 }

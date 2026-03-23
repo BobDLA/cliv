@@ -15,7 +15,8 @@ const themes: { value: Theme; icon: typeof Sun; titleKey: string }[] = [
  * Active icon gets accent background + white fill; inactive are subtle.
  */
 export const ThemeSwitcher = memo(function ThemeSwitcher() {
-  const { theme, setTheme } = useUIStore();
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
   const t = useT();
 
   return (

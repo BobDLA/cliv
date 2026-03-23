@@ -136,6 +136,24 @@ export interface CliArgs {
   trustedCaller: string | null;
 }
 
+// ─── UI Preferences ───────────────────────────────────────
+
+export type Theme = "dark" | "dim" | "light";
+export type SidebarTab = "outline" | "history";
+export type ContentWidth = "narrow" | "standard" | "wide";
+export type PagePadding = "compact" | "comfortable" | "airy";
+export type ReadingDensity = "compact" | "comfortable" | "relaxed";
+export type HighlightStrength = "subtle" | "balanced" | "strong";
+export type ShortcutCommand =
+  | "openFile"
+  | "search"
+  | "submitReturn"
+  | "submitAnnotation"
+  | "addAnnotation"
+  | "fontIncrease"
+  | "fontDecrease"
+  | "fontReset";
+
 // ─── App Config ───────────────────────────────────────────
 
 export interface LaunchConfig {
@@ -151,9 +169,50 @@ export interface PromptConfig {
   iterateHeaderEn: string | null;
 }
 
+export interface ShortcutConfig {
+  openFile: string;
+  search: string;
+  submitReturn: string;
+  submitAnnotation: string;
+  addAnnotation: string;
+  fontIncrease: string;
+  fontDecrease: string;
+  fontReset: string;
+}
+
+export interface UiConfig {
+  theme: Theme;
+  fontSize: number;
+  locale: "zh" | "en";
+  sidebarOpen: boolean;
+  sidebarTab: SidebarTab;
+  sidebarWidth: number;
+  annotationMarginWidth: number;
+  contentWidth: ContentWidth;
+  pagePadding: PagePadding;
+  readingDensity: ReadingDensity;
+  highlightStrength: HighlightStrength;
+  shortcuts: ShortcutConfig;
+}
+
+export interface AppConfigStatus {
+  path: string;
+  exists: boolean;
+  launchConfigured: boolean;
+  promptsConfigured: boolean;
+  uiConfigured: boolean;
+}
+
+export interface SaveAppConfigInput {
+  prompts?: PromptConfig | null;
+  ui?: UiConfig | null;
+}
+
 export interface AppConfig {
   launch: LaunchConfig;
   prompts: PromptConfig;
+  ui: UiConfig;
+  status: AppConfigStatus;
 }
 
 // ─── Selection ────────────────────────────────────────────
@@ -163,15 +222,6 @@ export interface SelectionInfo {
   range: AnnotationRange;
   rect: { top: number; left: number; bottom: number; width: number };
 }
-
-// ─── UI Preferences ───────────────────────────────────────
-
-export type Theme = "dark" | "dim" | "light";
-export type SidebarTab = "outline" | "history";
-export type ContentWidth = "narrow" | "standard" | "wide";
-export type PagePadding = "compact" | "comfortable" | "airy";
-export type ReadingDensity = "compact" | "comfortable" | "relaxed";
-export type HighlightStrength = "subtle" | "balanced" | "strong";
 
 // ─── Return / Write-back ──────────────────────────────────
 

@@ -1,12 +1,15 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AnnotationPopup } from "@/features/annotations/AnnotationPopup";
 import { ReturnBuilder } from "@/features/return/ReturnBuilder";
+import { DEFAULT_SHORTCUTS } from "@/lib/shortcuts";
 import { resolvePromptHeader } from "@/lib/promptTemplates";
 import {
   useAnnotationStore,
   useConfigStore,
   useDocumentStore,
   useReturnStore,
+  useSelectionStore,
   useUIStore,
 } from "@/stores";
 
@@ -34,7 +37,8 @@ describe("ReturnBuilder", () => {
 
     useAnnotationStore.getState().clearAnnotations();
     useReturnStore.getState().reset();
-    useConfigStore.setState({ appConfig: null, promptConfig: null });
+    useSelectionStore.getState().reset();
+    useConfigStore.setState({ appConfig: null, promptConfig: null, configStatus: null });
     useDocumentStore.setState({
       replyContent: null,
       targetContent: null,
@@ -48,10 +52,12 @@ describe("ReturnBuilder", () => {
       isLoading: false,
       error: null,
     });
+    useUIStore.getState().resetPreferences();
     useUIStore.setState({
       theme: "light",
       fontSize: 18,
       locale: "en",
+      shortcuts: { ...DEFAULT_SHORTCUTS },
     });
   });
 
@@ -152,6 +158,100 @@ describe("ReturnBuilder", () => {
     });
 
     expect(saveReviewArchiveMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores repeated clicks while a submit is already in progress", async () => {
+    let resolveWriteBack: ((value: "clipboard") => void) | undefined;
+    writeBackMock.mockImplementation(
+      () =>
+        new Promise<"clipboard">((resolve) => {
+          resolveWriteBack = resolve;
+        }),
+    );
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        reply: "# Current reply",
+        target: null,
+        targetPath: null,
+        reviewPath: "/tmp/reply.md",
+        replyPath: "/tmp/reply.md",
+        workspacePath: "/tmp/workspace",
+      });
+    });
+
+    render(<ReturnBuilder />);
+
+    const submitButton = screen.getByTestId("return-submit");
+    fireEvent.click(submitButton);
+    fireEvent.click(submitButton);
+
+    expect(writeBackMock).toHaveBeenCalledTimes(1);
+    expect(saveReviewArchiveMock).not.toHaveBeenCalled();
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("return-status-pending")).toHaveTextContent(
+      "Copying and saving",
+    );
+
+    if (!resolveWriteBack) {
+      throw new Error("writeBack resolver was not captured");
+    }
+
+    const resolvePendingWriteBack: (value: "clipboard") => void = resolveWriteBack;
+    await act(async () => {
+      resolvePendingWriteBack("clipboard");
+    });
+
+    await waitFor(() => {
+      expect(saveReviewArchiveMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps the same output locked after a successful clipboard submit until content changes", async () => {
+    writeBackMock.mockResolvedValue("clipboard");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    act(() => {
+      useDocumentStore.getState().setDocument({
+        reply: "# Current reply",
+        target: null,
+        targetPath: null,
+        reviewPath: "/tmp/reply.md",
+        replyPath: "/tmp/reply.md",
+        workspacePath: "/tmp/workspace",
+      });
+    });
+
+    render(<ReturnBuilder />);
+
+    const submitButton = screen.getByTestId("return-submit");
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(writeBackMock).toHaveBeenCalledTimes(1);
+      expect(saveReviewArchiveMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(submitButton).toBeDisabled();
+    expect(screen.getByTestId("return-status-success")).toHaveTextContent(
+      "Copied to clipboard",
+    );
+
+    fireEvent.click(submitButton);
+
+    expect(writeBackMock).toHaveBeenCalledTimes(1);
+    expect(saveReviewArchiveMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByTestId("return-free-edit"), {
+      target: { value: "Adjusted after the first submit" },
+    });
+
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId("return-status-success")).not.toBeInTheDocument();
   });
 
   it("archives standalone open-file reviews under the opened file folder", async () => {
@@ -275,4 +375,58 @@ describe("ReturnBuilder", () => {
       `${iterateHeader}\n\n${replyHeader}\n\nKeep the response focused on the failing test.`,
     );
   });
+
+  it("submits the return builder on the shared Mod+Enter shortcut when no annotation popup is active", async () => {
+    writeBackMock.mockResolvedValue("written");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+
+    render(<ReturnBuilder />);
+
+    fireEvent.keyDown(document, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(writeBackMock).toHaveBeenCalled();
+    });
+  });
+
+  it("lets annotation submit win over return submit when both use Mod+Enter", async () => {
+    writeBackMock.mockResolvedValue("written");
+    saveReviewArchiveMock.mockResolvedValue(undefined);
+    useSelectionStore.setState({
+      selection: {
+        quote: "reply",
+        range: {
+          startOffset: 0,
+          endOffset: 5,
+          contextSnippet: "reply",
+        },
+        rect: {
+          top: 12,
+          left: 24,
+          bottom: 36,
+          width: 120,
+        },
+      },
+      showPopup: true,
+      popupKind: "comment",
+      draftComment: "",
+    });
+
+    render(
+      <>
+        <ReturnBuilder />
+        <AnnotationPopup />
+      </>,
+    );
+
+    const textarea = await screen.findByTestId("annotation-popup-textarea");
+    fireEvent.change(textarea, { target: { value: "First note" } });
+    fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(useAnnotationStore.getState().annotations).toHaveLength(1);
+    });
+    expect(writeBackMock).not.toHaveBeenCalled();
+  });
+
 });
