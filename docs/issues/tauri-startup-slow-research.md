@@ -4,7 +4,7 @@
 
 关联输入：
 - `docs/doc/issue_tauri_startup_slow.md`
-- `issues/gnome-window-activation.md`
+- `docs/issues/gnome-window-activation.md`
 
 归档说明（2026-03-20）：
 - 本文保留了 `daemon-hot-restart` 相关实验的分析上下文
@@ -280,7 +280,7 @@ WebView 已经出来
 
 ### 2. 但 GNOME 下窗口激活是另一类问题
 
-已有文档 `issues/gnome-window-activation.md` 已经说明：
+已有文档 `docs/issues/gnome-window-activation.md` 已经说明：
 
 - `show() + set_focus()` 在 GNOME 下不可靠
 - 这一轮实测里 `activation_token=false`
@@ -695,7 +695,7 @@ daemon 能避免重复冷启动，但在 GNOME 下会引入新的窗口激活问
 
 本地：
 - `docs/doc/issue_tauri_startup_slow.md`
-- `issues/gnome-window-activation.md`
+- `docs/issues/gnome-window-activation.md`
 - `src-tauri/src/lib.rs`
 - `src-tauri/src/main.rs`
 - `src-tauri/src/commands/files.rs`

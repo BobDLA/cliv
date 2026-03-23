@@ -6,167 +6,95 @@
 
 **[中文版](README.zh-CN.md)**
 
-**cliV** — A desktop reviewer launched from the CLI, for reading long AI agent replies and Markdown drafts.
-Read, annotate, then write back when there's an explicit or trusted write target; copy the result when there isn't.
+cliV is a desktop review surface for long AI agent replies. Use it as `$EDITOR` from Codex, Claude Code, or Gemini CLI to read rich Markdown, annotate exact passages, aggregate feedback, and send the result back by write-back or clipboard.
 
-<!-- TODO: Add hero screenshot -->
-<!-- ![cliV screenshot](docs/media/hero.png) -->
+## Why cliV
 
-## Why cliV?
+Terminal agents are good at generating long structured replies. They are not good at close review. cliV keeps the coding loop in the terminal and moves only the review step into a desktop GUI when a reply needs careful inspection.
 
-AI coding agents (Codex, Claude Code, Gemini CLI) produce long, structured replies — but you're reading them in a terminal. That's fine for 20 lines, painful for 500.
+## Core Workflow
 
-When your agent invokes `$EDITOR` (commonly `Ctrl+G`, but depends on agent and config), **cliV** opens a desktop GUI better suited for review:
+1. Your agent hook caches each finished reply with `cliv cache-codex`, `cliv cache-claude`, or `cliv cache-gemini`.
+2. The agent triggers `$EDITOR` for review, commonly `Ctrl+G` depending on the tool and config.
+3. cliV loads the latest reply, renders it as Markdown, and lets you annotate by text selection.
+4. cliV aggregates the annotations and either writes back to the current target or copies the result to the clipboard.
 
-- **Review** — full Markdown + Mermaid diagram rendering, no more plain text
-- **Annotate** — select exact passages to add comments instead of writing vague follow-ups
-- **Write back** — write back to the active write target when available, fall back to clipboard otherwise
-- **Open** — also open local Markdown files for standalone review
+## What cliV Supports
+
+- Rich Markdown review for headings, tables, code blocks, and Mermaid diagrams
+- Selection-based annotations with multi-annotation aggregation
+- Direct write-back when an explicit or trusted target exists
+- Clipboard fallback when no write target is available
+- Standalone review for local `.md`, `.markdown`, and `.txt` files
+- Unified cliV-owned settings in `~/.cliv/config.toml`
 
 ## Supported Agents
 
-| Agent | Integration | Hook Command |
-|---|---|---|
-| [Codex](https://github.com/openai/codex) | `notify` hook | `cliv cache-codex` |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `Stop` hook | `cliv cache-claude` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `AfterAgent` hook | `cliv cache-gemini` |
-
-`cache-codex` receives JSON via CLI arguments; `cache-claude` and `cache-gemini` read JSON from stdin. Gemini also relies on `GEMINI_SESSION_ID`.
+| Agent | Hook | Cache Command | Input Shape |
+|---|---|---|---|
+| [Codex](https://github.com/openai/codex) | `notify` | `cliv cache-codex` | JSON via CLI argument |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `Stop` | `cliv cache-claude` | JSON via stdin |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `AfterAgent` | `cliv cache-gemini` | JSON via stdin plus `GEMINI_SESSION_ID` |
 
 ## Install
 
-### Download (recommended)
+Download the latest assets from [GitHub Releases](https://github.com/BobDLA/cliv/releases). The current release workflow publishes platform builds for Linux, macOS, and Windows.
 
-Grab the latest release from [GitHub Releases](https://github.com/BobDLA/cliv/releases):
-
-- **Linux**: `.deb` package or standalone binary
+To build from source:
 
 ```bash
-# Install .deb
-sudo dpkg -i cliv_0.2.0_amd64.deb
-
-# Or copy the binary directly
-cp cliv ~/.local/bin/
-```
-
-### Build from source
-
-```bash
-# Prerequisites: Node.js 20+, Rust 1.75+, pnpm
 git clone https://github.com/BobDLA/cliv.git
 cd cliv
 pnpm install
 pnpm tauri build
-# Binary at src-tauri/target/release/cliv
 ```
 
-### Set up as your `$EDITOR`
+Prerequisites: Node.js 20+, Rust stable, and pnpm.
+
+## Quick Setup
+
+Set cliV as your editor:
 
 ```bash
-# Add to ~/.bashrc or ~/.zshrc
 export EDITOR="cliv"
 ```
 
-Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit arguments, you can also pass `--target <file>`. Then configure your agent hooks — see [docs/integrations.md](docs/integrations.md) for details.
+Then configure the hook for your agent. Detailed setup lives in [docs/integrations.md](docs/integrations.md).
 
-## Quick Start
+## Launch Semantics
 
-1. Start your AI agent (Codex, Claude Code, or Gemini CLI)
-2. Have a conversation that generates a long reply
-3. Trigger the agent's `$EDITOR` flow (commonly `Ctrl+G`, but depends on agent / config)
-4. cliV opens with the agent's latest reply rendered as rich Markdown
-5. Select text → annotate → aggregate → write back or copy the result
+- `cliv file.md` opens the file in review mode
+- `cliv --target draft.md` or `cliv -t draft.md` uses `draft.md` as the explicit write-back target
+- `cliv --compose draft.md` remains as a compatibility alias for `--target`
+- `CLIV_AGENT=codex|claude|gemini` is only needed when you want to override auto-detection
 
-## Features
+cliV writes back directly only when an explicit target exists or the launch comes from a trusted caller. Otherwise it falls back to the clipboard.
 
-- 📖 **Rich Markdown rendering** — headings, code blocks, tables, Mermaid diagrams
-- ✏️ **Selection-based annotations** — highlight passages and add comments (in-text highlights rely on CSS Highlight API)
-- 📋 **Write-back flow** — aggregate annotations into a prompt, then write back or copy
-- 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
-- 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
-- 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
-- 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
+## Configuration Boundary
 
-## Notes
+cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompts, reading preferences, and supported in-app shortcuts. Agent hook files remain owned by Codex, Claude Code, and Gemini CLI, and cliV does not rewrite them directly.
 
-- **Launch semantics** — `cliv <file.md>` opens that file for review. `cliv --target <file>`, `cliv -t <file>`, and the compatibility alias `cliv --compose <file>` treat the file as the write target.
-- **Write-back behavior** — cliV writes back directly only when an explicit target is present or the launch comes from a trusted caller; otherwise it falls back to clipboard.
-- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
-- **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
-- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
-- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory.
-- **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
-- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
-- **Logging** — on non-Windows systems, cliV may write diagnostic logs to `/tmp/cliv.log`.
+## Documentation
 
-### Example `~/.cliv/config.toml`
+- [Quick overview and demo](docs/demo/overview-and-quickstart.md)
+- [Installation guide](docs/install-guide.md)
+- [Agent integration guide](docs/integrations.md)
+- [Archived issue research](docs/issues/)
 
-```toml
-[launch]
-scan_depth = 5
-trusted_callers = ["codex", "claude", "gemini"]
-ignored_callers = [
-  "bash",
-  "sh",
-  "zsh",
-  "fish",
-  "tmux",
-  "open",
-  "launchd",
-  "cmd.exe",
-  "powershell.exe",
-  "pwsh.exe",
-  "explorer.exe",
-]
+## Development
 
-[prompts]
-reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
-reply_header_en = "Please respond to each annotation below in Markdown."
-iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
-iterate_header_en = "Please make incremental revisions based on the following annotations."
-
-[ui]
-theme = "light"
-font_size = 18
-locale = "en"
-sidebar_open = true
-sidebar_tab = "outline"
-sidebar_width = 224
-annotation_margin_width = 256
-content_width = "standard"
-page_padding = "comfortable"
-reading_density = "comfortable"
-highlight_strength = "balanced"
-
-[ui.shortcuts]
-open_file = "Mod+O"
-search = "Mod+F"
-submit_return = "Mod+Enter"
-submit_annotation = "Mod+Enter"
-add_annotation = "Mod+Alt+M"
-font_increase = "Mod+="
-font_decrease = "Mod+-"
-font_reset = "Mod+0"
+```bash
+pnpm test
+pnpm lint
+pnpm typecheck
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
-
-When `submit_annotation` and `submit_return` share `Mod+Enter`, cliV uses focus priority: annotation submit wins while the annotation editor is active; otherwise the same key falls through to return submit.
 
 ## Tech Stack
 
-- **Frontend**: React 19 + Vite 7 + Zustand + TailwindCSS 4
-- **Backend**: Tauri v2 (Rust)
-- **Rendering**: react-markdown + remark-gfm + Mermaid
-
-## Roadmap
-
-- [ ] Virtual scrolling for large documents
-- [ ] Diff / suggestion mode
-- [x] Standalone review polish (`cliv <file.md>` now stays review-only by default)
-- [x] Cross-platform builds (macOS, Windows)
-- [ ] Plugin system for custom agents
-- [x] Review history (project-grouped archives with read-only replay)
-- [ ] Favorites
-- [ ] Iterative editing mode
+- Frontend: React 19, Vite 7, Zustand, TailwindCSS 4
+- Backend: Tauri v2 with Rust
+- Rendering: `react-markdown`, `remark-gfm`, Mermaid
 
 ## License
 
