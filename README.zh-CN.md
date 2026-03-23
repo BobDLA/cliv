@@ -56,9 +56,12 @@ cp cliv ~/.local/bin/
 git clone https://github.com/BobDLA/cliv.git
 cd cliv
 pnpm install
-pnpm tauri build
+pnpm tauri:build
+# 本地打包命令；在 Linux 上默认走 deb-only 配置
 # 二进制位于 src-tauri/target/release/cliv
 ```
+
+如果要模拟发版链路或自定义 bundle 目标，使用 `pnpm tauri:build:release -- --bundles deb`，也可以按需传入其他 Tauri 构建参数。
 
 ### 设置 `$EDITOR`
 

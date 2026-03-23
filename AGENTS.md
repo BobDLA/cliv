@@ -49,9 +49,17 @@ pnpm tauri:dev        # Dev mode (hot reload)
 pnpm test             # Run Vitest suite
 pnpm lint             # Lint frontend code
 pnpm typecheck        # TypeScript typecheck
-pnpm tauri:build      # Production build
+pnpm tauri:build      # Local package build (Linux defaults to deb-only)
+pnpm tauri:build:release  # Release-oriented package build
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
+
+Build workflow rules:
+- Use `pnpm tauri:dev` for day-to-day local UI / desktop debugging.
+- On Linux, use `pnpm tauri:build` for local package smoke checks; it intentionally defaults to a deb-only bundle profile.
+- Use `pnpm tauri:build:install-deb` only when you need an install-level validation on the local Linux machine.
+- Use `pnpm tauri:build:release -- <tauri args>` for release-parity packaging or custom bundle / target combinations.
+- Keep detailed platform-specific build steps in `docs/build-workflows.md`; do not expand `AGENTS.md` into a full build manual.
 
 ## Branch And Worktree Rules
 

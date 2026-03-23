@@ -80,6 +80,7 @@ pnpm test:e2e
 ```bash
 pnpm test:e2e:desktop
 pnpm tauri:build
+pnpm tauri:build:release -- --bundles deb
 pnpm tauri:build:install-deb
 ```
 

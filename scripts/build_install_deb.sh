@@ -6,7 +6,7 @@ DEB_DIR="$ROOT_DIR/src-tauri/target/release/bundle/deb"
 
 cd "$ROOT_DIR"
 
-pnpm tauri build
+pnpm tauri:build:local
 
 if ! compgen -G "$DEB_DIR/cliv_*_amd64.deb" > /dev/null; then
   echo "No deb package found in: $DEB_DIR" >&2

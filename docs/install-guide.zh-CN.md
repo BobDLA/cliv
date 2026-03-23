@@ -7,12 +7,14 @@
 ```bash
 cd cliv
 pnpm install
-pnpm tauri build
+pnpm tauri:build
 ```
 
 构建产物：
 - **二进制**：`src-tauri/target/release/cliv`
 - **deb 包**：`src-tauri/target/release/bundle/deb/cliv_0.2.0_amd64.deb`
+
+`pnpm tauri:build` 现在是本地打包路径。在 Linux 上它会额外加载一个 deb-only 的 Tauri 覆盖配置，避免日常调试时顺手生成多余 bundle。需要按发版方式打包时，使用 `pnpm tauri:build:release -- <tauri 参数>`。
 
 ## 2. 安装
 
