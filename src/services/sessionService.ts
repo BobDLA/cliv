@@ -1,47 +1,24 @@
 import type { Annotation, ReturnBatch } from "@/types";
+import {
+  deleteSessionRecord,
+  findSessionRecord,
+  listSessionRecords,
+  replaceSessionRecord,
+  updateSessionRecord,
+} from "./sessionService/repository";
+import {
+  sortSessionSummariesByUpdatedAtDesc,
+  toSessionSummary,
+} from "./sessionService/summary";
+import type {
+  SessionRecord,
+  SessionSummary,
+} from "./sessionService/types";
 
-// ─── Session Data Structures ──────────────────────────────
-
-export interface SessionRecord {
-  id: string;
-  name: string;
-  documentPath: string | null;
-  createdAt: string;
-  updatedAt: string;
-  annotations: Annotation[];
-  returns: ReturnBatch[];
-}
-
-export interface SessionSummary {
-  id: string;
-  name: string;
-  documentPath: string | null;
-  createdAt: string;
-  updatedAt: string;
-  annotationCount: number;
-  returnCount: number;
-}
-
-const STORAGE_KEY = "cliv-sessions";
-
-// ─── Persistence Layer (localStorage MVP) ─────────────────
-
-function readAll(): SessionRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeAll(sessions: SessionRecord[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-  } catch (e) {
-    console.error("[SessionService] Failed to persist sessions:", e);
-  }
-}
+export type {
+  SessionRecord,
+  SessionSummary,
+} from "./sessionService/types";
 
 // ─── Public API ───────────────────────────────────────────
 
@@ -49,48 +26,30 @@ function writeAll(sessions: SessionRecord[]): void {
  * List all sessions (summaries only, sorted by updatedAt desc).
  */
 export function listSessions(): SessionSummary[] {
-  return readAll()
-    .map((s) => ({
-      id: s.id,
-      name: s.name,
-      documentPath: s.documentPath,
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt,
-      annotationCount: s.annotations.length,
-      returnCount: s.returns.length,
-    }))
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+  return listSessionRecords()
+    .map(toSessionSummary)
+    .sort(sortSessionSummariesByUpdatedAtDesc);
 }
 
 /**
  * Load a session by ID. Returns null if not found.
  */
 export function loadSession(id: string): SessionRecord | null {
-  return readAll().find((s) => s.id === id) ?? null;
+  return findSessionRecord(id);
 }
 
 /**
  * Save or update a session. If it exists, it's replaced.
  */
 export function saveSession(session: SessionRecord): void {
-  const all = readAll();
-  const idx = all.findIndex((s) => s.id === session.id);
-  if (idx >= 0) {
-    all[idx] = session;
-  } else {
-    all.push(session);
-  }
-  writeAll(all);
+  replaceSessionRecord(session);
 }
 
 /**
  * Delete a session by ID.
  */
 export function deleteSession(id: string): void {
-  writeAll(readAll().filter((s) => s.id !== id));
+  deleteSessionRecord(id);
 }
 
 /**
@@ -123,11 +82,11 @@ export function saveAnnotations(
   sessionId: string,
   annotations: Annotation[],
 ): void {
-  const session = loadSession(sessionId);
-  if (!session) return;
-  session.annotations = annotations;
-  session.updatedAt = new Date().toISOString();
-  saveSession(session);
+  void updateSessionRecord(sessionId, (session) => ({
+    ...session,
+    annotations,
+    updatedAt: new Date().toISOString(),
+  }));
 }
 
 /**
@@ -137,9 +96,9 @@ export function saveReturn(
   sessionId: string,
   batch: ReturnBatch,
 ): void {
-  const session = loadSession(sessionId);
-  if (!session) return;
-  session.returns.push(batch);
-  session.updatedAt = new Date().toISOString();
-  saveSession(session);
+  void updateSessionRecord(sessionId, (session) => ({
+    ...session,
+    returns: [...session.returns, batch],
+    updatedAt: new Date().toISOString(),
+  }));
 }

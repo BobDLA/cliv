@@ -1,12 +1,12 @@
 import { memo, useEffect, useCallback } from "react";
 import { Clock, Trash2, FileText, MessageSquare } from "lucide-react";
-import { useSessionStore, useAnnotationStore, useDocumentStore } from "@/stores";
+import { useSessionStore } from "@/stores";
+import {
+  applyReviewSnapshot,
+  buildSessionReviewSnapshot,
+} from "@/services/reviewSnapshot";
 import type { SessionSummary } from "@/services/sessionService";
 import { useT } from "@/lib/useT";
-import { getPathInfo } from "@/lib/pathUtils";
-
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /**
  * SessionTree — left sidebar component showing saved sessions.
@@ -31,47 +31,9 @@ export const SessionTree = memo(function SessionTree() {
   const handleOpen = useCallback(
     async (id: string) => {
       const session = openSession(id);
-      if (session) {
-        // Restore annotations into the annotation store
-        useAnnotationStore.getState().setAnnotations(session.annotations);
+      if (!session) return;
 
-        if (session.documentPath) {
-          const { baseName, parentPath } = getPathInfo(session.documentPath);
-          if (isTauri) {
-            try {
-              const { readFile } = await import("@/services/tauri-ipc");
-              const content = await readFile(session.documentPath);
-              useDocumentStore.getState().setDocument({
-                reply: content,
-                reviewPath: session.documentPath,
-                target: null,
-                targetPath: null,
-                replyPath: session.documentPath,
-                workspacePath: parentPath,
-                archivedSubmission: null,
-                documentId: baseName || session.documentPath,
-                isReadOnly: false,
-              });
-            } catch {
-              useDocumentStore.getState().setDocument({
-                reviewPath: session.documentPath,
-                workspacePath: parentPath,
-                archivedSubmission: null,
-                documentId: baseName || session.documentPath,
-                isReadOnly: false,
-              });
-            }
-          } else {
-            useDocumentStore.getState().setDocument({
-              reviewPath: session.documentPath,
-              workspacePath: parentPath,
-              archivedSubmission: null,
-              documentId: baseName || session.documentPath,
-              isReadOnly: false,
-            });
-          }
-        }
-      }
+      applyReviewSnapshot(await buildSessionReviewSnapshot(session));
     },
     [openSession],
   );
