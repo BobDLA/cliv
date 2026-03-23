@@ -76,7 +76,7 @@ scripts/new_worktree.sh fix/prompt-header-reseed
 # attach an existing branch to its canonical worktree path
 scripts/new_worktree.sh fix/prompt-header-reseed
 
-# prepare shared pnpm/Cargo/Playwright caches for all worktrees
+# prepare shared pnpm/Playwright caches for all worktrees
 scripts/setup_shared_worktree_cache.sh /mnt/hdd/dev-cache/cliv
 
 # clean up after merge

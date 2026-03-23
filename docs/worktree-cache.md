@@ -23,11 +23,11 @@ The helper creates shared locations for:
 
 - `pnpm store-dir`
 - `PNPM_HOME`
-- `CARGO_HOME`
-- `RUSTUP_HOME`
 - `PLAYWRIGHT_BROWSERS_PATH`
 
 When `pnpm` is already installed, the script also configures the global `pnpm store-dir` for you.
+
+The helper intentionally does not rewrite `CARGO_HOME` or `RUSTUP_HOME`. Pointing those homes at a brand-new directory can break an existing Rust toolchain install, so cliV leaves Rust's default homes alone unless you migrate them yourself on purpose.
 
 ## Per-Worktree Rule
 

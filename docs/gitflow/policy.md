@@ -33,7 +33,7 @@ scripts/cleanup_worktree.sh fix/prompt-header-reseed --remote
 Shared cache rule:
 
 - Share cache layers across worktrees, not `node_modules`.
-- Use `scripts/setup_shared_worktree_cache.sh <shared-root>` to prepare shared `pnpm`, Cargo/Rustup, and Playwright cache locations.
+- Use `scripts/setup_shared_worktree_cache.sh <shared-root>` to prepare shared `pnpm` and Playwright cache locations.
 - Keep the shared cache root on the same filesystem as the worktrees when possible so `pnpm` can hardlink efficiently.
 - See `docs/worktree-cache.md` for the full setup.
 
