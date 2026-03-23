@@ -88,16 +88,12 @@ export EDITOR="cliv"
 - 🔄 **多 Agent 支持** — 尽力自动识别 Codex / Claude / Gemini，也可用 `CLIV_AGENT` 强制指定
 - 📂 **打开本地 Markdown** — 既能审阅缓存回复，也能直接打开 `.md` 文件，且默认按只读审阅处理
 - 🎛️ **统一设置** — 在同一个设置面板中管理 Reading、Prompts、Shortcuts、Integrations，并统一持久化到 `~/.cliv/config.toml`
-- 🎛️ **统一设置** — 在同一个设置面板中管理 Reading、Prompts、Shortcuts、Integrations，并统一持久化到 `~/.cliv/config.toml`
 
 ## 说明
 
 - **启动语义** — `cliv <file.md>` 会把文件当作审阅内容打开；`cliv --target <file>`、`cliv -t <file>` 和兼容别名 `cliv --compose <file>` 会把文件当作写回目标。
 - **写回行为** — 只有存在显式目标或命中受信调用方时，cliV 才会直接写回；否则回退到剪贴板。
 - **本地存储** — 集成 hook 会把回复缓存在各 Agent 的 `reply_cache` 目录下；会话数据目前也只保存在本地。
-- **设置边界** — cliV 自己的 durable settings 统一保存在 `~/.cliv/config.toml`，包括 launch policy、prompt headers、阅读偏好和受支持的应用级快捷键。外部 hook 文件仍归各 agent CLI 自己管理。
-- **自动识别** — Agent 识别依赖环境变量和进程启发式；如需强制指定，可设置 `CLIV_AGENT=codex|claude|gemini`。受信调用方、忽略调用方、扫描深度、prompt headers 和受支持的 settings-backed shortcuts 都可在 `~/.cliv/config.toml` 中配置。
-- **本地存储** — 集成 hook 会把回复缓存在各 Agent 的 `reply_cache` 目录下。
 - **设置边界** — cliV 自己的 durable settings 统一保存在 `~/.cliv/config.toml`，包括 launch policy、prompt headers、阅读偏好和受支持的应用级快捷键。外部 hook 文件仍归各 agent CLI 自己管理。
 - **自动识别** — Agent 识别依赖环境变量和进程启发式；如需强制指定，可设置 `CLIV_AGENT=codex|claude|gemini`。受信调用方、忽略调用方、扫描深度、prompt headers 和受支持的 settings-backed shortcuts 都可在 `~/.cliv/config.toml` 中配置。
 - **日志** — 在非 Windows 系统上，cliV 可能会把诊断日志写到 `/tmp/cliv.log`。
