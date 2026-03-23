@@ -94,9 +94,10 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - **Launch semantics** — `cliv <file.md>` opens that file for review. `cliv --target <file>`, `cliv -t <file>`, and the compatibility alias `cliv --compose <file>` treat the file as the write target.
 - **Write-back behavior** — cliV writes back directly only when an explicit target is present or the launch comes from a trusted caller; otherwise it falls back to clipboard.
 - **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
+- **Contributor docs** — see [docs/demo/demo.md](docs/demo/demo.md) for the architecture showcase, [docs/testing-standard.md](docs/testing-standard.md) for validation rules, [docs/build-workflows.md](docs/build-workflows.md) for package/build paths, [docs/worktree-cache.md](docs/worktree-cache.md) for shared worktree cache setup, [docs/refactoring_governance.md](docs/refactoring_governance.md) for refactor scope, [docs/refactor-backlog.md](docs/refactor-backlog.md) for the executed backlog, and [docs/session-history-boundary.md](docs/session-history-boundary.md) for the shared restore boundary.
 - **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
 - **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
-- **Logging** — on non-Windows systems, cliV may write diagnostic logs to `/tmp/cliv.log`.
+- **Logging** — on non-Windows systems, cliV may write diagnostic logs to `~/.cliv/cliv.log`.
 
 ### Example `~/.cliv/config.toml`
 

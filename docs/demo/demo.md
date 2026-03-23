@@ -37,7 +37,7 @@ AI coding agents like **Codex**, **Claude Code**, and **Gemini CLI** produce lon
 | ✏️ Annotations | Select exact passages, add inline comments |
 | 📋 Write-back | Aggregate annotations → write back or copy |
 | 🔄 Multi-agent | Auto-detect Codex / Claude / Gemini |
-| 🗂️ Sessions | Persist review snapshots locally |
+| 🗂️ Sessions & History | Saved sessions stay local; submitted reviews replay from grouped history |
 | 🎛️ Reading Settings | One surface for theme, font size, layout memory, and reading presets |
 
 ### Design Philosophy
@@ -46,7 +46,7 @@ AI coding agents like **Codex**, **Claude Code**, and **Gemini CLI** produce lon
 
 cliV follows three core principles:
 
-1. **Zero-friction integration** — drop-in `$EDITOR` replacement, no configuration files needed
+1. **Low-friction integration** — works as a direct `$EDITOR` reviewer, with optional hook setup for agent reply capture
 2. **Defensive reliability** — atomic writes, graceful fallbacks, defensive error handling
 3. **Agent-aware intelligence** — auto-detects which agent launched it and finds the correct reply
 
@@ -72,7 +72,8 @@ graph TB
         DETECT["Agent Detector"]
         EXTRACT["Reply Extractors"]
         CMD_FILES["File Commands"]
-        CMD_SESS["Session Commands"]
+        CMD_HIST["History Commands"]
+        CMD_CFG["Config Commands"]
     end
 
     subgraph "React Frontend"
@@ -80,13 +81,15 @@ graph TB
         DOC["Document Viewer"]
         ANN["Annotation Layer"]
         RET["Return Flow"]
-        SESS["Session Manager"]
+        NAV["History / Restore UI"]
+        PREFS["Personalization Panel"]
     end
 
     subgraph "Storage"
         FS_CACHE["~/.codex/reply_cache<br/>~/.claude/reply_cache<br/>~/.gemini/reply_cache"]
-        FS_SESS["~/.cliv/sessions"]
-        FS_ANN["~/.cliv/annotations"]
+        LS_SESS["browser localStorage<br/>(cliv-sessions)"]
+        FS_HIST["~/.cliv/history/archive/"]
+        FS_CFG["~/.cliv/config.toml"]
         CLIPBOARD["System Clipboard"]
     end
 
@@ -100,13 +103,18 @@ graph TB
     EXTRACT --> CMD_FILES
 
     CMD_FILES <-->|"IPC"| DOC
-    CMD_SESS <-->|"IPC"| SESS
+    CMD_HIST <-->|"IPC"| NAV
+    CMD_CFG <-->|"IPC"| PREFS
     CACHE --> FS_CACHE
-    CMD_SESS --> FS_SESS
+    NAV -->|"saved sessions"| LS_SESS
+    CMD_HIST --> FS_HIST
+    CMD_CFG --> FS_CFG
 
+    NAV -->|"restore snapshot"| DOC
     DOC --> ANN
     ANN --> RET
     RET -->|"write-back"| CMD_FILES
+    RET -->|"archive review"| CMD_HIST
     RET -->|"fallback"| CLIPBOARD
 ```
 
@@ -163,7 +171,7 @@ Each supported AI agent has a unique hook mechanism. cliV normalizes these into 
 
 | Agent | Hook Type | Trigger | Data Source | Cache Key |
 |:---|:---|:---|:---|:---|
-| Codex | `notify` | `agent-turn-complete` | CLI argument (JSON) | `thread_id` + PID |
+| Codex | `notify` | `agent-turn-complete` | CLI argument (JSON) | PID cache key + sidecar thread metadata |
 | Claude Code | `Stop` | `Stop` event | stdin (JSON) | `session_id` + PID |
 | Gemini CLI | `AfterAgent` | After agent response | stdin (JSON) | `GEMINI_SESSION_ID` + PID |
 
@@ -228,13 +236,14 @@ flowchart TD
     CHECK_SUB -->|"cache-gemini"| GEMINI_CACHE["CacheGemini Mode<br/>Read stdin"]
     CHECK_SUB -->|"No"| GUI_MODE["GUI Mode"]
 
-    GUI_MODE --> DETECT["detect_agent()"]
-    DETECT --> PARSE_ARGS["Parse remaining args:<br/>--compose, --metadata, file"]
+    GUI_MODE --> DETECT["detect_agent() + detect_trusted_caller()"]
+    DETECT --> PARSE_ARGS["Parse remaining args:<br/>--compose / --target / -t, --metadata, file"]
+    PARSE_ARGS --> RESOLVE["resolve_launch_paths()<br/>reviewPath vs targetPath"]
 
     CODEX_CACHE --> EXIT_0["Exit 0"]
     CLAUDE_CACHE --> EXIT_0
     GEMINI_CACHE --> EXIT_0
-    PARSE_ARGS --> LAUNCH["Launch Tauri Window"]
+    RESOLVE --> LAUNCH["Launch Tauri Window"]
 
     style CODEX_CACHE fill:#e8f5e9
     style CLAUDE_CACHE fill:#e3f2fd
@@ -250,54 +259,71 @@ flowchart TD
 pub enum CliMode {
     /// Launch the Tauri GUI (default).
     Gui,
-    /// Cache a Codex reply: `cliv cache-codex '<json>'`
+    /// Cache a Codex reply from notify hook: `cliv cache-codex '<json>'`
     CacheCodex(String),
-    /// Cache a Claude reply (stdin): `cliv cache-claude`
+    /// Cache a Claude reply from Stop hook (stdin): `cliv cache-claude`
     CacheClaude,
-    /// Cache a Gemini reply (stdin): `cliv cache-gemini`
+    /// Cache a Gemini reply from AfterAgent hook (stdin): `cliv cache-gemini`
     CacheGemini,
 }
 
-/// CLI arguments for GUI mode.
-#[derive(Debug, Clone, Serialize)]
+/// CLI arguments parsed from `std::env::args()` and environment variables.
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliArgs {
-    pub compose_path: Option<String>,
+    pub review_path: Option<String>,
+    pub target_path: Option<String>,
     pub metadata_path: Option<String>,
     pub file_path: Option<String>,
+    pub workspace_path: Option<String>,
     pub agent: Option<String>,
+    pub trusted_caller: Option<String>,
 }
 ```
 
 ### Argument Parsing Logic
 
 ```rust
-// Parse positional and named arguments
-let mut i = 1;
+let mut metadata_path = None;
+let mut explicit_target = None;
+let mut positional_path = None;
+
+let mut i = 0;
 while i < argv.len() {
     match argv[i].as_str() {
         "--metadata" => {
-            args.metadata_path = Some(argv[i + 1].clone());
-            i += 2;
+            if i + 1 < argv.len() {
+                metadata_path = Some(argv[i + 1].clone());
+                i += 2;
+            } else {
+                i += 1;
+            }
         }
-        "--compose" => {
-            args.compose_path = Some(argv[i + 1].clone());
-            i += 2;
+        "--compose" | "--target" | "-t" => {
+            if i + 1 < argv.len() {
+                explicit_target = Some(argv[i + 1].clone());
+                i += 2;
+            } else {
+                i += 1;
+            }
         }
-        arg if !arg.starts_with('-') => {
-            // First positional arg = file path
-            if args.file_path.is_none() {
-                args.file_path = Some(arg.to_string());
-                // Also set as compose target if not explicit
-                if args.compose_path.is_none() {
-                    args.compose_path = Some(arg.to_string());
-                }
+        arg if arg.starts_with('-') => {
+            i += 1;
+        }
+        arg => {
+            if positional_path.is_none() {
+                positional_path = Some(arg.to_string());
             }
             i += 1;
         }
-        _ => { i += 1; }
     }
 }
+
+let (review_path, target_path) = resolve_launch_paths(
+    positional_path.clone(),
+    explicit_target,
+    trusted_caller.clone(),
+);
 ```
 
 ---
@@ -482,6 +508,7 @@ graph TB
         APP_COMP["App Component"]
         HOOKS["Custom Hooks"]
         LAYOUT["Layout Components"]
+        PREFS["Settings Panel<br/>(PersonalizationPanel)"]
     end
 
     subgraph "Feature Modules (src/features/)"
@@ -489,6 +516,7 @@ graph TB
         F_ANN["✏️ annotations/"]
         F_RET["📋 return/"]
         F_HIS["🗂️ history/"]
+        F_SESS["💾 sessions/"]
     end
 
     subgraph "Services (src/services/)"
@@ -505,78 +533,88 @@ graph TB
         S_SEL["selectionStore"]
         S_RET["returnStore"]
         S_SESS["sessionStore"]
+        S_HIS["historyStore"]
         S_UI["uiStore"]
+        S_CFG["configStore"]
     end
 
     MAIN --> APP_COMP
     APP_COMP --> LAYOUT
     APP_COMP --> HOOKS
+    APP_COMP --> PREFS
 
     LAYOUT --> F_DOC
     LAYOUT --> F_ANN
     LAYOUT --> F_RET
-    LAYOUT --> F_SESS
+    LAYOUT --> F_HIS
 
     F_DOC --> S_DOC
     F_DOC --> SVC_IPC
     F_ANN --> S_ANN
     F_ANN --> S_SEL
     F_RET --> S_RET
+    F_RET --> SVC_WB
+    F_RET --> SVC_HIS
+    F_HIS --> S_HIS
+    F_HIS --> SVC_HIS
     F_SESS --> S_SESS
     F_SESS --> SVC_SESS
     F_SESS --> SVC_SNAP
 
+    PREFS --> S_UI
+    PREFS --> S_CFG
     SVC_IPC --> S_DOC
-    SVC_WB --> S_RET
-    SVC_SESS --> S_SESS
     SVC_SNAP --> S_DOC
     SVC_SNAP --> S_ANN
     SVC_SNAP --> S_SEL
     SVC_SNAP --> S_RET
+    SVC_SNAP --> S_HIS
 
     style F_DOC fill:#e3f2fd
     style F_ANN fill:#e8f5e9
     style F_RET fill:#fff3e0
-    style F_SESS fill:#f3e5f5
+    style F_HIS fill:#f3e5f5
+    style F_SESS fill:#ede7f6
 ```
 
 ### Component Tree
 
 ```mermaid
 graph TD
-    APP["App"] --> TOOLBAR["Toolbar"]
-    APP --> SPLIT["Split View"]
-    APP --> STATUS["Status Bar"]
+    APP["App"] --> TOPBAR["TopBar"]
+    APP --> LEFT["LeftSidebar"]
+    APP --> DOC_AREA["DocumentArea"]
+    APP --> PREFS["PersonalizationPanel"]
 
-    SPLIT --> DOC_PANEL["Document Panel"]
-    SPLIT --> SIDE_PANEL["Side Panel"]
+    LEFT --> OUTLINE_TAB["DocumentOutline"]
+    LEFT --> HISTORY_TAB["HistoryTree"]
+    HISTORY_TAB --> HISTORY_GROUP["Workspace groups + archived reviews"]
 
-    DOC_PANEL --> MD_RENDERER["Markdown Renderer<br/>(react-markdown)"]
-    DOC_PANEL --> HIGHLIGHT["Highlight Overlay<br/>(CSS Highlight API)"]
-    DOC_PANEL --> BUBBLE["ParagraphBubble<br/>(annotation triggers)"]
+    DOC_AREA --> READONLY["Read-only replay banner"]
+    DOC_AREA --> MD_RENDERER["MarkdownViewer<br/>(react-markdown)"]
+    DOC_AREA --> OVERLAY["AnnotationOverlay<br/>(CSS Highlight API)"]
+    DOC_AREA --> SELECTION["SelectionCatcher"]
+    DOC_AREA --> HOVER["AnnotationHoverActions"]
+    DOC_AREA --> BUBBLE["ParagraphBubble"]
+    DOC_AREA --> POPUP["AnnotationPopup"]
+    DOC_AREA --> ANN_LIST["AnnotationList<br/>(right margin)"]
+    DOC_AREA --> RETURN["ReturnBuilder<br/>(bottom split panel)"]
 
     MD_RENDERER --> MERMAID["Mermaid Diagrams"]
     MD_RENDERER --> CODE_BLOCK["Code Highlight"]
     MD_RENDERER --> TABLE["Table Renderer"]
 
-    SIDE_PANEL --> ANN_LIST["Annotation List"]
-    SIDE_PANEL --> SESS_LIST["Session List"]
-    SIDE_PANEL --> OVERVIEW["Overview Panel"]
-
-    ANN_LIST --> ANN_CARD["Annotation Card"]
-    ANN_CARD --> ANN_EDITOR["Inline Editor"]
-
-    TOOLBAR --> THEME_BTN["Theme Switch"]
-    TOOLBAR --> FONT_BTN["Font Scale"]
-    TOOLBAR --> WRITE_BTN["Write Back"]
-    TOOLBAR --> COPY_BTN["Copy Result"]
+    TOPBAR --> FILE_BTN["Open file"]
+    TOPBAR --> SIDEBAR_BTN["Toggle sidebar"]
+    TOPBAR --> SETTINGS_BTN["Open settings"]
+    RETURN --> SUBMIT_BTN["Submit / write back"]
 ```
 
 ---
 
 ## State Management Deep Dive
 
-cliV uses **Zustand** for state management with 6 independent stores, each responsible for a single domain.
+cliV uses **Zustand** for state management with 8 focused stores, each responsible for a single domain.
 
 ### Store Topology
 
@@ -587,9 +625,10 @@ graph LR
         AS["annotationStore<br/>✏️ Annotations"]
         SS["selectionStore<br/>🔍 Text Selection"]
         RS["returnStore<br/>📋 Write-back"]
-        SES["sessionStore<br/>🗂️ Sessions"]
+        SES["sessionStore<br/>💾 Saved Sessions"]
         HS["historyStore<br/>🗃️ Archive Replay"]
         UI["uiStore<br/>🎨 Theme + UI"]
+        CFG["configStore<br/>⚙️ App Config"]
     end
 
     SNAP["reviewSnapshot.ts<br/>restore seam"]
@@ -603,27 +642,37 @@ graph LR
     SNAP -->|"apply annotation state"| AS
     SNAP -->|"replay reset only"| SS
     SNAP -->|"replay reset only"| RS
-    UI -->|"theme/scale"| DS
+    SNAP -->|"archive selection"| HS
+    CFG -->|"loads/saves ui config"| UI
+    UI -->|"theme/layout prefs"| DS
 ```
 
 ### Document Store
 
 ```typescript
 interface DocumentState {
-  replyContent: string | null;    // The agent's reply (Markdown)
-  composeContent: string | null;  // Editor compose content
-  composePath: string | null;     // File path for write-back
-  replyPath: string | null;       // Path to cached reply
-  documentId: string;             // Unique document identifier
+  replyContent: string | null;
+  targetContent: string | null;
+  targetPath: string | null;
+  reviewPath: string | null;
+  replyPath: string | null;
+  workspacePath: string | null;
+  archivedSubmission: SubmissionRecord | null;
+  documentId: string;
+  isReadOnly: boolean;
   isLoading: boolean;
   error: string | null;
 
   setDocument: (opts: {
     reply?: string | null;
-    compose?: string | null;
-    composePath?: string | null;
+    target?: string | null;
+    targetPath?: string | null;
+    reviewPath?: string | null;
     replyPath?: string | null;
+    workspacePath?: string | null;
+    archivedSubmission?: SubmissionRecord | null;
     documentId?: string;
+    isReadOnly?: boolean;
   }) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -732,14 +781,19 @@ sequenceDiagram
 
 ```typescript
 interface Annotation {
-  id: string;                  // UUID
-  selectedText: string;        // The highlighted passage
-  comment: string;             // User's annotation comment
-  paragraphIndex: number;      // Which paragraph the selection is in
-  startOffset: number;         // Character offset within paragraph
-  endOffset: number;           // Character offset within paragraph
-  createdAt: number;           // Timestamp (ms)
-  color?: string;              // Highlight color (optional)
+  id: string;
+  documentId: string;
+  quote: string;
+  comment: string;
+  range?: {
+    startOffset: number;
+    endOffset: number;
+    paragraphIndex?: number;
+    contextSnippet?: string;
+  };
+  kind: "comment" | "question" | "rewrite" | "challenge";
+  status: "open" | "resolved";
+  createdAt: string;
 }
 ```
 
@@ -791,41 +845,48 @@ stateDiagram-v2
 
 ```mermaid
 classDiagram
-    class ReviewArchive {
-        +String id
-        +String workspacePath
-        +String archivedAt
-        +DocumentSnapshot reply
+    class ReviewArchiveData {
+        +HistoryEntrySummary summary
+        +String replyContent
         +Annotation[] annotations
-        +Submission submission
+        +SubmissionRecord submission
+        +String targetBefore
     }
 
-    class DocumentSnapshot {
-        +String replyContent
+    class HistoryEntrySummary {
+        +String id
+        +String workspaceKey
+        +String workspaceLabel
+        +String workspacePath
+        +String archivedAt
         +String reviewPath
         +String replyPath
-        +String workspacePath
+        +String targetPath
+        +Number itemCount
     }
 
     class Annotation {
         +String id
-        +String selectedText
+        +String documentId
+        +String quote
         +String comment
-        +Number paragraphIndex
-        +Number startOffset
-        +Number endOffset
+        +AnnotationRange range
+        +String kind
+        +String status
+        +String createdAt
     }
 
-    class Submission {
+    class SubmissionRecord {
+        +String createdAt
         +String method
         +String templateMode
         +String userText
         +String finalOutput
     }
 
-    ReviewArchive *-- DocumentSnapshot
-    ReviewArchive *-- Annotation
-    ReviewArchive *-- Submission
+    ReviewArchiveData *-- HistoryEntrySummary
+    ReviewArchiveData *-- Annotation
+    ReviewArchiveData *-- SubmissionRecord
 ```
 
 ### Archive Storage Flow
@@ -874,19 +935,23 @@ The return flow aggregates annotations into actionable feedback and delivers it 
 
 ```mermaid
 flowchart TD
-    START["User triggers<br/>Write Back"] --> HAS_COMPOSE{"composePath<br/>exists?"}
+    START["User triggers<br/>Submit"] --> HAS_TARGET{"targetPath<br/>exists?"}
 
-    HAS_COMPOSE -->|"Yes"| HAS_TAURI{"Running in<br/>Tauri?"}
-    HAS_COMPOSE -->|"No"| CLIPBOARD["📋 Copy to clipboard"]
+    HAS_TARGET -->|"Yes"| HAS_TAURI{"Running in<br/>Tauri?"}
+    HAS_TARGET -->|"No"| CLIPBOARD["📋 Copy to clipboard"]
 
-    HAS_TAURI -->|"Yes"| WRITE_FILE["Write to composePath<br/>(atomic write)"]
+    HAS_TAURI -->|"Yes"| WRITE_FILE["Write to targetPath<br/>(atomic write)"]
     HAS_TAURI -->|"No"| CLIPBOARD
 
-    WRITE_FILE --> CLOSE["Close window<br/>(agent resumes)"]
-    CLIPBOARD --> NOTIFY["Show notification:<br/>'Copied to clipboard'"]
+    WRITE_FILE --> ARCHIVE["Save review archive<br/>for workspace history"]
+    ARCHIVE --> CLOSE["Close window<br/>(agent resumes)"]
+    CLIPBOARD --> ARCHIVE_CLIP["Save archive + keep window open"]
+    ARCHIVE_CLIP --> NOTIFY["Show notification:<br/>'Copied to clipboard'"]
 
     style WRITE_FILE fill:#c8e6c9
+    style ARCHIVE fill:#e8f5e9
     style CLIPBOARD fill:#fff3e0
+    style ARCHIVE_CLIP fill:#fff8e1
     style CLOSE fill:#e8f5e9
     style NOTIFY fill:#e3f2fd
 ```
@@ -912,46 +977,66 @@ flowchart LR
 erDiagram
     CLI_ARGS ||--o| DOCUMENT : "opens"
     DOCUMENT ||--o{ ANNOTATION : "contains"
-    SESSION ||--|{ ANNOTATION : "persists"
-    SESSION ||--|| DOCUMENT : "snapshots"
-    SESSION ||--|| UI_STATE : "captures"
+    REVIEW_ARCHIVE ||--|{ ANNOTATION : "replays"
+    REVIEW_ARCHIVE ||--|| DOCUMENT : "snapshots"
+    SAVED_SESSION ||--|{ ANNOTATION : "persists"
+    SAVED_SESSION ||--|| UI_STATE : "captures prefs indirectly"
 
     CLI_ARGS {
-        string compose_path
+        string review_path
+        string target_path
         string metadata_path
         string file_path
+        string workspace_path
         string agent
+        string trusted_caller
     }
 
     DOCUMENT {
         string id PK
         string reply_content
-        string compose_content
-        string compose_path
+        string target_content
+        string target_path
+        string review_path
         string reply_path
+        string workspace_path
+        boolean is_read_only
     }
 
     ANNOTATION {
         string id PK
-        string selected_text
+        string document_id
+        string quote
         string comment
-        int paragraph_index
+        string kind
+        string status
         int start_offset
         int end_offset
         timestamp created_at
     }
 
-    SESSION {
+    SAVED_SESSION {
         string id PK
         string name
         timestamp created_at
         timestamp updated_at
     }
 
+    REVIEW_ARCHIVE {
+        string id PK
+        string workspace_key
+        string archived_at
+        string target_path
+        string review_path
+        string reply_path
+    }
+
     UI_STATE {
         string theme
-        float font_scale
-        float scroll_position
+        int font_size
+        string sidebar_tab
+        int sidebar_width
+        int annotation_margin_width
     }
 ```
 
@@ -960,27 +1045,35 @@ erDiagram
 ```typescript
 // Core types used throughout the application
 
-type Theme = "dark" | "muted" | "light";
+type Theme = "dark" | "dim" | "light";
+type SidebarTab = "outline" | "history";
 
 interface UIState {
   theme: Theme;
-  fontScale: number;          // 0.8 – 1.5
+  fontSize: number;
+  locale: "zh" | "en";
   sidebarOpen: boolean;
-  sidebarTab: "annotations" | "sessions" | "overview";
-  scrollPosition: number;
+  sidebarTab: SidebarTab;
+  sidebarWidth: number;
+  marginWidth: number;
+  contentWidth: "narrow" | "standard" | "wide";
+  pagePadding: "compact" | "comfortable" | "airy";
+  readingDensity: "compact" | "comfortable" | "relaxed";
+  highlightStrength: "subtle" | "balanced" | "strong";
 }
 
 interface ReturnState {
-  mode: "writeback" | "clipboard";
-  pending: boolean;
-  lastResult: "success" | "error" | null;
-  aggregatedContent: string | null;
+  selectedAnnotationIds: Set<string>;
+  returnStatus: "idle" | "previewing" | "writing" | "done" | "error";
+  returnError: string | null;
+  showReturnPanel: boolean;
 }
 
 interface SelectionState {
-  selectedText: string | null;
-  selectionRange: Range | null;
-  anchorPosition: { x: number; y: number } | null;
+  selection: SelectionInfo | null;
+  showPopup: boolean;
+  popupKind: AnnotationKind;
+  draftComment: string;
 }
 ```
 
@@ -1052,7 +1145,7 @@ fn log(msg: &str) {
         .unwrap_or(0);
     if let Ok(mut f) = OpenOptions::new()
         .create(true).append(true)
-        .open("/tmp/cliv.log")
+        .open(log_path())
     {
         let _ = writeln!(f, "[{}] {}", ts, msg);
     }
@@ -1088,7 +1181,7 @@ gantt
     CLI + GUI foundation       :done, 2025-01-01, 2025-04-01
     Multi-agent support        :done, 2025-04-01, 2025-07-01
     Annotation system          :done, 2025-07-01, 2025-10-01
-    Session persistence        :done, 2025-10-01, 2026-01-01
+    Session + history restore  :done, 2025-10-01, 2026-01-01
 
     section Performance
     Virtual scrolling          :active, 2026-01-01, 2026-04-01
@@ -1099,8 +1192,7 @@ gantt
     Plugin system              :2026-07-01, 2026-10-01
 
     section Platform
-    macOS build                :2026-04-01, 2026-07-01
-    Windows build              :2026-07-01, 2026-10-01
+    Cross-platform builds      :done, 2026-01-01, 2026-03-01
 ```
 
 ### Future Architecture Vision
@@ -1110,7 +1202,7 @@ graph TB
     subgraph "Current (v0.x)"
         direction TB
         C1["Single window"]
-        C2["Local sessions"]
+        C2["Local sessions + history replay"]
         C3["3 agents"]
     end
 
@@ -1159,7 +1251,7 @@ graph TB
 | `~/.codex/reply_cache/` | Cached Codex replies |
 | `~/.claude/reply_cache/` | Cached Claude replies |
 | `~/.gemini/reply_cache/` | Cached Gemini replies |
-| `/tmp/cliv.log` | Diagnostic log file |
+| `~/.cliv/cliv.log` | Diagnostic log file |
 
 ### CLI Usage
 
