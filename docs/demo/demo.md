@@ -495,6 +495,8 @@ graph TB
         SVC_IPC["tauriIpc.ts"]
         SVC_WB["writeBack.ts"]
         SVC_HIS["historyService.ts"]
+        SVC_SESS["sessionService.ts"]
+        SVC_SNAP["reviewSnapshot.ts"]
     end
 
     subgraph "State (src/stores/)"
@@ -522,10 +524,15 @@ graph TB
     F_RET --> S_RET
     F_SESS --> S_SESS
     F_SESS --> SVC_SESS
+    F_SESS --> SVC_SNAP
 
     SVC_IPC --> S_DOC
     SVC_WB --> S_RET
     SVC_SESS --> S_SESS
+    SVC_SNAP --> S_DOC
+    SVC_SNAP --> S_ANN
+    SVC_SNAP --> S_SEL
+    SVC_SNAP --> S_RET
 
     style F_DOC fill:#e3f2fd
     style F_ANN fill:#e8f5e9
@@ -581,14 +588,21 @@ graph LR
         SS["selectionStore<br/>🔍 Text Selection"]
         RS["returnStore<br/>📋 Write-back"]
         SES["sessionStore<br/>🗂️ Sessions"]
+        HS["historyStore<br/>🗃️ Archive Replay"]
         UI["uiStore<br/>🎨 Theme + UI"]
     end
+
+    SNAP["reviewSnapshot.ts<br/>restore seam"]
 
     DS -->|"content drives"| AS
     AS -->|"annotations feed"| RS
     SS -->|"selection creates"| AS
-    SES -->|"restores"| DS
-    SES -->|"restores"| AS
+    SES -->|"loads saved session"| SNAP
+    HS -->|"loads archive replay"| SNAP
+    SNAP -->|"apply editable / replay snapshot"| DS
+    SNAP -->|"apply annotation state"| AS
+    SNAP -->|"replay reset only"| SS
+    SNAP -->|"replay reset only"| RS
     UI -->|"theme/scale"| DS
 ```
 
@@ -640,12 +654,15 @@ interface AnnotationState {
 
 ```mermaid
 flowchart LR
-    ZUSTAND["Zustand Store"] -->|"subscribe"| PERSIST["Persistence<br/>Middleware"]
-    PERSIST -->|"serialize"| LS["localStorage<br/>(prefix: cliv:)"]
-    LS -->|"hydrate on load"| ZUSTAND
+    UI["uiStore persistence"] -->|"serialize"| LS_UI["localStorage<br/>(prefix: cliv:)"]
+    LS_UI -->|"hydrate on load"| UI
 
-    ZUSTAND -->|"history archives"| FS["~/.cliv/history/archive/"]
-    FS -->|"load archive summaries"| ZUSTAND
+    SESS["sessionService"] -->|"saved session snapshots"| LS_SESS["localStorage<br/>(cliv-sessions)"]
+    HIST["historyService"] -->|"archive summaries + payloads"| FS["~/.cliv/history/archive/"]
+
+    LS_SESS -->|"editable restore"| SNAP["reviewSnapshot<br/>restore seam"]
+    FS -->|"read-only replay restore"| SNAP
+    SNAP -->|"apply snapshot"| ZUSTAND["document / annotation / selection / return stores"]
 ```
 
 ---
@@ -811,13 +828,14 @@ classDiagram
     ReviewArchive *-- Submission
 ```
 
-### Session Storage Flow
+### Archive Storage Flow
 
 ```mermaid
 sequenceDiagram
     participant UI as React UI
     participant Store as historyStore
     participant SVC as historyService
+    participant Restore as reviewSnapshot
     participant IPC as Tauri IPC
     participant FS as History Archive
 
@@ -838,9 +856,13 @@ sequenceDiagram
     IPC->>FS: read reply.md + annotations.json + submission.json
     FS-->>IPC: Archive snapshot
     IPC-->>SVC: ReviewArchive object
-    SVC-->>Store: Hydrate read-only replay stores
+    SVC-->>Store: ReviewArchive object
+    Store->>Restore: buildArchiveReviewSnapshot + applyReviewSnapshot
+    Restore-->>Store: Read-only replay stores updated
     Store-->>UI: Re-render everything
 ```
+
+Saved local sessions use the same restore seam, but keep `localStorage` persistence and editable document state.
 
 ---
 

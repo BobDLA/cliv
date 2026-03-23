@@ -3,13 +3,11 @@ import {
   loadReviewArchive,
   listReviewHistory,
 } from "@/services/historyService";
-import type { HistoryWorkspaceGroup } from "@/types";
 import {
-  useAnnotationStore,
-} from "./annotationStore";
-import { useDocumentStore } from "./documentStore";
-import { useReturnStore } from "./returnStore";
-import { useSelectionStore } from "./selectionStore";
+  applyReviewSnapshot,
+  buildArchiveReviewSnapshot,
+} from "@/services/reviewSnapshot";
+import type { HistoryWorkspaceGroup } from "@/types";
 
 interface HistoryState {
   groups: HistoryWorkspaceGroup[];
@@ -54,24 +52,7 @@ export const useHistoryStore = create<HistoryState>((set) => ({
         return false;
       }
 
-      useSelectionStore.getState().reset();
-      useReturnStore.getState().reset();
-      useAnnotationStore.getState().clearAnnotations();
-      useAnnotationStore.getState().setAnnotations(archive.annotations);
-      useDocumentStore.getState().setDocument({
-        reply: archive.replyContent,
-        target: null,
-        targetPath: null,
-        reviewPath:
-          archive.summary.reviewPath ??
-          archive.summary.replyPath ??
-          archive.summary.workspacePath,
-        replyPath: archive.summary.replyPath ?? archive.summary.reviewPath,
-        workspacePath: archive.summary.workspacePath,
-        archivedSubmission: archive.submission,
-        documentId: archive.summary.id,
-        isReadOnly: true,
-      });
+      applyReviewSnapshot(buildArchiveReviewSnapshot(archive));
 
       set({
         currentArchiveRef: { workspaceKey, archiveId },
