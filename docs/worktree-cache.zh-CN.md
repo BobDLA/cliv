@@ -23,11 +23,11 @@ source /mnt/hdd/dev-cache/cliv/cliv-worktree-env.sh
 
 - `pnpm store-dir`
 - `PNPM_HOME`
-- `CARGO_HOME`
-- `RUSTUP_HOME`
 - `PLAYWRIGHT_BROWSERS_PATH`
 
 如果系统里已经安装了 `pnpm`，脚本还会顺手帮你配置全局 `pnpm store-dir`。
+
+这个 helper 故意不会改写 `CARGO_HOME` 或 `RUSTUP_HOME`。如果把现有 Rust 安装直接指向一个全新的目录，往往会让已有 toolchain 失效，所以 cliV 默认保留 Rust 现有的 home 位置；只有在你明确手动迁移时才应该修改它们。
 
 ## 每个 Worktree 仍然要独立保留的内容
 
