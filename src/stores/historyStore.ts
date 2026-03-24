@@ -1,15 +1,18 @@
 import { create } from "zustand";
+import { useSessionStore } from "./sessionStore";
 import {
   loadReviewArchive,
   listReviewHistory,
 } from "@/services/historyService";
-import type { HistoryWorkspaceGroup } from "@/types";
 import {
-  useAnnotationStore,
-} from "./annotationStore";
-import { useDocumentStore } from "./documentStore";
-import { useReturnStore } from "./returnStore";
-import { useSelectionStore } from "./selectionStore";
+  applyReviewSnapshot,
+  beginReviewRestoreRequest,
+  buildArchiveReviewSnapshot,
+  isCurrentReviewRestoreRequest,
+} from "@/services/reviewSnapshot";
+import type { HistoryWorkspaceGroup } from "@/types";
+
+let currentArchiveOpenRequestId = 0;
 
 interface HistoryState {
   groups: HistoryWorkspaceGroup[];
@@ -46,32 +49,25 @@ export const useHistoryStore = create<HistoryState>((set) => ({
   setQuery: (query) => set({ query }),
 
   openArchive: async (workspaceKey, archiveId) => {
+    currentArchiveOpenRequestId += 1;
+    const archiveOpenRequestId = currentArchiveOpenRequestId;
+    const requestId = beginReviewRestoreRequest();
     set({ isLoading: true, error: null });
     try {
       const archive = await loadReviewArchive(workspaceKey, archiveId);
+      if (!isCurrentReviewRestoreRequest(requestId)) {
+        if (currentArchiveOpenRequestId === archiveOpenRequestId) {
+          set({ isLoading: false });
+        }
+        return false;
+      }
       if (!archive) {
         set({ isLoading: false });
         return false;
       }
 
-      useSelectionStore.getState().reset();
-      useReturnStore.getState().reset();
-      useAnnotationStore.getState().clearAnnotations();
-      useAnnotationStore.getState().setAnnotations(archive.annotations);
-      useDocumentStore.getState().setDocument({
-        reply: archive.replyContent,
-        target: null,
-        targetPath: null,
-        reviewPath:
-          archive.summary.reviewPath ??
-          archive.summary.replyPath ??
-          archive.summary.workspacePath,
-        replyPath: archive.summary.replyPath ?? archive.summary.reviewPath,
-        workspacePath: archive.summary.workspacePath,
-        archivedSubmission: archive.submission,
-        documentId: archive.summary.id,
-        isReadOnly: true,
-      });
+      applyReviewSnapshot(buildArchiveReviewSnapshot(archive));
+      useSessionStore.setState({ currentSessionId: null });
 
       set({
         currentArchiveRef: { workspaceKey, archiveId },
@@ -79,6 +75,12 @@ export const useHistoryStore = create<HistoryState>((set) => ({
       });
       return true;
     } catch (error) {
+      if (!isCurrentReviewRestoreRequest(requestId)) {
+        if (currentArchiveOpenRequestId === archiveOpenRequestId) {
+          set({ isLoading: false });
+        }
+        return false;
+      }
       set({
         error: error instanceof Error ? error.message : String(error),
         isLoading: false,

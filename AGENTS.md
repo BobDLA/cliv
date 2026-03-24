@@ -8,7 +8,7 @@ This file provides context for AI coding agents working on this codebase.
 
 - **Frontend**: React 19 + Vite 7 + Zustand (state) + TailwindCSS 4
 - **Backend**: Tauri v2 (Rust) — handles CLI parsing, file I/O, and agent reply extraction
-- **Scripts**: Python cache scripts + Bash wrapper for `$EDITOR` integration
+- **Scripts**: Python docs validation + Bash build/worktree helpers
 - works on multiple platforms: Linux, macOS, Windows
 
 ## Architecture
@@ -16,8 +16,8 @@ This file provides context for AI coding agents working on this codebase.
 ```text
 src/                    # React frontend
 ├── app/                # App shell, hooks, components
-├── features/           # Feature modules (documents, annotations, return, sessions)
-├── services/           # Tauri IPC, writeBack, sessionService
+├── features/           # Feature modules (documents, annotations, history, return, sessions)
+├── services/           # Tauri IPC, writeBack, historyService, reviewSnapshot, sessionService
 ├── stores/             # Zustand stores
 └── types/              # TypeScript types
 
@@ -38,7 +38,7 @@ src-tauri/              # Rust backend
 - **Reply extraction**: Cascading fallback (cache → transcript → scan), agent-aware priority
 - **Atomic writes**: All file writes use write-to-tmp + rename pattern
 - **State management**: Zustand with localStorage persistence (prefix: `cliv:`)
-- **User data**: Stored in `~/.cliv/` (sessions, annotations)
+- **User data**: archived history and durable config live under `~/.cliv/`; saved sessions stay in browser `localStorage`, while UI prefs also sync through app config in `~/.cliv/config.toml`
 - **Write-back fallback**: when no explicit write target exists, output falls back to clipboard
 
 ## Development
@@ -97,6 +97,11 @@ scripts/cleanup_worktree.sh fix/prompt-header-reseed --remote
 See also:
 - `docs/testing-standard.md`
 - `docs/regression-cases.md`
+- `docs/build-workflows.md`
+- `docs/worktree-cache.md`
+- `docs/refactoring_governance.md`
+- `docs/refactor-backlog.md`
+- `docs/session-history-boundary.md`
 
 ### Change type → minimum validation
 

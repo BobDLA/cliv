@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   useAnnotationStore,
   useConfigStore,
@@ -6,61 +6,27 @@ import {
   useUIStore,
 } from "@/stores";
 import { hydrateUIFromAppConfig } from "@/stores/uiStore";
-import { DEMO_CONTENT_ZH, DEMO_CONTENT_EN } from "@/app/demoContent";
-import { getPathInfo, resolveWorkspacePath } from "@/lib/pathUtils";
-import type { CliArgs } from "@/types";
+import {
+  applyFetchedAppConfig,
+  buildDemoDocumentState,
+  buildLoadedDocumentState,
+  buildOpenedFileDocumentState,
+  formatInitDocumentError,
+  isTauriEnvironment,
+  recoverReplyContent,
+  shouldUseReplyExtractionFallback,
+} from "./initDocumentHelpers";
 
-// Check if running inside Tauri
-const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-type ExtractFn = () => Promise<string | null>;
-
-/**
- * Build an ordered list of extraction attempts based on which agent triggered us.
- * The calling agent goes first; others follow as fallback.
- */
-function buildExtractionPlan(
-  agent: string | null | undefined,
-  extractCodex: () => Promise<string>,
-  extractClaude: () => Promise<string>,
-  extractGemini: () => Promise<string>,
-): ExtractFn[] {
-  const codex: ExtractFn = async () => {
-    try { const r = await extractCodex(); return r?.trim() ? r : null; } catch { return null; }
-  };
-  const claude: ExtractFn = async () => {
-    try { const r = await extractClaude(); return r?.trim() ? r : null; } catch { return null; }
-  };
-  const gemini: ExtractFn = async () => {
-    try { const r = await extractGemini(); return r?.trim() ? r : null; } catch { return null; }
-  };
-
-  switch (agent) {
-    case "codex":   return [codex, claude, gemini];
-    case "claude":  return [claude, gemini, codex];
-    case "gemini":  return [gemini, claude, codex];
-    default:        return [claude, gemini, codex]; // default fallback order
-  }
-}
-
-/**
- * Only use cached agent-reply fallback when the launch clearly came from an
- * integrated agent/editor flow. A plain `cliv` launch should stay blank.
- */
-export function shouldUseReplyExtractionFallback(
-  args: Pick<CliArgs, "agent" | "trustedCaller">,
-): boolean {
-  return Boolean(args.agent || args.trustedCaller);
-}
+export { shouldUseReplyExtractionFallback };
 
 /**
  * Hook: initialize document from CLI args (Tauri) or demo content (browser dev).
  */
 export function useInitDocument() {
   const { setDocument, setLoading, setError } = useDocumentStore();
-  const setAppConfig = useConfigStore((s) => s.setAppConfig);
-  const locale = useUIStore((s) => s.locale);
+  const clearAnnotations = useAnnotationStore((state) => state.clearAnnotations);
+  const setAppConfig = useConfigStore((state) => state.setAppConfig);
+  const locale = useUIStore((state) => state.locale);
 
   const loadTauriDocument = useCallback(async () => {
     setLoading(true);
@@ -75,8 +41,8 @@ export function useInitDocument() {
         extractGeminiReply,
       } = await import("@/services/tauri-ipc");
       const appConfig = await getAppConfig();
-      setAppConfig(appConfig);
-      hydrateUIFromAppConfig(appConfig);
+      applyFetchedAppConfig(appConfig, setAppConfig, hydrateUIFromAppConfig);
+
       const args = await getCliArgs();
       const result = await loadFiles(
         args.reviewPath,
@@ -89,63 +55,23 @@ export function useInitDocument() {
         return;
       }
 
-      // Try to extract the last reply using cached hooks
-      let replyContent = result.reply;
-      if (
-        (!replyContent || replyContent.trim() === "") &&
-        shouldUseReplyExtractionFallback(args)
-      ) {
-        const plan = buildExtractionPlan(
-          args.agent,
-          () => extractCodexReply(null, args.workspacePath),
-          () => extractClaudeReply(null),
-          () => extractGeminiReply(null),
-        );
-
-        for (const attempt of plan) {
-          const reply = await attempt();
-          if (reply) {
-            replyContent = reply;
-            break;
-          }
-        }
-      }
-
-      // Clear previous annotations on reload
-      useAnnotationStore.getState().clearAnnotations();
-      const workspacePath = resolveWorkspacePath({
-        workspacePath: args.workspacePath,
-        reviewPath: result.reviewPath ?? args.reviewPath ?? args.filePath,
-        replyPath: result.replyPath,
-        targetPath: result.targetPath,
+      const replyContent = await recoverReplyContent(args, result, {
+        extractCodexReply,
+        extractClaudeReply,
+        extractGeminiReply,
       });
 
-      setDocument({
-        reply: replyContent,
-        target: result.target,
-        targetPath: result.targetPath,
-        reviewPath: result.reviewPath ?? args.reviewPath,
-        replyPath: result.replyPath,
-        workspacePath,
-        archivedSubmission: null,
-        documentId:
-          result.metadata?.turn?.id ??
-          result.reviewPath ??
-          result.replyPath ??
-          "default",
-        isReadOnly: false,
-      });
-    } catch (e) {
-      setError(
-        `加载失败: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      clearAnnotations();
+      setDocument(buildLoadedDocumentState(args, result, replyContent));
+    } catch (error) {
+      setError(formatInitDocumentError(error));
     } finally {
       setLoading(false);
     }
-  }, [setAppConfig, setDocument, setLoading, setError]);
+  }, [clearAnnotations, setAppConfig, setDocument, setError, setLoading]);
 
   useEffect(() => {
-    if (!isTauri) {
+    if (!isTauriEnvironment) {
       return;
     }
 
@@ -153,22 +79,15 @@ export function useInitDocument() {
   }, [loadTauriDocument]);
 
   useEffect(() => {
-    if (isTauri) {
+    if (isTauriEnvironment) {
       return;
     }
 
     setLoading(true);
-    const demoContent = locale === "zh" ? DEMO_CONTENT_ZH : DEMO_CONTENT_EN;
-    useAnnotationStore.getState().clearAnnotations();
-    setDocument({
-      reply: demoContent,
-      workspacePath: null,
-      archivedSubmission: null,
-      documentId: "demo",
-      isReadOnly: false,
-    });
+    clearAnnotations();
+    setDocument(buildDemoDocumentState(locale));
     setLoading(false);
-  }, [locale, setDocument, setLoading]);
+  }, [clearAnnotations, locale, setDocument, setLoading]);
 }
 
 /**
@@ -180,41 +99,25 @@ export function openFileFromTauri(
   fileInputRef: React.RefObject<HTMLInputElement | null>,
 ) {
   return async () => {
-    if (isTauri) {
+    if (isTauriEnvironment) {
       try {
         const { open } = await import("@tauri-apps/plugin-dialog");
         const { invoke } = await import("@tauri-apps/api/core");
-        
+
         const selected = await open({
           multiple: false,
           filters: [{ name: "Markdown", extensions: ["md", "markdown", "txt"] }],
         });
-        
+
         if (selected && typeof selected === "string") {
           const content = await invoke<string>("read_file", {
             path: selected,
           });
-          const { baseName } = getPathInfo(selected);
-          setDocument({
-            reply: content,
-            target: null,
-            targetPath: null,
-            reviewPath: selected,
-            replyPath: selected,
-            workspacePath: resolveWorkspacePath({
-              workspacePath: null,
-              reviewPath: selected,
-              replyPath: selected,
-              targetPath: null,
-            }),
-            archivedSubmission: null,
-            documentId: baseName || "file",
-            isReadOnly: false,
-          });
+          setDocument(buildOpenedFileDocumentState(selected, content));
           useAnnotationStore.getState().clearAnnotations();
         }
-      } catch (err) {
-        console.error("Failed to open file via Tauri dialog:", err);
+      } catch (error) {
+        console.error("Failed to open file via Tauri dialog:", error);
         // Tauri command may not exist yet — fallback to browser file input
         fileInputRef.current?.click();
       }
