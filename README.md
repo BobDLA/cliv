@@ -14,7 +14,7 @@
 
 [![cliV Demo Preview](docs/demo_cliv_preview.gif)](docs/demo_cliv.mp4)
 
-_Animated preview for GitHub. Click to open the full 50s MP4 demo on GitHub._
+_Full animated preview for GitHub. Click to open the MP4 demo on GitHub._
 
 ## Why cliV?
 

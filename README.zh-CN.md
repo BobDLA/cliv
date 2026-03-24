@@ -14,7 +14,7 @@
 
 [![cliV 演示预览](docs/demo_cliv_preview.gif)](docs/demo_cliv.mp4)
 
-_GitHub 中显示为动图预览；点击可在 GitHub 中打开完整的 50 秒 MP4 演示。_
+_GitHub 中显示为完整动图预览；点击可在 GitHub 中打开 MP4 演示。_
 
 ## 为什么需要 cliV？
 
