@@ -81,9 +81,9 @@ export function buildArchiveReviewSnapshot(
   };
 }
 
-export async function buildSessionReviewSnapshot(
+export function buildPendingSessionReviewSnapshot(
   session: SessionRecord,
-): Promise<ReviewSnapshot> {
+): ReviewSnapshot {
   const baseSnapshot = {
     annotations: session.annotations,
     resetSelection: true,
@@ -112,30 +112,38 @@ export async function buildSessionReviewSnapshot(
   }
 
   const { baseName, parentPath } = getPathInfo(session.documentPath);
-  const baseDocument = {
-    reply: null,
-    target: null,
-    targetPath: null,
-    reviewPath: session.documentPath,
-    replyPath: null,
-    workspacePath: parentPath,
-    archivedSubmission: null,
-    documentId: baseName || session.documentPath,
-    isReadOnly: false,
-  } satisfies ReviewDocumentPatch;
+  return {
+    ...baseSnapshot,
+    document: {
+      reply: null,
+      target: null,
+      targetPath: null,
+      reviewPath: session.documentPath,
+      replyPath: null,
+      workspacePath: parentPath,
+      archivedSubmission: null,
+      documentId: baseName || session.documentPath,
+      isReadOnly: false,
+    },
+  };
+}
 
-  if (!isTauriRuntime()) {
-    return {
-      ...baseSnapshot,
-      document: baseDocument,
-    };
+export async function buildSessionReviewSnapshot(
+  session: SessionRecord,
+): Promise<ReviewSnapshot> {
+  const pendingSnapshot = buildPendingSessionReviewSnapshot(session);
+
+  if (!session.documentPath || !isTauriRuntime()) {
+    return pendingSnapshot;
   }
+
+  const { baseName, parentPath } = getPathInfo(session.documentPath);
 
   try {
     const { readFile } = await import("@/services/tauri-ipc");
     const content = await readFile(session.documentPath);
     return {
-      ...baseSnapshot,
+      ...pendingSnapshot,
       document: {
         reply: content,
         target: null,
@@ -149,10 +157,7 @@ export async function buildSessionReviewSnapshot(
       },
     };
   } catch {
-    return {
-      ...baseSnapshot,
-      document: baseDocument,
-    };
+    return pendingSnapshot;
   }
 }
 

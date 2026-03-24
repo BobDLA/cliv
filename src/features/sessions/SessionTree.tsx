@@ -4,6 +4,7 @@ import { useHistoryStore, useSessionStore } from "@/stores";
 import {
   applyReviewSnapshot,
   beginReviewRestoreRequest,
+  buildPendingSessionReviewSnapshot,
   buildSessionReviewSnapshot,
   isCurrentReviewRestoreRequest,
 } from "@/services/reviewSnapshot";
@@ -37,6 +38,7 @@ export const SessionTree = memo(function SessionTree() {
 
       useHistoryStore.setState({ currentArchiveRef: null });
       const requestId = beginReviewRestoreRequest();
+      applyReviewSnapshot(buildPendingSessionReviewSnapshot(session));
 
       const snapshot = await buildSessionReviewSnapshot(session);
       if (!isCurrentReviewRestoreRequest(requestId)) {

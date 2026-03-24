@@ -175,6 +175,92 @@ describe("SessionTree", () => {
     expect(useHistoryStore.getState().currentArchiveRef).toBeNull();
   });
 
+  it("clears stale review state immediately while a saved session is still loading", async () => {
+    const session = createSession(
+      "Saved draft",
+      "/tmp/project/reply.md",
+      [
+        {
+          id: "ann-1",
+          documentId: "doc-1",
+          quote: "Body",
+          comment: "Keep this editable",
+          kind: "comment",
+          status: "open",
+          createdAt: "2026-03-22T10:00:00.000Z",
+        },
+      ],
+      [],
+    );
+
+    const snapshot =
+      deferred<Awaited<ReturnType<typeof reviewSnapshotModule.buildSessionReviewSnapshot>>>();
+    vi.spyOn(reviewSnapshotModule, "buildSessionReviewSnapshot").mockReturnValue(snapshot.promise);
+
+    render(<SessionTree />);
+
+    await waitFor(() => {
+      expect(document.querySelector(`[data-session-id="${session.id}"]`)).not.toBeNull();
+    });
+
+    fireEvent.click(getSessionItem(session.id));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().currentSessionId).toBe(session.id);
+    });
+
+    expect(useHistoryStore.getState().currentArchiveRef).toBeNull();
+    expect(useAnnotationStore.getState().annotations).toHaveLength(1);
+    expect(useAnnotationStore.getState().annotations[0]?.id).toBe("ann-1");
+    expect(useDocumentStore.getState()).toMatchObject({
+      replyContent: null,
+      targetContent: null,
+      targetPath: null,
+      reviewPath: "/tmp/project/reply.md",
+      replyPath: null,
+      workspacePath: "/tmp/project",
+      archivedSubmission: null,
+      documentId: "reply.md",
+      isReadOnly: false,
+    });
+    expect(useSelectionStore.getState()).toMatchObject({
+      selection: null,
+      showPopup: false,
+      popupKind: "comment",
+      draftComment: "",
+    });
+    expect(useReturnStore.getState().selectedAnnotationIds.size).toBe(0);
+    expect(useReturnStore.getState().returnStatus).toBe("idle");
+    expect(useReturnStore.getState().returnError).toBeNull();
+    expect(useReturnStore.getState().showReturnPanel).toBe(false);
+
+    await act(async () => {
+      snapshot.resolve({
+        annotations: session.annotations,
+        resetSelection: true,
+        resetReturnState: true,
+        resetAnnotationUiState: true,
+        document: {
+          reply: "# session reply",
+          target: null,
+          targetPath: null,
+          reviewPath: "/tmp/project/reply.md",
+          replyPath: "/tmp/project/reply.md",
+          workspacePath: "/tmp/project",
+          archivedSubmission: null,
+          documentId: "reply.md",
+          isReadOnly: false,
+        },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().replyContent).toBe("# session reply");
+      expect(useAnnotationStore.getState().annotations[0]?.id).toBe("ann-1");
+    });
+  });
+
   it("keeps the newest session open when an earlier file read resolves later", async () => {
     const sessionA = createSession(
       "Session A",
