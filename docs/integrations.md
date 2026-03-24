@@ -164,12 +164,13 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-**How it works**: Claude pipes JSON to stdin containing `session_id` and `last_assistant_message`. cliV caches to `~/.claude/reply_cache/{session-id}.md`.
+**How it works**: Claude pipes JSON to stdin containing `session_id` and `last_assistant_message`. cliV writes reply-cache metadata and compatible cache entries so the active lookup key can resolve back to the real Claude conversation identity.
 
 ### Extraction fallback chain
 
-1. **Cache hit**: `CLAUDE_SESSION_ID` → `~/.claude/reply_cache/{id}.md`
-2. **Transcript scan**: Newest JSONL in `~/.claude/transcripts/`
+1. **Direct cache hit**: `CLAUDE_SESSION_ID` (used by cliV as a compatibility lookup-key carrier) → `~/.claude/reply_cache/{key}.md`
+2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `key`, `real_session_id`, or `pid` matches the lookup key
+3. **Compatibility direct hit**: Read a legacy direct file if it exists for that same key
 
 ---
 
@@ -196,12 +197,13 @@ Add to `~/.gemini/settings.json`:
 }
 ```
 
-**How it works**: Gemini pipes JSON to stdin containing `prompt_response`. The session ID comes from the `GEMINI_SESSION_ID` env var (injected by Gemini). cliV caches to `~/.gemini/reply_cache/{session-id}.md`.
+**How it works**: Gemini pipes JSON to stdin containing `prompt_response`. `GEMINI_SESSION_ID` may provide the agent-native conversation identity; cliV writes reply-cache metadata and compatible cache entries so the active lookup key can resolve deterministically.
 
 ### Extraction fallback chain
 
-1. **Cache hit**: `GEMINI_SESSION_ID` → `~/.gemini/reply_cache/{id}.md`
-2. **File scan**: Newest `.md` in `~/.gemini/reply_cache/`
+1. **Direct cache hit**: `GEMINI_SESSION_ID` (used by cliV as a compatibility lookup-key carrier) → `~/.gemini/reply_cache/{key}.md`
+2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `key`, `real_session_id`, or `pid` matches the lookup key
+3. **Compatibility direct hit**: Read a legacy direct file if it exists for that same key
 
 ---
 
@@ -213,7 +215,7 @@ cliV is a single binary. No Python, Bash, Node.js, or wrapper scripts needed.
 
 ### Agent auto-detection
 
-When launched as `$EDITOR`, cliV auto-detects the calling agent from environment variables (`CODEX_THREAD_ID`, `CLAUDE_SESSION_ID`, `GEMINI_SESSION_ID`). For Codex, `CODEX_THREAD_ID` is kept as a compatibility variable name, but the value used for cache lookup is normally the active agent PID. No `CLIV_AGENT` env var is needed unless you want to override.
+When launched as `$EDITOR`, cliV auto-detects the calling agent from environment variables (`CODEX_THREAD_ID`, `CLAUDE_SESSION_ID`, `GEMINI_SESSION_ID`). In cliV these env vars are treated as compatibility carriers for the active reply-cache lookup key: the value may be the agent-native conversation ID or a PID-derived cache key depending on launch context. No `CLIV_AGENT` env var is needed unless you want to override.
 
 ### Launch modes
 
@@ -222,8 +224,6 @@ When launched as `$EDITOR`, cliV auto-detects the calling agent from environment
 - `cliv --compose draft.md`: compatibility alias for `--target`.
 - If a trusted caller launches cliV with only one positional file, that file is treated as the write target for legacy `$EDITOR` integrations.
 
-### Extraction priority
+### Extraction routing
 
-When the agent is unknown, cliV tries: **Claude → Gemini → Codex**.
-
-> **Why?** Codex's fallback scanner always returns _something_ (even stale data), so it goes last to avoid masking fresher replies.
+cliV only calls the extractor for the detected agent. If no agent is detected, reply extraction is skipped and the UI stays fail-closed.

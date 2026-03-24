@@ -1094,15 +1094,15 @@ write(path.tmp) → rename(path.tmp → path) → success
                 ↘ on failure: remove(path.tmp) → log error
 ```
 
-#### 2. Cascading Fallbacks
+#### 2. Deterministic Cache Lookup
 
-Reply discovery uses ordered fallback strategies:
+Reply discovery uses a constrained lookup contract to avoid cross-talk:
 
 ```mermaid
 flowchart TD
-    A["1. Cache by PID<br/>(most reliable)"] -->|"Miss"| B["2. Cache by Session ID<br/>(agent-provided)"]
-    B -->|"Miss"| C["3. Transcript scan<br/>(full directory search)"]
-    C -->|"Miss"| D["4. Manual file open<br/>(user intervention)"]
+    A["1. Direct cache hit<br/>(lookup key)"] -->|"Miss"| B["2. Metadata alias<br/>(key / real_session_id / pid)"]
+    B -->|"Miss"| C["3. Legacy direct hit<br/>(compatibility only)"]
+    C -->|"Miss"| D["4. Fail closed<br/>(manual file open if needed)"]
 
     A -->|"Hit"| SUCCESS["✅ Reply loaded"]
     B -->|"Hit"| SUCCESS
@@ -1158,7 +1158,7 @@ fn log(msg: &str) {
 | Component | Error | Strategy |
 |:---|:---|:---|
 | Cache write | Disk full / permissions | Log + return (no crash) |
-| Cache read | File missing | Fallback to next strategy |
+| Cache read | File missing | Fail closed (do not try another agent) |
 | Agent detection | Process not found | Return None (unknown agent) |
 | Stdin read | Empty / invalid JSON | Log + return early |
 | IPC call | Tauri bridge error | Show error in UI |

@@ -6,18 +6,30 @@ import { fileURLToPath } from "url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
-const binaryPath = path.join(
-  repoRoot,
-  "src-tauri",
-  "target",
-  "debug",
-  os.platform() === "win32" ? "cliv.exe" : "cliv",
-);
+const desktopTargetDir =
+  process.env.CLIV_DESKTOP_TARGET_DIR ||
+  path.join(repoRoot, "src-tauri", "target", "desktop-e2e");
+const binaryPath =
+  process.env.CLIV_DESKTOP_BINARY_PATH ||
+  path.join(
+    desktopTargetDir,
+    "debug",
+    os.platform() === "win32" ? "cliv.exe" : "cliv",
+  );
 const driverExecutable =
   os.platform() === "win32" ? "tauri-driver.exe" : "tauri-driver";
 const desktopScenario = process.env.CLIV_DESKTOP_SCENARIO ?? "standalone";
+const skipBuild = process.env.CLIV_DESKTOP_SKIP_BUILD === "1";
+
+if (skipBuild && !fs.existsSync(binaryPath)) {
+  throw new Error(
+    `Desktop smoke binary not found at ${binaryPath}. Run without CLIV_DESKTOP_SKIP_BUILD=1 first, or set CLIV_DESKTOP_BINARY_PATH.`,
+  );
+}
+
 const scenarioWorkspace = ensureScenarioWorkspace(desktopScenario);
-const appArgs = buildAppArgs(scenarioWorkspace);
+const appArgs = scenarioWorkspace.appArgs;
+const applicationPath = scenarioWorkspace.applicationPath ?? binaryPath;
 
 process.env.CLIV_DESKTOP_WORKSPACE = scenarioWorkspace.workspaceDir;
 process.env.CLIV_DESKTOP_COMPOSE_PATH = scenarioWorkspace.composePath ?? "";
@@ -25,6 +37,7 @@ process.env.CLIV_DESKTOP_REPLY_PATH = scenarioWorkspace.replyPath ?? "";
 process.env.CLIV_DESKTOP_METADATA_PATH = scenarioWorkspace.metadataPath ?? "";
 process.env.CLIV_DESKTOP_EXPECTED_HEADING = scenarioWorkspace.expectedHeading ?? "";
 process.env.CLIV_DESKTOP_EXPECTED_ERROR = scenarioWorkspace.expectedError ?? "";
+process.env.CLIV_DESKTOP_LOG_PATH = scenarioWorkspace.logPath ?? "";
 
 let tauriDriver;
 let exit = false;
@@ -38,7 +51,7 @@ export const config = {
     {
       maxInstances: 1,
       "tauri:options": {
-        application: binaryPath,
+        application: applicationPath,
         args: appArgs,
       },
     },
@@ -50,14 +63,40 @@ export const config = {
     timeout: 120000,
   },
   onPrepare: () => {
-    const result = spawnSync("pnpm", ["tauri", "build", "--debug", "--no-bundle"], {
+    if (skipBuild) {
+      return;
+    }
+
+    const frontend = spawnSync("pnpm", ["build"], {
       cwd: repoRoot,
       stdio: "inherit",
       shell: true,
     });
 
-    if (result.status !== 0) {
-      throw new Error("Failed to build Tauri debug app for desktop smoke tests");
+    if (frontend.status !== 0) {
+      throw new Error("Failed to build frontend dist for desktop smoke tests");
+    }
+
+    const cargo = spawnSync(
+      "cargo",
+      [
+        "build",
+        "--manifest-path",
+        path.join("src-tauri", "Cargo.toml"),
+        "-F",
+        "tauri/custom-protocol",
+        "--target-dir",
+        desktopTargetDir,
+      ],
+      {
+        cwd: repoRoot,
+        stdio: "inherit",
+        shell: true,
+      },
+    );
+
+    if (cargo.status !== 0) {
+      throw new Error("Failed to build desktop smoke Tauri binary");
     }
   },
   beforeSession: () => {
@@ -81,18 +120,6 @@ export const config = {
   },
 };
 
-function buildAppArgs(workspace) {
-  if (workspace.metadataPath) {
-    return ["--compose", workspace.composePath, "--metadata", workspace.metadataPath];
-  }
-
-  if (desktopScenario === "standalone") {
-    return ["--compose", workspace.composePath, workspace.composePath];
-  }
-
-  return [workspace.composePath];
-}
-
 function ensureScenarioWorkspace(scenario) {
   const workspaceDir =
     process.env.CLIV_DESKTOP_WORKSPACE ||
@@ -105,6 +132,10 @@ function ensureScenarioWorkspace(scenario) {
       return writeMetadataWorkspace(workspaceDir);
     case "missing-reply":
       return writeMissingReplyWorkspace(workspaceDir);
+    case "gemini-pid-only":
+      return writeGeminiPidOnlyWorkspace(workspaceDir);
+    case "trusted-caller-only":
+      return writeTrustedCallerOnlyWorkspace(workspaceDir);
     default:
       return writeStandaloneWorkspace(workspaceDir);
   }
@@ -137,6 +168,9 @@ function writeStandaloneWorkspace(workspaceDir) {
     metadataPath: null,
     expectedHeading: "Desktop Smoke Fixture",
     expectedError: null,
+    logPath: null,
+    applicationPath: null,
+    appArgs: ["--compose", composePath, composePath],
   };
 }
 
@@ -194,6 +228,9 @@ function writeMetadataWorkspace(workspaceDir) {
     metadataPath,
     expectedHeading: "Metadata Reply Fixture",
     expectedError: null,
+    logPath: null,
+    applicationPath: null,
+    appArgs: ["--compose", composePath, "--metadata", metadataPath],
   };
 }
 
@@ -240,7 +277,176 @@ function writeMissingReplyWorkspace(workspaceDir) {
     metadataPath,
     expectedHeading: null,
     expectedError: `Reply file not found: ${missingReplyPath}`,
+    logPath: null,
+    applicationPath: null,
+    appArgs: ["--compose", composePath, "--metadata", metadataPath],
   };
+}
+
+function writeGeminiPidOnlyWorkspace(workspaceDir) {
+  ensureWrapperScenarioSupported("gemini-pid-only");
+
+  const composePath = path.join(workspaceDir, "compose.md");
+  const homeDir = path.join(workspaceDir, "home");
+  const logPath = path.join(homeDir, ".cliv", "cliv.log");
+
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(
+    composePath,
+    [
+      "# Gemini Compose Target",
+      "",
+      "This file is passed as the write-back target while the reply is loaded from the Gemini pid cache.",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const applicationPath = writeNodeWrapper(
+    path.join(workspaceDir, "gemini"),
+    buildGeminiWrapperSource({ homeDir }),
+  );
+
+  return {
+    workspaceDir,
+    composePath,
+    replyPath: null,
+    metadataPath: null,
+    expectedHeading: "Gemini PID Reply Fixture",
+    expectedError: null,
+    logPath,
+    applicationPath,
+    appArgs: ["--compose", composePath],
+  };
+}
+
+function writeTrustedCallerOnlyWorkspace(workspaceDir) {
+  ensureWrapperScenarioSupported("trusted-caller-only");
+
+  const composePath = path.join(workspaceDir, "compose.md");
+  const homeDir = path.join(workspaceDir, "home");
+  const logPath = path.join(homeDir, ".cliv", "cliv.log");
+
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(
+    composePath,
+    [
+      "# Trusted Caller Compose Target",
+      "",
+      "This file should be treated as a write target only.",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const applicationPath = writeNodeWrapper(
+    path.join(workspaceDir, "mycli"),
+    buildTrustedCallerWrapperSource({ homeDir }),
+  );
+
+  return {
+    workspaceDir,
+    composePath,
+    replyPath: null,
+    metadataPath: null,
+    expectedHeading: null,
+    expectedError: null,
+    logPath,
+    applicationPath,
+    appArgs: [composePath],
+  };
+}
+
+function ensureWrapperScenarioSupported(scenario) {
+  if (os.platform() === "win32") {
+    throw new Error(`${scenario} desktop smoke scenario is only supported on Unix-like systems`);
+  }
+}
+
+function writeNodeWrapper(wrapperPath, source) {
+  fs.writeFileSync(wrapperPath, `#!/usr/bin/env node\n${source}`, "utf8");
+  fs.chmodSync(wrapperPath, 0o755);
+  return wrapperPath;
+}
+
+function buildGeminiWrapperSource({ homeDir }) {
+  return `const { spawn, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+
+const env = { ...process.env, HOME: ${JSON.stringify(homeDir)}, CLIV_DEBUG: "1" };
+delete env.CLIV_AGENT;
+delete env.CODEX_THREAD_ID;
+delete env.CLAUDE_SESSION_ID;
+delete env.GEMINI_SESSION_ID;
+delete env.CODEX_HOME;
+
+fs.mkdirSync(env.HOME, { recursive: true });
+
+const hook = spawnSync(${JSON.stringify(binaryPath)}, ["cache-gemini"], {
+  env,
+  input: JSON.stringify({
+    prompt_response: "# Gemini PID Reply Fixture\\n\\nLoaded via real cache-gemini hook and pid-based GUI extraction.\\n",
+  }),
+  encoding: "utf8",
+  stdio: ["pipe", "inherit", "inherit"],
+});
+
+if (hook.status !== 0) {
+  process.exit(hook.status ?? 1);
+}
+
+const child = spawn(${JSON.stringify(binaryPath)}, process.argv.slice(2), {
+  env,
+  stdio: "inherit",
+});
+
+child.on("exit", (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 0);
+});
+`;
+}
+
+function buildTrustedCallerWrapperSource({ homeDir }) {
+  return `const { spawn } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const env = { ...process.env, HOME: ${JSON.stringify(homeDir)}, CLIV_DEBUG: "1" };
+delete env.CLIV_AGENT;
+delete env.CODEX_THREAD_ID;
+delete env.CLAUDE_SESSION_ID;
+delete env.GEMINI_SESSION_ID;
+delete env.CODEX_HOME;
+
+const configDir = path.join(env.HOME, ".cliv");
+fs.mkdirSync(configDir, { recursive: true });
+fs.writeFileSync(
+  path.join(configDir, "config.toml"),
+  [
+    "[launch]",
+    'trusted_callers = ["mycli"]',
+    "",
+  ].join("\\n"),
+  "utf8",
+);
+
+const child = spawn(${JSON.stringify(binaryPath)}, process.argv.slice(2), {
+  env,
+  stdio: "inherit",
+});
+
+child.on("exit", (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 0);
+});
+`;
 }
 
 function closeTauriDriver() {

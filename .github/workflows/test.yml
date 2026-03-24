@@ -71,4 +71,4 @@ jobs:
         run: cargo install tauri-driver
 
       - name: Desktop smoke E2E
-        run: xvfb-run -a pnpm test:e2e:desktop
+        run: xvfb-run -a pnpm test:e2e:desktop:unix

@@ -164,12 +164,13 @@ notify = ["cliv", "cache-codex"]
 }
 ```
 
-**工作原理**：Claude 通过 stdin 管道传入 JSON，包含 `session_id` 和 `last_assistant_message`。cliV 缓存到 `~/.claude/reply_cache/{session-id}.md`。
+**工作原理**：Claude 通过 stdin 管道传入 JSON，包含 `session_id` 和 `last_assistant_message`。cliV 会写入 reply cache metadata 与兼容缓存项，使当前 lookup key 能稳定映射回真实 Claude 会话身份。
 
 ### 提取回退链
 
-1. **缓存命中**：`CLAUDE_SESSION_ID` → `~/.claude/reply_cache/{id}.md`
-2. **会话记录扫描**：`~/.claude/transcripts/` 中最新的 JSONL 文件
+1. **直接缓存命中**：`CLAUDE_SESSION_ID`（在 cliV 中作为兼容的 lookup-key carrier）→ `~/.claude/reply_cache/{key}.md`
+2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `key`、`real_session_id` 或 `pid` 与 lookup key 匹配的最新记录
+3. **兼容直读**：若该 key 仍存在 legacy 直存文件，则直接读取
 
 ---
 
@@ -196,12 +197,13 @@ notify = ["cliv", "cache-codex"]
 }
 ```
 
-**工作原理**：Gemini 通过 stdin 管道传入 JSON，包含 `prompt_response`。Session ID 来自 `GEMINI_SESSION_ID` 环境变量（由 Gemini 注入）。cliV 缓存到 `~/.gemini/reply_cache/{session-id}.md`。
+**工作原理**：Gemini 通过 stdin 管道传入 JSON，包含 `prompt_response`。`GEMINI_SESSION_ID` 若存在，可提供 agent 原生会话身份；cliV 会写入 reply cache metadata 与兼容缓存项，使当前 lookup key 能确定性地解析到目标回复。
 
 ### 提取回退链
 
-1. **缓存命中**：`GEMINI_SESSION_ID` → `~/.gemini/reply_cache/{id}.md`
-2. **文件扫描**：`~/.gemini/reply_cache/` 中最新的 `.md` 文件
+1. **直接缓存命中**：`GEMINI_SESSION_ID`（在 cliV 中作为兼容的 lookup-key carrier）→ `~/.gemini/reply_cache/{key}.md`
+2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `key`、`real_session_id` 或 `pid` 与 lookup key 匹配的最新记录
+3. **兼容直读**：若该 key 仍存在 legacy 直存文件，则直接读取
 
 ---
 
@@ -213,7 +215,7 @@ cliV 是一个单一二进制文件。不需要 Python、Bash、Node.js 或任�
 
 ### Agent 自动检测
 
-当作为 `$EDITOR` 启动时，cliV 会通过环境变量（`CODEX_THREAD_ID`、`CLAUDE_SESSION_ID`、`GEMINI_SESSION_ID`）自动检测调用的 Agent。对于 Codex，`CODEX_THREAD_ID` 这个名字出于兼容性保留，但实际用于缓存查找的值通常是当前 agent 的 PID。除非你想手动覆盖，否则不需要设置 `CLIV_AGENT` 环境变量。
+当作为 `$EDITOR` 启动时，cliV 会通过环境变量（`CODEX_THREAD_ID`、`CLAUDE_SESSION_ID`、`GEMINI_SESSION_ID`）自动检测调用的 Agent。在 cliV 内部，这些环境变量统一被视为当前 reply-cache lookup key 的兼容承载字段：其值可能是 agent 原生会话 ID，也可能是 PID 派生的缓存键，取决于启动上下文。除非你想手动覆盖，否则不需要设置 `CLIV_AGENT` 环境变量。
 
 ### 启动模式
 
@@ -222,8 +224,6 @@ cliV 是一个单一二进制文件。不需要 Python、Bash、Node.js 或任�
 - `cliv --compose draft.md`：兼容旧调用方式，语义等同于 `--target`。
 - 若命中 `trusted_callers` 且只收到一个位置参数：该参数会被视为写回目标，用于兼容只会调用 `cliv <file>` 的 CLI。
 
-### 提取优先级
+### 提取路由
 
-当 Agent 未知时，cliV 按以下顺序尝试：**Claude → Gemini → Codex**。
-
-> **为什么？** Codex 的回退扫描器总是会返回 _某些内容_（即使是过期数据），所以放在最后，避免遮盖更新的回复。
+cliV 只会调用已检测到的那个 Agent 对应的 extractor。若未检测到 Agent，则跳过 reply extraction，界面保持 fail-closed。

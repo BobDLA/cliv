@@ -1,16 +1,7 @@
 use super::common;
+use super::{is_pid_like, read_cached_reply, resolve_cache_path_from_meta};
 use crate::logging;
-use serde::Deserialize;
-use std::fs;
-use std::path::{Path, PathBuf};
-
-#[derive(Debug, Deserialize)]
-struct CacheMetaRecord {
-    agent: Option<String>,
-    key: Option<String>,
-    real_session_id: Option<String>,
-    cached_at: Option<String>,
-}
+use std::path::Path;
 
 /// Read the cached Codex reply for a given cache key or thread-id.
 /// The cache is populated by `cliv cache-codex` (called from Codex notify hook).
@@ -55,19 +46,19 @@ pub fn extract_codex_reply_from(
         let cache_path = codex_home
             .join("reply_cache")
             .join(format!("{}.md", lookup_key));
-        if let Some(reply) = read_cached_reply(&cache_path) {
+        if let Some(reply) = read_cached_reply("codex", &cache_path) {
             return reply;
         }
     }
 
     // Strategy 2: Resolve a pid-keyed cache file by metadata, typically from a thread-id.
-    if let Some(cache_path) = resolve_cache_path_from_meta(codex_home, &lookup_key) {
+    if let Some(cache_path) = resolve_cache_path_from_meta("codex", codex_home, &lookup_key) {
         logging::log(&format!(
             "  extract codex: metadata matched key='{}' → {}",
             lookup_key,
             cache_path.display()
         ));
-        if let Some(reply) = read_cached_reply(&cache_path) {
+        if let Some(reply) = read_cached_reply("codex", &cache_path) {
             return reply;
         }
     }
@@ -76,7 +67,7 @@ pub fn extract_codex_reply_from(
     let legacy_cache_path = codex_home
         .join("reply_cache")
         .join(format!("{}.md", lookup_key));
-    if let Some(reply) = read_cached_reply(&legacy_cache_path) {
+    if let Some(reply) = read_cached_reply("codex", &legacy_cache_path) {
         return reply;
     }
 
@@ -84,78 +75,6 @@ pub fn extract_codex_reply_from(
         "Codex reply not found for key '{}'. Neither cache file nor metadata match found.",
         lookup_key
     ))
-}
-
-fn is_pid_like(value: &str) -> bool {
-    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_digit())
-}
-
-fn read_cached_reply(cache_path: &Path) -> Option<Result<String, String>> {
-    common::read_cached_reply("extract codex", cache_path, "Failed to read reply cache")
-}
-
-fn resolve_cache_path_from_meta(codex_home: &Path, lookup_key: &str) -> Option<PathBuf> {
-    let cache_dir = codex_home.join("reply_cache");
-    let mut newest_match: Option<(u64, PathBuf)> = None;
-
-    for entry in fs::read_dir(&cache_dir).ok()? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        let path = entry.path();
-        let file_name = match path.file_name().and_then(|name| name.to_str()) {
-            Some(name) => name,
-            None => continue,
-        };
-        if !file_name.ends_with(".meta.json") {
-            continue;
-        }
-
-        let raw = match fs::read_to_string(&path) {
-            Ok(raw) => raw,
-            Err(_) => continue,
-        };
-        let meta: CacheMetaRecord = match serde_json::from_str(&raw) {
-            Ok(meta) => meta,
-            Err(_) => continue,
-        };
-        if meta.agent.as_deref() != Some("codex") {
-            continue;
-        }
-
-        let matches_lookup = meta.key.as_deref() == Some(lookup_key)
-            || meta.real_session_id.as_deref() == Some(lookup_key);
-        if !matches_lookup {
-            continue;
-        }
-
-        let md_name = match file_name.strip_suffix(".meta.json") {
-            Some(name) => name,
-            None => continue,
-        };
-        let md_path = cache_dir.join(format!("{}.md", md_name));
-        if !md_path.exists() {
-            continue;
-        }
-
-        let cached_at = meta
-            .cached_at
-            .as_deref()
-            .and_then(parse_cached_at)
-            .unwrap_or(0);
-
-        match newest_match {
-            Some((best_ts, _)) if cached_at < best_ts => {}
-            _ => newest_match = Some((cached_at, md_path)),
-        }
-    }
-
-    newest_match.map(|(_, path)| path)
-}
-
-fn parse_cached_at(value: &str) -> Option<u64> {
-    value.trim_end_matches('Z').parse::<u64>().ok()
 }
 
 #[cfg(test)]
@@ -230,5 +149,16 @@ mod tests {
         let result = extract_codex_reply_from(home.path(), Some("nonexistent-key".into()));
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found for key"));
+    }
+
+    #[test]
+    fn requested_pid_miss_does_not_return_other_pid_cache() {
+        let home = setup_temp_home();
+        let cache_path = home.path().join("reply_cache").join("12345.md");
+        fs::write(&cache_path, "Other pid reply").unwrap();
+
+        let result = extract_codex_reply_from(home.path(), Some("99999".into()));
+        let err = result.expect_err("expected missing pid lookup to fail");
+        assert!(err.contains("99999"));
     }
 }
