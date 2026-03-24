@@ -6,17 +6,19 @@
 
 **[中文版](README.zh-CN.md)**
 
-**cliV** — A desktop reviewer launched from the CLI, for reading long AI agent replies and Markdown drafts.
-Read, annotate, then write back when there's an explicit or trusted write target; copy the result when there isn't.
+> ### Tame the AI Flood. Review with precision.
+> 
+> **A desktop reviewer crafted for command-line invocation.** Escape the flood of terminal text with a single shortcut: read long AI replies comfortably in rich text, make precise selection-based annotations, and write the aggregated prompt right back to your target workflow.
 
-<!-- TODO: Add hero screenshot -->
-<!-- ![cliV screenshot](docs/media/hero.png) -->
+![cliV Screenshot](docs/image.png)
+
+<video src="docs/demo_cliv.mp4" controls="controls" width="100%" muted="true" loop="true"></video>
 
 ## Why cliV?
 
 AI coding agents (Codex, Claude Code, Gemini CLI) produce long, structured replies — but you're reading them in a terminal. That's fine for 20 lines, painful for 500.
 
-When your agent invokes `$EDITOR` (commonly `Ctrl+G`, but depends on agent and config), **cliV** opens a desktop GUI better suited for review:
+**cliV** can be set as an external editor for Claude Code, Codex, and Gemini, invoked via shortcut, enabling review, annotation, prompt return, and history functions:
 
 - **Review** — full Markdown + Mermaid diagram rendering, no more plain text
 - **Annotate** — select exact passages to add comments instead of writing vague follow-ups
@@ -33,44 +35,13 @@ When your agent invokes `$EDITOR` (commonly `Ctrl+G`, but depends on agent and c
 
 `cache-codex` receives JSON via CLI arguments; `cache-claude` and `cache-gemini` read JSON from stdin. Gemini also relies on `GEMINI_SESSION_ID`.
 
-## Install
+## Installation and Configuration
 
-### Download (recommended)
+Please refer to our dedicated guide documents:
+- [Install Guide](docs/install-guide.md)
+- [Agent Integrations Guide](docs/integrations.md)
 
-Grab the latest release from [GitHub Releases](https://github.com/BobDLA/cliv/releases):
-
-- **Linux**: `.deb` package or standalone binary
-
-```bash
-# Install .deb
-sudo dpkg -i cliv_0.2.1_amd64.deb
-
-# Or copy the binary directly
-cp cliv ~/.local/bin/
-```
-
-### Build from source
-
-```bash
-# Prerequisites: Node.js 20+, Rust 1.75+, pnpm
-git clone https://github.com/BobDLA/cliv.git
-cd cliv
-pnpm install
-pnpm tauri:build
-# Local package build; on Linux this uses the deb-only profile
-# Binary at src-tauri/target/release/cliv
-```
-
-For release-style packaging or custom bundle targets, use `pnpm tauri:build:release -- --bundles deb` (or pass a different Tauri build flag set as needed).
-
-### Set up as your `$EDITOR`
-
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-export EDITOR="cliv"
-```
-
-Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit arguments, you can also pass `--target <file>`. Then configure your agent hooks — see [docs/integrations.md](docs/integrations.md) for details.
+These documents explain how to download or build cliV, set up `$EDITOR`, and configure integrations and `config.toml` hooks for agents like Codex, Claude Code, and Gemini CLI. Architecture and contributor notes are also linked across specific internal documents.
 
 ## Quick Start
 
@@ -80,6 +51,47 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 4. cliV opens with the agent's latest reply rendered as rich Markdown
 5. Select text → annotate → aggregate → write back or copy the result
 
+## Workflow
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 60, "rankSpacing": 80, "padding": 24}} }%%
+flowchart LR
+    subgraph A["CLI Coding Tools"]
+        A1["Claude Code"]
+        A2["Codex"]
+        A3["Gemini"]
+    end
+
+    B["Trigger `$EDITOR` via shortcut<br/>(e.g., Ctrl+G)"]
+
+    subgraph C["cliV Review Phase"]
+        C1["Auto-extract latest reply"]
+        C2["Rich text reading"]
+        C3["Add/Edit/Delete annotations"]
+        C4["Aggregate annotations as Prompt"]
+    end
+
+    subgraph D["Return Result"]
+        D1["Write back to explicit target"]
+        D2["Fallback to clipboard"]
+    end
+
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    B --> C1 --> C2 --> C3 --> C4
+    C4 --> D1
+    C4 -. No write target .-> D2
+
+    classDef cli fill:#EDF4FF,stroke:#5B8DEF,color:#17325C,stroke-width:1.5px;
+    classDef review fill:#EEF8F1,stroke:#43A047,color:#1F4D2E,stroke-width:1.5px;
+    classDef back fill:#FFF4E5,stroke:#FB8C00,color:#6A3A00,stroke-width:1.5px;
+
+    class A1,A2,A3,B cli;
+    class C1,C2,C3,C4 review;
+    class D1,D2 back;
+```
+
 ## Features
 
 - 📖 **Rich Markdown rendering** — headings, code blocks, tables, Mermaid diagrams
@@ -88,68 +100,6 @@ Keeping `$EDITOR` as plain `cliv` is fine; if your caller supports explicit argu
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
 - 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
-
-## Notes
-
-- **Launch semantics** — `cliv <file.md>` opens that file for review. `cliv --target <file>`, `cliv -t <file>`, and the compatibility alias `cliv --compose <file>` treat the file as the write target.
-- **Write-back behavior** — cliV writes back directly only when an explicit target is present or the launch comes from a trusted caller; otherwise it falls back to clipboard.
-- **Local storage** — integration hooks cache replies under each agent's `reply_cache` directory; session data is also local-only for now.
-- **Contributor docs** — see [docs/demo/demo.md](docs/demo/demo.md) for the architecture showcase, [docs/testing-standard.md](docs/testing-standard.md) for validation rules, [docs/build-workflows.md](docs/build-workflows.md) for package/build paths, [docs/worktree-cache.md](docs/worktree-cache.md) for shared worktree cache setup, [docs/refactoring_governance.md](docs/refactoring_governance.md) for refactor scope, [docs/refactor-backlog.md](docs/refactor-backlog.md) for the executed backlog, and [docs/session-history-boundary.md](docs/session-history-boundary.md) for the shared restore boundary.
-- **Settings boundary** — cliV stores its own durable settings in `~/.cliv/config.toml`, including launch policy, prompt headers, reading preferences, and supported app shortcuts. External hook files remain owned by each agent CLI.
-- **Auto-detection** — agent detection relies on environment variables and process heuristics; to force, set `CLIV_AGENT=codex|claude|gemini`. Trusted callers, ignored callers, scan depth, prompt headers, and supported settings-backed shortcuts can all be configured in `~/.cliv/config.toml`.
-- **Logging** — on non-Windows systems, cliV may write diagnostic logs to `~/.cliv/cliv.log`.
-
-### Example `~/.cliv/config.toml`
-
-```toml
-[launch]
-scan_depth = 5
-trusted_callers = ["codex", "claude", "gemini"]
-ignored_callers = [
-  "bash",
-  "sh",
-  "zsh",
-  "fish",
-  "tmux",
-  "open",
-  "launchd",
-  "cmd.exe",
-  "powershell.exe",
-  "pwsh.exe",
-  "explorer.exe",
-]
-
-[prompts]
-reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
-reply_header_en = "Please respond to each annotation below in Markdown."
-iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
-iterate_header_en = "Please make incremental revisions based on the following annotations."
-
-[ui]
-theme = "light"
-font_size = 18
-locale = "en"
-sidebar_open = true
-sidebar_tab = "outline"
-sidebar_width = 224
-annotation_margin_width = 256
-content_width = "standard"
-page_padding = "comfortable"
-reading_density = "comfortable"
-highlight_strength = "balanced"
-
-[ui.shortcuts]
-open_file = "Mod+O"
-search = "Mod+F"
-submit_return = "Mod+Enter"
-submit_annotation = "Mod+Enter"
-add_annotation = "Mod+Alt+M"
-font_increase = "Mod+="
-font_decrease = "Mod+-"
-font_reset = "Mod+0"
-```
-
-When `submit_annotation` and `submit_return` share `Mod+Enter`, cliV uses focus priority: annotation submit wins while the annotation editor is active; otherwise the same key falls through to return submit.
 
 ## Tech Stack
 

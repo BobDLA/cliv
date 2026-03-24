@@ -177,11 +177,10 @@ Each supported AI agent has a unique hook mechanism. cliV normalizes these into 
 
 ### Integration Setup Examples
 
-**Codex** — Add to `~/.codex/config.yaml`:
+**Codex** — Add to `~/.codex/config.toml`:
 
-```yaml
-notify:
-  - "cliv cache-codex '$1'"
+```toml
+notify = ["cliv", "cache-codex"]
 ```
 
 **Claude Code** — Add to `~/.claude/settings.json`:
@@ -191,7 +190,6 @@ notify:
   "hooks": {
     "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
@@ -211,8 +209,12 @@ notify:
   "hooks": {
     "AfterAgent": [
       {
-        "cwd": ".",
-        "command": "cliv cache-gemini"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-gemini"
+          }
+        ]
       }
     ]
   }

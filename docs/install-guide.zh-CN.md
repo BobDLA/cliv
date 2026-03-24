@@ -2,23 +2,9 @@
 
 **[English](install-guide.md)**
 
-## 1. 构建
+## 1. 安装
 
-```bash
-cd cliv
-pnpm install
-pnpm tauri:build
-```
-
-构建产物：
-- **二进制**：`src-tauri/target/release/cliv`
-- **deb 包**：`src-tauri/target/release/bundle/deb/cliv_0.2.1_amd64.deb`
-
-`pnpm tauri:build` 现在是本地打包路径。在 Linux 上它会额外加载一个 deb-only 的 Tauri 覆盖配置，避免日常调试时顺手生成多余 bundle。需要按发版方式打包时，使用 `pnpm tauri:build:release -- <tauri 参数>`。
-
-## 2. 安装
-
-根据你的系统选择一种方式：
+从 [GitHub Releases](https://github.com/BobDLA/cliv/releases) 获取最新版本，并根据你的系统选择合适的安装方式。如果你需要从源码参与开发构建，请参阅开发者文档 [Build Workflows](build-workflows.md)。
 
 ### Linux
 ```bash
@@ -36,14 +22,21 @@ sudo dpkg -i cliv_*.deb
 sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
 ```
 
+### Windows
+1. 下载 `.msi` 安装包并双击运行安装向导。
+2. 安装程序会自动将 `cliv` 添加到系统的 `PATH` 环境变量中。安装完成后，你可以在 PowerShell 或 CMD 中直接使用 `cliv` 命令。由于环境变量刷新机制，首次安装可能需要重启终端软件才能生效。
+
 ### 验证
 ```bash
 cliv --help  # 或 which cliv
 ```
 
-## 3. 设置环境变量
+## 2. 设置环境变量
 
-编辑 `~/.bashrc` 或 `~/.zshrc`：
+> [!CAUTION]
+> **此步骤非常重要且容易出错**。只有正确配置了 `$EDITOR` 和下方的 Agent hook，才能实现“终端快捷键自动唤起桌面审阅”。
+
+编辑/添加环境变量到配置（例如 `~/.bashrc` 或 `~/.zshrc`）：
 
 ```bash
 export EDITOR="cliv"
@@ -52,15 +45,17 @@ export EDITOR="cliv"
 然后 `source ~/.bashrc`（或重启终端）。
 
 > **原理**：当 AI agent 触发 Ctrl+G 时，它会调用 `$EDITOR`。设成 `cliv` 后，agent 会直接启动 cliV。
-> `cliv file.md` 默认是只读审阅；如需显式写回目标，可用 `cliv --target file.md`（兼容别名：`--compose`）。
 
-## 4. 配置 Agent Hook
+## 3. 配置 Agent Hook
 
-每个 agent 需要一行 hook 配置，让它在回复完成后调用 `cliv cache-xxx` 缓存回复。
+> [!CAUTION]
+> **关键步骤**：这是第二处容易遗漏的核心配置。如果不配置 Hook，按下触发键时 cliV 将无法获取到 Agent 最新的回复内容。此步骤对集成至关重要。
+
+每个 agent 需要一行自定义 hook 配置，让它在完成每次回复后必定调用 `cliv cache-xxx` 来将最新内容安全写入本机缓存。
 
 ---
 
-### 4a. Codex
+### 3a. Codex
 
 编辑 `~/.codex/config.toml`，添加：
 
@@ -68,22 +63,7 @@ export EDITOR="cliv"
 notify = ["cliv", "cache-codex"]
 ```
 
-**完整示例**（如果文件不存在就新建）：
 
-```toml
-# ~/.codex/config.toml
-model = "o4-mini"
-notify = ["cliv", "cache-codex"]
-```
-
-**测试**：
-```bash
-# 手动测试 cache-codex
-CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
-cat ~/.codex/reply_cache/424242.md
-cat ~/.codex/reply_cache/424242.meta.json
-# 这里的 424242 用来模拟 GUI 启动时使用的 pid 缓存键。
-```
 
 **真实测试**：
 1. 启动 Codex → 进行一轮对话
@@ -92,7 +72,7 @@ cat ~/.codex/reply_cache/424242.meta.json
 
 ---
 
-### 4b. Claude Code
+### 3b. Claude Code
 
 编辑 `~/.claude/settings.json`，添加 Stop hook：
 
@@ -115,12 +95,7 @@ cat ~/.codex/reply_cache/424242.meta.json
 
 > ⚠️ 如果文件已有其他配置，把 `hooks` 部分合并进去，不要覆盖。
 
-**测试**：
-```bash
-# 手动测试 cache-claude
-echo '{"hook_event_name":"Stop","session_id":"test-456","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
-cat ~/.claude/reply_cache/test-456.md
-```
+
 
 **真实测试**：
 1. 启动 Claude Code → 进行一轮对话
@@ -129,7 +104,7 @@ cat ~/.claude/reply_cache/test-456.md
 
 ---
 
-### 4c. Gemini CLI
+### 3c. Gemini CLI
 
 编辑 `~/.gemini/settings.json`，添加 AfterAgent hook：
 
@@ -150,12 +125,7 @@ cat ~/.claude/reply_cache/test-456.md
 }
 ```
 
-**测试**：
-```bash
-# 手动测试 cache-gemini
-echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-789 cliv cache-gemini
-cat ~/.gemini/reply_cache/test-789.md
-```
+
 
 **真实测试**：
 1. 启动 Gemini CLI → 进行一轮对话
@@ -164,7 +134,7 @@ cat ~/.gemini/reply_cache/test-789.md
 
 ---
 
-## 5. 验证清单
+## 4. 验证清单
 
 | 步骤 | 命令 | 预期 |
 |---|---|---|
@@ -176,7 +146,32 @@ cat ~/.gemini/reply_cache/test-789.md
 | Claude cache 测试 | 上面的手动命令 | 文件写入成功 |
 | Ctrl+G 真实测试 | 在 agent 中按 Ctrl+G | cliV 窗口弹出 |
 
-## 6. 常见问题 (FAQ)
+## 5. 常见问题与调试 (FAQ & Troubleshooting)
+
+### 如何验证或调试缓存 Hook 是否工作？
+
+如果按下快捷键后 cliV 没有显示最新的回复，你可以通过下方的手动调试命令测试提取逻辑是否正常：
+
+**Codex 调试**：
+```bash
+CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
+cat ~/.codex/reply_cache/424242.md
+```
+*(注：424242 用来模拟 GUI 启动时使用的 pid 缓存键。)*
+
+**Claude Code 调试**：
+```bash
+echo '{"hook_event_name":"Stop","session_id":"test-claude","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
+cat ~/.claude/reply_cache/test-claude.md
+```
+
+**Gemini CLI 调试**：
+```bash
+echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-gemini cliv cache-gemini
+cat ~/.gemini/reply_cache/test-gemini.md
+```
+
+如果手动执行上述命令后能成功将 `.md` 文件写入对应的 `reply_cache` 目录，说明 cliV 本身工作正常，问题极大概率出在 Agent 的 hook 配置文件路径或语法上。
 
 ### macOS 提示“已损坏，无法打开。您应该将它移到废纸篓”
 这是因为通过网页下载的 GitHub Releases 产物会被 macOS 的 Gatekeeper 隔离（缺少 Apple 开发者签名和公证）。
@@ -185,10 +180,10 @@ cat ~/.gemini/reply_cache/test-789.md
 sudo xattr -rd com.apple.quarantine /Applications/cliV.app
 ```
 
-## 7. 卸载
+## 6. 卸载
 
 ```bash
-# 如果用方式 A 安装
+# 如果是下载的独立二进制放置于 ~/.local/bin
 rm ~/.local/bin/cliv
 
 # 如果用 deb 安装
