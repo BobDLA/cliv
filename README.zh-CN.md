@@ -12,7 +12,9 @@
 
 ![cliV 截图](docs/image.png)
 
-<video src="docs/demo_cliv.mp4" controls="controls" width="100%" muted="true" loop="true"></video>
+[![cliV 演示预览](docs/demo_cliv_preview.gif)](./docs/demo_cliv.mp4?raw=1)
+
+_GitHub 中显示为动图预览；点击可打开完整的 50 秒 MP4 演示。_
 
 ## 为什么需要 cliV？
 

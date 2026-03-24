@@ -12,7 +12,9 @@
 
 ![cliV Screenshot](docs/image.png)
 
-<video src="docs/demo_cliv.mp4" controls="controls" width="100%" muted="true" loop="true"></video>
+[![cliV Demo Preview](docs/demo_cliv_preview.gif)](./docs/demo_cliv.mp4?raw=1)
+
+_Animated preview for GitHub. Click to open the full 50s MP4 demo._
 
 ## Why cliV?
 
