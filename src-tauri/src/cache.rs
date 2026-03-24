@@ -9,21 +9,31 @@ fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn now_iso8601() -> String {
+fn now_cache_timestamp() -> String {
     let dur = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
-    // Simple ISO-8601 without pulling in chrono: Unix epoch seconds
-    format!("{}Z", dur.as_secs())
+    // Unix-epoch nanoseconds keep metadata ordering stable for rapid successive writes.
+    format!("{}Z", dur.as_nanos())
 }
 
 /// Metadata written alongside each .md cache file.
+///
+/// Shared contract across Codex / Claude / Gemini:
+/// - `key` is the concrete reply-cache lookup key used for the filename.
+/// - `real_session_id` stores the agent-native conversation identity when available
+///   (Codex thread-id, Claude session_id, Gemini session_id).
+/// - `pid` stores the ancestor agent PID when available.
+///
+/// In other words: lookup key, conversation identity, and pid are related but not
+/// interchangeable. Readers may use metadata to bridge between them, but should not
+/// guess beyond direct-file hits and metadata-backed alias resolution.
 #[derive(Debug, Serialize)]
 struct CacheMeta {
     source: String,                  // "real_id" or "pid"
-    key: String,                     // the actual filename key (thread-id, session-id, or pid)
+    key: String,                     // concrete reply-cache lookup key / filename stem
     agent: String,                   // "codex", "claude", "gemini"
-    real_session_id: Option<String>, // the real thread/session ID (if different from key)
+    real_session_id: Option<String>, // agent-native conversation identity, if available
     pid: Option<u32>,                // ancestor agent PID (if found)
     cached_at: String,               // timestamp
     size_bytes: usize,               // content size
@@ -94,6 +104,8 @@ fn read_stdin() -> Option<String> {
 #[cfg(target_os = "linux")]
 fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
     let mut pid = std::os::unix::process::parent_id();
+    let mut matched_pid_by_name = None;
+    let mut matched_pid_by_cmdline = None;
 
     for level in 0..5 {
         if pid <= 1 {
@@ -111,10 +123,10 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
 
         if comm.contains(agent_name) {
             logging::debug(&format!(
-                "  ancestor: matched {} at pid={}",
+                "  ancestor: candidate {} match at pid={}",
                 agent_name, pid
             ));
-            return Some(pid);
+            matched_pid_by_name = Some(pid);
         }
 
         // Fallback: when comm is a generic interpreter (e.g. "node"),
@@ -129,10 +141,10 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
                     .to_lowercase();
                 if cmdline.contains(agent_name) {
                     logging::debug(&format!(
-                        "  ancestor: matched {} in cmdline at pid={}",
+                        "  ancestor: candidate {} cmdline match at pid={}",
                         agent_name, pid
                     ));
-                    return Some(pid);
+                    matched_pid_by_cmdline = Some(pid);
                 }
             }
         }
@@ -156,6 +168,14 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
         };
     }
 
+    if let Some(pid) = matched_pid_by_name.or(matched_pid_by_cmdline) {
+        logging::debug(&format!(
+            "  ancestor: selected outermost {} pid={}",
+            agent_name, pid
+        ));
+        return Some(pid);
+    }
+
     logging::debug(&format!(
         "  ancestor: {} not found in process chain",
         agent_name
@@ -166,6 +186,7 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
 #[cfg(target_os = "macos")]
 fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
     let mut pid = std::os::unix::process::parent_id();
+    let mut matched_pid_by_name = None;
 
     for level in 0..5 {
         if pid <= 1 {
@@ -190,10 +211,10 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
 
         if comm.contains(agent_name) {
             logging::debug(&format!(
-                "  ancestor: matched {} at pid={}",
+                "  ancestor: candidate {} match at pid={}",
                 agent_name, pid
             ));
-            return Some(pid);
+            matched_pid_by_name = Some(pid);
         }
 
         // Get PPID via ps
@@ -203,6 +224,14 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             .ok()?;
         let ppid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
         pid = ppid_str.parse::<u32>().ok()?;
+    }
+
+    if let Some(pid) = matched_pid_by_name {
+        logging::debug(&format!(
+            "  ancestor: selected outermost {} pid={}",
+            agent_name, pid
+        ));
+        return Some(pid);
     }
 
     logging::debug(&format!(
@@ -216,6 +245,7 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
 fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
     let own_pid = std::process::id();
     let mut pid = own_pid;
+    let mut matched_pid_by_name = None;
 
     for level in 0..5 {
         if pid == 0 {
@@ -248,10 +278,10 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
                     ));
                     if name.contains(agent_name) {
                         logging::debug(&format!(
-                            "  ancestor: matched {} at pid={}",
+                            "  ancestor: candidate {} match at pid={}",
                             agent_name, pid
                         ));
-                        return Some(pid);
+                        matched_pid_by_name = Some(pid);
                     }
                 }
                 pid = ppid;
@@ -262,6 +292,14 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
         if !found {
             break;
         }
+    }
+
+    if let Some(pid) = matched_pid_by_name {
+        logging::debug(&format!(
+            "  ancestor: selected outermost {} pid={}",
+            agent_name, pid
+        ));
+        return Some(pid);
     }
 
     logging::debug(&format!(
@@ -349,7 +387,7 @@ pub fn cache_codex(json_arg: &str) {
             agent: "codex".to_string(),
             real_session_id: Some(thread_id.to_string()),
             pid: Some(codex_pid),
-            cached_at: now_iso8601(),
+            cached_at: now_cache_timestamp(),
             size_bytes: message.len(),
         },
     );
@@ -432,7 +470,7 @@ pub fn cache_claude() {
                 agent: "claude".to_string(),
                 real_session_id: Some(session_id.to_string()),
                 pid: Some(pid),
-                cached_at: now_iso8601(),
+                cached_at: now_cache_timestamp(),
                 size_bytes: message.len(),
             },
         );
@@ -449,7 +487,7 @@ pub fn cache_claude() {
             agent: "claude".to_string(),
             real_session_id: Some(session_id.to_string()),
             pid: claude_pid,
-            cached_at: now_iso8601(),
+            cached_at: now_cache_timestamp(),
             size_bytes: message.len(),
         },
     );
@@ -509,7 +547,7 @@ pub fn cache_gemini() {
                 agent: "gemini".to_string(),
                 real_session_id: session_id.clone(),
                 pid: Some(pid),
-                cached_at: now_iso8601(),
+                cached_at: now_cache_timestamp(),
                 size_bytes: message.len(),
             },
         );
@@ -527,7 +565,7 @@ pub fn cache_gemini() {
                 agent: "gemini".to_string(),
                 real_session_id: session_id.clone(),
                 pid: gemini_pid,
-                cached_at: now_iso8601(),
+                cached_at: now_cache_timestamp(),
                 size_bytes: message.len(),
             },
         );

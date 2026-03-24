@@ -202,7 +202,7 @@ describe("useInitDocument in Tauri mode", () => {
     expect(tauriIpc.extractCodexReply).not.toHaveBeenCalled();
   });
 
-  it("uses cached reply extraction for trusted caller launches when file load is empty", async () => {
+  it("does not extract cached reply for trusted-caller-only launches", async () => {
     tauriIpc.getCliArgs.mockResolvedValue(
       makeCliArgs({
         reviewPath: "/tmp/review.md",
@@ -217,23 +217,21 @@ describe("useInitDocument in Tauri mode", () => {
         reply: "   ",
       }),
     );
-    tauriIpc.extractClaudeReply.mockResolvedValue("Recovered from Claude cache");
 
     render(<InitDocumentHarness />);
 
     await waitFor(() => {
-      expect(useDocumentStore.getState().replyContent).toBe(
-        "Recovered from Claude cache",
-      );
+      expect(useDocumentStore.getState().reviewPath).toBe("/tmp/review.md");
     });
 
-    expect(tauriIpc.extractClaudeReply).toHaveBeenCalledWith(null);
+    expect(useDocumentStore.getState().replyContent).toBe("   ");
+    expect(tauriIpc.extractClaudeReply).not.toHaveBeenCalled();
     expect(tauriIpc.extractGeminiReply).not.toHaveBeenCalled();
     expect(tauriIpc.extractCodexReply).not.toHaveBeenCalled();
     expect(useDocumentStore.getState().workspacePath).toBe("/tmp");
   });
 
-  it("tries the detected agent first, then falls back in order until one extractor succeeds", async () => {
+  it("only tries the detected agent extractor and fails closed on miss", async () => {
     tauriIpc.getCliArgs.mockResolvedValue(
       makeCliArgs({
         filePath: "/tmp/review.md",
@@ -255,16 +253,12 @@ describe("useInitDocument in Tauri mode", () => {
     render(<InitDocumentHarness />);
 
     await waitFor(() => {
-      expect(useDocumentStore.getState().replyContent).toBe(
-        "Claude fallback reply",
-      );
+      expect(useDocumentStore.getState().reviewPath).toBe("/tmp/review.md");
     });
 
+    expect(useDocumentStore.getState().replyContent).toBe("");
     expect(tauriIpc.extractGeminiReply).toHaveBeenCalledWith(null);
-    expect(tauriIpc.extractClaudeReply).toHaveBeenCalledWith(null);
-    expect(
-      tauriIpc.extractGeminiReply.mock.invocationCallOrder[0],
-    ).toBeLessThan(tauriIpc.extractClaudeReply.mock.invocationCallOrder[0]);
+    expect(tauriIpc.extractClaudeReply).not.toHaveBeenCalled();
     expect(tauriIpc.extractCodexReply).not.toHaveBeenCalled();
   });
 

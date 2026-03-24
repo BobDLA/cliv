@@ -17,11 +17,11 @@ type ReplyExtractionServices = {
   extractGeminiReply: (sessionId: string | null) => Promise<string>;
 };
 
-function buildExtractionPlan(
+function buildExtractionAttempt(
   agent: string | null | undefined,
   services: ReplyExtractionServices,
   workspacePath: string | null,
-): ExtractFn[] {
+): ExtractFn | null {
   const codex: ExtractFn = async () => {
     try {
       const reply = await services.extractCodexReply(null, workspacePath);
@@ -51,20 +51,20 @@ function buildExtractionPlan(
 
   switch (agent) {
     case "codex":
-      return [codex, claude, gemini];
+      return codex;
     case "claude":
-      return [claude, gemini, codex];
+      return claude;
     case "gemini":
-      return [gemini, claude, codex];
+      return gemini;
     default:
-      return [claude, gemini, codex];
+      return null;
   }
 }
 
 export function shouldUseReplyExtractionFallback(
-  args: Pick<CliArgs, "agent" | "trustedCaller">,
+  args: Pick<CliArgs, "agent">,
 ): boolean {
-  return Boolean(args.agent || args.trustedCaller);
+  return Boolean(args.agent);
 }
 
 export async function recoverReplyContent(
@@ -74,17 +74,21 @@ export async function recoverReplyContent(
 ): Promise<string | null> {
   let replyContent = result.reply;
 
+  // Fail closed unless an agent was actually detected.
+  // Trusted-caller-only launches are compatibility write-target flows.
   if (
     (!replyContent || replyContent.trim() === "") &&
     shouldUseReplyExtractionFallback(args)
   ) {
-    const plan = buildExtractionPlan(args.agent, services, args.workspacePath);
-
-    for (const attempt of plan) {
+    const attempt = buildExtractionAttempt(
+      args.agent,
+      services,
+      args.workspacePath,
+    );
+    if (attempt) {
       const reply = await attempt();
       if (reply) {
         replyContent = reply;
-        break;
       }
     }
   }

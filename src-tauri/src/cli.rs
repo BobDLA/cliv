@@ -198,6 +198,9 @@ fn resolve_launch_paths(
     explicit_target: Option<String>,
     trusted_caller: Option<String>,
 ) -> (Option<String>, Option<String>) {
+    // Compatibility-only path for wrappers that still launch `cliv <file>`.
+    // This is not the default Claude/Gemini/Codex UX: a lone positional file
+    // becomes the write target only when the caller is explicitly trusted.
     match (positional_path, explicit_target, trusted_caller) {
         (review_path, Some(target_path), _) => (review_path, Some(target_path)),
         (Some(target_path), None, Some(_)) => (None, Some(target_path)),
@@ -241,18 +244,32 @@ fn detect_agent(process_chain: &[ParentProcess]) -> Option<String> {
         return Some("gemini".to_string());
     }
 
-    logging::debug("  detect: no session env vars found, trying parent process...");
+    logging::debug("  detect: no lookup-key env vars found, trying parent process...");
 
-    for process in process_chain {
-        if let Some(agent) = match_agent_name(&process.name)
-            .or_else(|| process.cmdline.as_deref().and_then(match_agent_name))
-        {
-            return handle_agent_match(agent, process.pid, process.level);
-        }
+    if let Some((agent, pid, level)) = find_agent_process(process_chain) {
+        return handle_agent_match(agent, pid, level);
     }
 
     logging::log("  detect: no agent detected");
     None
+}
+
+fn find_agent_process(process_chain: &[ParentProcess]) -> Option<(&'static str, u32, usize)> {
+    let mut matched_by_name = None;
+    let mut matched_by_cmdline = None;
+
+    for process in process_chain {
+        if let Some(agent) = match_agent_name(&process.name) {
+            matched_by_name = Some((agent, process.pid, process.level));
+            continue;
+        }
+
+        if let Some(agent) = process.cmdline.as_deref().and_then(match_agent_name) {
+            matched_by_cmdline = Some((agent, process.pid, process.level));
+        }
+    }
+
+    matched_by_name.or(matched_by_cmdline)
 }
 
 fn detect_trusted_caller(config: &AppConfig, process_chain: &[ParentProcess]) -> Option<String> {
@@ -352,8 +369,11 @@ fn is_generic_interpreter(name: &str) -> bool {
     )
 }
 
-/// Given a matched agent and its PID, set the appropriate lookup env var.
-/// The env value is used as the active reply-cache key during GUI extraction.
+/// Given a matched agent and its PID, set the appropriate compatibility env var.
+///
+/// Important: these env vars are treated by cliV as reply-cache lookup-key carriers
+/// during GUI extraction. Their names are historical and do not guarantee that the
+/// runtime value is the agent's semantic conversation identity.
 fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<String> {
     let pid_str = agent_pid.to_string();
     let (env_var, agent) = match agent_name {
@@ -585,7 +605,9 @@ fn macos_cmdline(pid: u32) -> Option<String> {
         .args(["-o", "command=", "-p", &pid.to_string()])
         .output()
         .ok()?;
-    let cmd = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+    let cmd = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .to_lowercase();
     if cmd.is_empty() {
         None
     } else {
@@ -714,8 +736,8 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_trusted_caller, match_agent_name, parse_gui_args, resolve_launch_paths,
-        ParentProcess,
+        detect_trusted_caller, find_agent_process, match_agent_name, parse_gui_args,
+        resolve_launch_paths, ParentProcess,
     };
     use crate::config::{AppConfig, LaunchConfig};
 
@@ -908,6 +930,26 @@ mod tests {
         );
 
         assert_eq!(caller, None);
+    }
+
+    #[test]
+    fn find_agent_process_prefers_outermost_agent_match() {
+        let matched = find_agent_process(&[
+            ParentProcess {
+                pid: 101,
+                name: "node".into(),
+                cmdline: Some("/tmp/claude-inner /tmp/buffer.md".into()),
+                level: 0,
+            },
+            ParentProcess {
+                pid: 202,
+                name: "node".into(),
+                cmdline: Some("/tmp/claude-outer".into()),
+                level: 1,
+            },
+        ]);
+
+        assert_eq!(matched, Some(("claude", 202, 1)));
     }
 
     #[test]

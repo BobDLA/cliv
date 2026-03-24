@@ -1,6 +1,5 @@
 use crate::logging;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub fn default_agent_home(hidden_dir: &str) -> PathBuf {
     dirs::home_dir()
@@ -36,28 +35,4 @@ pub fn resolve_lookup_key(
     } else {
         (None, "none")
     }
-}
-
-pub fn read_cached_reply(
-    log_prefix: &str,
-    cache_path: &Path,
-    read_error_prefix: &str,
-) -> Option<Result<String, String>> {
-    logging::log(&format!(
-        "  {}: trying cache path={}",
-        log_prefix,
-        cache_path.display()
-    ));
-    if cache_path.exists() {
-        logging::log(&format!(
-            "  {}: HIT cache file={} size={}",
-            log_prefix,
-            cache_path.display(),
-            fs::metadata(cache_path).map(|meta| meta.len()).unwrap_or(0)
-        ));
-        return Some(
-            fs::read_to_string(cache_path).map_err(|err| format!("{}: {}", read_error_prefix, err)),
-        );
-    }
-    None
 }
