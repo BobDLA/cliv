@@ -1,9 +1,5 @@
 # cliV
 
-[![GitHub Stars](https://img.shields.io/github/stars/BobDLA/cliv?style=flat-square&logo=github&label=Stars)](https://github.com/BobDLA/cliv)
-[![License](https://img.shields.io/github/license/BobDLA/cliv?style=flat-square)](https://github.com/BobDLA/cliv/blob/main/LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/BobDLA/cliv?style=flat-square&label=Release)](https://github.com/BobDLA/cliv/releases)
-
 **[English](README.md)**
 
 > ### Tame the AI Flood. Review with precision.
@@ -119,6 +115,10 @@ flowchart LR
 - [x] 审阅历史（按项目分组归档，并支持只读回放）
 - [ ] 收藏夹
 - [ ] 迭代编辑模式
+
+## 致谢
+
+- [Linux DO](https://linux.do/) — 学AI，上L站！
 
 ## 许可证
 
