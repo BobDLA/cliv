@@ -4,12 +4,22 @@
  */
 interface ResizeHandleProps {
   onDragStart: (e: React.MouseEvent) => void;
+  className?: string;
+  style?: React.CSSProperties;
+  testId?: string;
 }
 
-export function ResizeHandle({ onDragStart }: ResizeHandleProps) {
+export function ResizeHandle({
+  onDragStart,
+  className,
+  style,
+  testId,
+}: ResizeHandleProps) {
   return (
     <div
       onMouseDown={onDragStart}
+      className={className}
+      data-testid={testId}
       style={{
         width: "6px",
         cursor: "col-resize",
@@ -17,6 +27,7 @@ export function ResizeHandle({ onDragStart }: ResizeHandleProps) {
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
+        ...style,
       }}
     >
       <div

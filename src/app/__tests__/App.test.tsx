@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { App } from "@/app/App";
+import { appVersionLabel } from "@/lib/appVersion";
 import { useDocumentStore, useUIStore } from "@/stores";
 
 vi.mock("@/app/hooks/useInitDocument", () => ({
@@ -50,9 +51,31 @@ describe("App", () => {
     expect(screen.getAllByText("cliV").length).toBeGreaterThan(0);
   });
 
-  it("should show the version message", () => {
+  it("shows the current app version in the top bar", () => {
     render(<App />);
-    expect(screen.getByText("Test document")).toBeInTheDocument();
+    expect(screen.getByTestId("topbar-version")).toHaveTextContent(appVersionLabel);
+  });
+
+  it("shows the current app version in the empty state", () => {
+    useDocumentStore.setState({
+      replyContent: null,
+      targetContent: null,
+      targetPath: null,
+      reviewPath: null,
+      replyPath: null,
+      workspacePath: null,
+      archivedSubmission: null,
+      documentId: "empty-doc",
+      isReadOnly: false,
+      isLoading: false,
+      error: null,
+    });
+
+    render(<App />);
+
+    expect(screen.getByTestId("docarea-empty-version")).toHaveTextContent(
+      `cliV ${appVersionLabel}`,
+    );
   });
 
   it("renders the GitHub link in the top bar", () => {

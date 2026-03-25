@@ -10,6 +10,7 @@ import {
   AnnotationHoverActions,
 } from "@/features/annotations";
 import { ReturnBuilder } from "@/features/return";
+import { appVersionLabel } from "@/lib/appVersion";
 import { ResizeHandle } from "./ResizeHandle";
 import { useT } from "@/lib/useT";
 
@@ -123,8 +124,11 @@ export function DocumentArea({
               <div className="flex h-full min-h-[60vh] flex-1 items-center justify-center">
                 <div className="flex max-w-lg -translate-y-12 transform flex-col items-center justify-center gap-6 text-center">
                   <div className="mb-2 text-5xl opacity-80">📖</div>
-                  <h2 className="text-3xl font-bold tracking-tight text-text-strong">
-                    cliV v0.2
+                  <h2
+                    className="text-3xl font-bold tracking-tight text-text-strong"
+                    data-testid="docarea-empty-version"
+                  >
+                    cliV {appVersionLabel}
                   </h2>
                   <p className="text-base leading-relaxed text-text-muted">
                     {t("docarea.hintUse")}{" "}

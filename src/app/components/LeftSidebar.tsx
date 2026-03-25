@@ -34,10 +34,15 @@ export function LeftSidebar({
   ].join(" ");
 
   return (
-    <>
+    <div
+      className="grid shrink-0 bg-surface-sidebar"
+      style={{
+        gridTemplateColumns: `${width}px 6px`,
+        gridTemplateRows: "auto minmax(0, 1fr)",
+      }}
+    >
       <aside
-        style={{ width: `${width}px` }}
-        className="flex shrink-0 flex-col bg-surface-sidebar"
+        className="row-span-2 flex min-h-0 min-w-0 flex-col bg-surface-sidebar"
         data-testid="left-sidebar"
       >
         <div className="flex items-center border-b border-border-subtle/50">
@@ -58,7 +63,9 @@ export function LeftSidebar({
         </div>
         <div
           className={
-            sidebarTab === "outline" ? "flex-1 overflow-y-auto" : "flex-1 min-h-0"
+            sidebarTab === "outline"
+              ? "flex-1 min-h-0 overflow-y-auto"
+              : "flex-1 min-h-0"
           }
         >
           {sidebarTab === "outline" ? (
@@ -73,7 +80,11 @@ export function LeftSidebar({
           </div>
         ) : null}
       </aside>
-      <ResizeHandle onDragStart={onDragStart} />
-    </>
+      <ResizeHandle
+        onDragStart={onDragStart}
+        testId="left-sidebar-resize-handle"
+        style={{ gridColumn: 2, gridRow: 2, alignSelf: "stretch" }}
+      />
+    </div>
   );
 }

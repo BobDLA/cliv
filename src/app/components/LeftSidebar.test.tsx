@@ -51,4 +51,18 @@ describe("LeftSidebar", () => {
     expect(screen.getByTestId("document-outline-stub")).toBeInTheDocument();
     expect(useUIStore.getState().sidebarTab).toBe("outline");
   });
+
+  it("keeps the resize handle below the tab strip", () => {
+    render(
+      <LeftSidebar
+        width={240}
+        headings={[]}
+        onDragStart={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("left-sidebar-resize-handle")).toHaveStyle({
+      gridRow: "2",
+    });
+  });
 });

@@ -6,6 +6,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { DocumentSearch } from "@/features/documents";
+import { appVersionLabel } from "@/lib/appVersion";
 import { useT } from "@/lib/useT";
 import { useDocumentStore } from "@/stores";
 
@@ -44,8 +45,11 @@ export function TopBar({
           <BookOpen className="h-5 w-5 text-accent" />
         </button>
         <span className="text-sm font-bold tracking-tight text-text-strong">cliV</span>
-        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[0.7rem] font-medium text-accent/80">
-          v0.2.1
+        <span
+          className="rounded bg-accent/10 px-1.5 py-0.5 text-[0.7rem] font-medium text-accent/80"
+          data-testid="topbar-version"
+        >
+          {appVersionLabel}
         </span>
         {isReadOnly ? (
           <span
