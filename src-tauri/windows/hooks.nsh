@@ -14,7 +14,7 @@
   FileWrite $0 "$\r$\n"
   FileWrite $0 "function Broadcast-EnvironmentChange() {$\r$\n"
   FileWrite $0 "  $$signature = @'$\r$\n"
-  FileWrite $0 "[System.Runtime.InteropServices.DllImport(""user32.dll"", CharSet = System.Runtime.InteropServices.CharSet.Auto, SetLastError = true)]$\r$\n"
+  FileWrite $0 "[System.Runtime.InteropServices.DllImport($\"user32.dll$\", CharSet = System.Runtime.InteropServices.CharSet.Auto, SetLastError = true)]$\r$\n"
   FileWrite $0 "public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, System.UInt32 Msg, System.IntPtr wParam, string lParam, System.UInt32 fuFlags, System.UInt32 uTimeout, out System.IntPtr lpdwResult);$\r$\n"
   FileWrite $0 "'@$\r$\n"
   FileWrite $0 "  $$type = Add-Type -MemberDefinition $$signature -Name 'CliVNativeMethods' -Namespace 'CliVInstaller' -PassThru$\r$\n"
