@@ -25,21 +25,24 @@ AI coding agents (Codex, Claude Code, Gemini CLI) produce long, structured repli
 
 ## Supported Agents
 
-| Agent | Integration | Hook Command |
-|---|---|---|
-| [Codex](https://github.com/openai/codex) | `notify` hook | `cliv cache-codex` |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `Stop` hook | `cliv cache-claude` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `AfterAgent` hook | `cliv cache-gemini` |
+- [Codex](https://github.com/openai/codex)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli)
 
-`cache-codex` receives JSON via CLI arguments; `cache-claude` and `cache-gemini` read JSON from stdin. Gemini also relies on `GEMINI_SESSION_ID`.
+Hook commands, path rules, launch behavior, and debugging are documented in the guide links below.
 
 ## Installation and Configuration
 
-Please refer to our dedicated guide documents:
+Please use the dedicated guide documents:
 - [Install Guide](docs/install-guide.md)
-- [Agent Integrations Guide](docs/integrations.md)
+- [Advanced Integration & Debugging Guide](docs/integrations.md)
 
-These documents explain how to download or build cliV, set up `$EDITOR`, and configure integrations and `config.toml` hooks for agents like Codex, Claude Code, and Gemini CLI. Architecture and contributor notes are also linked across specific internal documents.
+What each guide covers:
+
+- `Install Guide`: official install paths, `$EDITOR`, basic hook setup, verification, and uninstall
+- `Advanced Integration & Debugging Guide`: non-default executable paths, launch semantics, reply-cache lookup rules, and manual debugging
+
+For source builds and developer workflows, see the additional documents under [`docs/`](docs/) and the contributor notes in [`AGENTS.md`](AGENTS.md).
 
 ## Quick Start
 
@@ -97,7 +100,7 @@ flowchart LR
 - 📋 **Write-back flow** — aggregate annotations into a prompt, then write back or copy
 - 🔄 **Multi-agent support** — best-effort auto-detection of Codex / Claude / Gemini; force with `CLIV_AGENT`
 - 📂 **Open local Markdown** — review cached replies or open `.md` files directly with safe review-only defaults
-- 🎛️ **Unified settings** — manage Reading, Prompts, Shortcuts, and Integrations from one settings surface backed by `~/.cliv/config.toml`
+- 🎛️ **Unified settings** — manage Reading, Prompts, and Shortcuts from one settings surface backed by `~/.cliv/config.toml`
 
 ## Tech Stack
 

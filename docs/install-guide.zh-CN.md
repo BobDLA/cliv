@@ -1,80 +1,119 @@
-# cliV 安装与配置指南
+# cliV 安装指南
 
 **[English](install-guide.md)**
 
+这份文档只覆盖普通用户的正式安装路径。
+如果你需要看非默认路径、启动语义、reply cache 查找规则、手工调试，请继续看 [高级集成与调试参考](integrations.zh-CN.md)。
+
 ## 1. 安装
 
-从 [GitHub Releases](https://github.com/BobDLA/cliv/releases) 获取最新版本，并根据你的系统选择合适的安装方式。如果你需要从源码参与开发构建，请参阅开发者文档 [Build Workflows](build-workflows.md)。
+从 [GitHub Releases](https://github.com/BobDLA/cliv/releases) 下载对应平台的正式发布版本。如果你需要从源码构建，请参考 [Build Workflows](build-workflows.md)。
 
 ### Linux
+
+官方安装方式：
+
 ```bash
-# 安装 deb 包（自动放置到 /usr/bin/）
 sudo dpkg -i cliv_*.deb
 ```
 
+安装完成后，`cliv` 会出现在 `/usr/bin/cliv`，因此 hook 配置和 `$EDITOR` 都可以直接写成 `cliv`。
+
 ### macOS
-1. 打开 `.dmg` 并将 `cliV.app` 拖入 **应用程序 (Applications)** 文件夹。
 
-> **💡 最简配置（推荐普通用户使用）**：你可以完全跳过终端敲代码的步骤。在后续配置 Agent 和环境变量时，只要看到 `cliv`，直接替换成这个绝对路径即可：`/Applications/cliV.app/Contents/MacOS/cliv`
+1. 打开 `.dmg`，把 `cliV.app` 拖入 **应用程序 (Applications)**。
+2. 选择一种调用方式：
 
-2. *(可选)* 创建软链接，让你可以在终端随时输入短命令 `cliv`：
+推荐：
+- 不创建软链接。
+- 在 `$EDITOR` 和各个 Agent hook 里直接使用绝对路径 `/Applications/cliV.app/Contents/MacOS/cliv`。
+
+可选：
+- 如果你希望始终使用短命令 `cliv`，再创建软链接。
+
 ```bash
 sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
 ```
 
 ### Windows
-1. 下载 `.msi` 安装包并双击运行安装向导。
-2. 安装程序会自动将 `cliv` 添加到系统的 `PATH` 环境变量中。安装完成后，你可以在 PowerShell 或 CMD 中直接使用 `cliv` 命令。由于环境变量刷新机制，首次安装可能需要重启终端软件才能生效。
 
-### 验证
+1. 下载 `-setup.exe` 安装包并运行。
+2. 安装器会把 cliV 安装到 `%LOCALAPPDATA%\cliv`。
+3. 安装器会把这个目录加入“当前用户”的 `PATH`。
+4. 安装或更新后，请重新打开终端，让新的 `PATH` 生效。
+
+在 Windows 上，hook 配置和 `EDITOR` 一般都可以直接写成 `cliv`。
+
+### 验证二进制是否可用
+
+Linux / macOS 且 `cliv` 已在 `PATH` 中：
+
 ```bash
-cliv --help  # 或 which cliv
+cliv --help
+which cliv
 ```
 
-## 2. 设置环境变量
+macOS 未创建软链接：
 
-> [!CAUTION]
-> **此步骤非常重要且容易出错**。只有正确配置了 `$EDITOR` 和下方的 Agent hook，才能实现“终端快捷键自动唤起桌面审阅”。
+```bash
+/Applications/cliV.app/Contents/MacOS/cliv --help
+```
 
-编辑/添加环境变量到配置（例如 `~/.bashrc` 或 `~/.zshrc`）：
+Windows PowerShell 或 CMD：
+
+```powershell
+cliv --help
+where.exe cliv
+```
+
+## 2. 设置 EDITOR
+
+`EDITOR` 的值要和你当前平台上 cliV 的可执行路径保持一致。
+
+Linux：
 
 ```bash
 export EDITOR="cliv"
 ```
 
-然后 `source ~/.bashrc`（或重启终端）。
+macOS 已创建软链接：
 
-> **原理**：当 AI agent 触发 Ctrl+G 时，它会调用 `$EDITOR`。设成 `cliv` 后，agent 会直接启动 cliV。
+```bash
+export EDITOR="cliv"
+```
+
+macOS 未创建软链接：
+
+```bash
+export EDITOR="/Applications/cliV.app/Contents/MacOS/cliv"
+```
+
+Windows PowerShell：
+
+```powershell
+setx EDITOR cliv
+```
+
+然后重新打开一个新的终端。
+
+当 Agent 触发 `Ctrl+G` 时，它会启动 `$EDITOR`，这就是 cliV 被唤起的入口。
 
 ## 3. 配置 Agent Hook
 
-> [!CAUTION]
-> **关键步骤**：这是第二处容易遗漏的核心配置。如果不配置 Hook，按下触发键时 cliV 将无法获取到 Agent 最新的回复内容。此步骤对集成至关重要。
+如果 cliV 不在你的 `PATH` 里，请把下面所有 `cliv` 都替换成完整可执行路径。
+实际使用中，这主要发生在“未创建软链接的 macOS”场景。Linux 的官方 `.deb` 安装和 Windows 的 `-setup.exe` 安装，一般都可以直接保留 `cliv`。
 
-每个 agent 需要一行自定义 hook 配置，让它在完成每次回复后必定调用 `cliv cache-xxx` 来将最新内容安全写入本机缓存。
+### Codex
 
----
-
-### 3a. Codex
-
-编辑 `~/.codex/config.toml`，添加：
+编辑 `~/.codex/config.toml`：
 
 ```toml
 notify = ["cliv", "cache-codex"]
 ```
 
+### Claude Code
 
-
-**真实测试**：
-1. 启动 Codex → 进行一轮对话
-2. 按 `Ctrl+G`
-3. cliV 应弹出并显示 AI 最新回复
-
----
-
-### 3b. Claude Code
-
-编辑 `~/.claude/settings.json`，添加 Stop hook：
+编辑 `~/.claude/settings.json`：
 
 ```json
 {
@@ -93,20 +132,11 @@ notify = ["cliv", "cache-codex"]
 }
 ```
 
-> ⚠️ 如果文件已有其他配置，把 `hooks` 部分合并进去，不要覆盖。
+如果文件里已经有别的设置，请把 `hooks` 部分合并进去，不要整文件覆盖。
 
+### Gemini CLI
 
-
-**真实测试**：
-1. 启动 Claude Code → 进行一轮对话
-2. 按 `Ctrl+G`
-3. cliV 应弹出并显示 Claude 最新回复
-
----
-
-### 3c. Gemini CLI
-
-编辑 `~/.gemini/settings.json`，添加 AfterAgent hook：
+编辑 `~/.gemini/settings.json`：
 
 ```json
 {
@@ -125,73 +155,83 @@ notify = ["cliv", "cache-codex"]
 }
 ```
 
+## 4. 快速验证
 
+1. 重新打开一个新的终端，确认 `cliv --help` 可以正常运行。
+2. 确认 `EDITOR` 的值确实指向 cliV。
+3. 启动任意一个 Agent，让它先产出一条回复。
+4. 按 `Ctrl+G`。
+5. cliV 应该弹出，并显示这条最新回复。
 
-**真实测试**：
-1. 启动 Gemini CLI → 进行一轮对话
-2. 按 `Ctrl+G`（需要 $EDITOR 支持后）
-3. cliV 应弹出并显示 Gemini 最新回复
+如果这里失败了，请继续看 [高级集成与调试参考](integrations.zh-CN.md)。
 
----
+## 5. 常见问题
 
-## 4. 验证清单
+### 提示找不到 `cliv`
 
-| 步骤 | 命令 | 预期 |
-|---|---|---|
-| 二进制存在 | `which cliv` | 显示路径 |
-| EDITOR 设置 | `echo $EDITOR` | `cliv` |
-| Codex hook 配置 | `cat ~/.codex/config.toml` | 含 `notify = ["cliv", "cache-codex"]` |
-| Claude hook 配置 | `cat ~/.claude/settings.json` | 含 `"command": "cliv cache-claude"` |
-| Codex cache 测试 | 上面的手动命令 | 缓存和元数据写入成功 |
-| Claude cache 测试 | 上面的手动命令 | 文件写入成功 |
-| Ctrl+G 真实测试 | 在 agent 中按 Ctrl+G | cliV 窗口弹出 |
+- Linux：确认 `.deb` 安装成功，并且 `/usr/bin/cliv` 存在。
+- macOS 未创建软链接：不要写 `cliv`，直接使用 `/Applications/cliV.app/Contents/MacOS/cliv`。
+- Windows：安装或更新后重新打开终端，再执行 `where.exe cliv`。
 
-## 5. 常见问题与调试 (FAQ & Troubleshooting)
+### macOS 提示应用已损坏
 
-### 如何验证或调试缓存 Hook 是否工作？
+这是因为从 GitHub Releases 下载的未签名应用会被 Gatekeeper 隔离。
 
-如果按下快捷键后 cliV 没有显示最新的回复，你可以通过下方的手动调试命令测试提取逻辑是否正常：
-
-**Codex 调试**：
-```bash
-CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
-cat ~/.codex/reply_cache/424242.md
-```
-*(注：424242 用来模拟 GUI 启动时使用的 pid 缓存键。)*
-
-**Claude Code 调试**：
-```bash
-echo '{"hook_event_name":"Stop","session_id":"test-claude","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
-cat ~/.claude/reply_cache/test-claude.md
-```
-
-**Gemini CLI 调试**：
-```bash
-echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-gemini cliv cache-gemini
-cat ~/.gemini/reply_cache/test-gemini.md
-```
-
-如果手动执行上述命令后能成功将 `.md` 文件写入对应的 `reply_cache` 目录，说明 cliV 本身工作正常，问题极大概率出在 Agent 的 hook 配置文件路径或语法上。
-
-### macOS 提示“已损坏，无法打开。您应该将它移到废纸篓”
-这是因为通过网页下载的 GitHub Releases 产物会被 macOS 的 Gatekeeper 隔离（缺少 Apple 开发者签名和公证）。
-**解决方法**：将 `cliV.app` 拖入“应用程序”(Applications) 文件夹，然后在终端运行以下命令移除隔离属性：
 ```bash
 sudo xattr -rd com.apple.quarantine /Applications/cliV.app
 ```
 
+### Hook 或缓存调试
+
+以下内容都放到了 [高级集成与调试参考](integrations.zh-CN.md)：
+
+- 手工 cache 写入测试
+- reply cache 文件位置
+- 启动目标解析规则
+- agent 检测与 lookup key 行为
+
 ## 6. 卸载
 
+### Linux
+
+官方 `.deb` 安装：
+
 ```bash
-# 如果是下载的独立二进制放置于 ~/.local/bin
-rm ~/.local/bin/cliv
-
-# 如果用 deb 安装
 sudo dpkg -r cliv
-
-# 清理用户数据和缓存（可选）
-rm -rf ~/.cliv
-rm -rf ~/.codex/reply_cache
-rm -rf ~/.claude/reply_cache
-rm -rf ~/.gemini/reply_cache
 ```
+
+如果你之前做过旧式手工测试，例如自己把 `cliv` 复制到 `~/.local/bin`，那种“自定义路径”需要你自行删除；它不属于当前正式安装流程。
+
+### macOS
+
+1. 删除 `/Applications/cliV.app`
+2. 如果你创建过软链接，再删除它：
+
+```bash
+sudo rm /usr/local/bin/cliv
+```
+
+### Windows
+
+任选一种方式：
+
+- 设置 -> 应用 -> 已安装的应用 -> `cliV` -> 卸载
+- `%LOCALAPPDATA%\cliv\uninstall.exe`
+
+### 可选：清理用户数据
+
+安装器只会移除应用本体。你自己的设置文件和 reply cache 属于用户数据，需要按需单独删除。
+
+Linux / macOS 路径：
+
+- `~/.cliv`
+- `~/.codex/reply_cache`
+- `~/.claude/reply_cache`
+- `~/.gemini/reply_cache`
+
+Windows 路径：
+
+- `%USERPROFILE%\.cliv`
+- `%USERPROFILE%\.codex\reply_cache`
+- `%USERPROFILE%\.claude\reply_cache`
+- `%USERPROFILE%\.gemini\reply_cache`

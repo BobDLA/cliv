@@ -1,67 +1,50 @@
-# cliV：Agent 集成指南
+# cliV 高级集成与调试参考
 
 **[English](integrations.md)**
 
-本文档说明如何将 cliV 与 Codex、Claude Code 和 Gemini CLI 集成。
+请先按 [安装指南](install-guide.zh-CN.md) 完成正式安装。
+这份文档只处理进阶场景：
 
-## 工作原理
+- 非默认可执行路径
+- `$EDITOR` 启动行为
+- 跨平台 hook 适配
+- reply cache 查找规则
+- 手工调试
 
-> **💡 提示**：本节解释底部运行机制。如果只关心如何使用，**可以跳过此节，直接看 [配置步骤](#配置步骤)**。
+## 1. 先确定命令路径
 
-cliV 是一个单一二进制文件，无需任何外部依赖（不需要 Python、Bash）。
+不同平台推荐使用的 hook / `$EDITOR` 命令如下：
 
-1. **Agent hook** 在每次回复后调用 `cliv cache-xxx` → 缓存到磁盘
-2. **你按下 Ctrl+G** → Agent 调用 `$EDITOR`（通常就是 `cliv`）
-3. **cliV** 自动检测是哪个 Agent 调用的，并结合显式参数或受信调用方规则决定写回目标，再打开 GUI
+| 平台 | hooks 和 `$EDITOR` 推荐写法 | 说明 |
+|---|---|---|
+| Linux | `cliv` | 官方 `.deb` 会把 `cliv` 安装到 `/usr/bin/cliv`。 |
+| Windows | `cliv` | `-setup.exe` 安装器会把 `%LOCALAPPDATA%\\cliv` 加入当前用户 `PATH`。安装或更新后需要重开终端。 |
+| macOS | `/Applications/cliV.app/Contents/MacOS/cliv` | `.app` 不会自动进 `PATH`。如果你手动创建过软链接，也可以继续写 `cliv`。 |
 
-```
-Agent 完成一次回复
-    ↓ hook 触发
-    cliv cache-codex / cache-claude / cache-gemini
-    ↓ 写入 ~/.{agent}/reply_cache/<cache-key>.md
+如果 cliV 不在 `PATH` 中，请把下面所有 `cliv` 替换成完整可执行路径。
 
-你按下 Ctrl+G
-    ↓ $EDITOR = cliv
-    cliv <file>                 # 兼容旧式调用
-    或 cliv --target <file>     # 调用方支持显式参数时推荐
-    ↓ 通过环境变量自动检测 Agent
-    ↓ 通过显式参数或 trusted caller 规则解析写回目标
-    ↓ 加载缓存的回复
-    cliV GUI 打开
-```
+## 2. 理解启动语义
 
----
+cliV 支持几种典型调用形态：
 
-## 配置步骤
+- `cliv review.md`
+  把 `review.md` 作为审阅内容打开，不自动把它当成写回目标。
+- `cliv --target draft.md` 或 `cliv -t draft.md`
+  把 `draft.md` 作为显式写回目标。
+- `cliv --compose draft.md`
+  与 `--target` 等价，只是兼容旧调用方式。
+- trusted caller 触发的 `cliv <file>`
+  如果受信调用方只传了一个位置参数，cliV 会把它视为旧式 `$EDITOR` 流程里的写回目标。
 
-### 第 1 步：安装
+如果没有检测到 Agent，cliV 会直接跳过 reply extraction，保持 fail-closed，不会自行猜测。
 
-```bash
-# 从 GitHub Release 下载
-cp cliv ~/.local/bin/
-# 或：sudo dpkg -i cliv_0.2.1_amd64.deb
-```
+## 3. 可选：cliV 自己的配置文件
 
-### 第 2 步：设置 $EDITOR
+大多数用户可以跳过这一节。
 
-```bash
-# ~/.bashrc 或 ~/.zshrc
-export EDITOR="cliv"
-```
+cliV 自己的持久化配置保存在 `~/.cliv/config.toml`。设置面板会写这个文件；Codex / Claude / Gemini 的 hook 文件不在这个边界内，cliV 不会直接重写它们。
 
-如果你的调用方支持传额外参数，也可以显式使用：
-
-```bash
-export EDITOR="cliv --target"
-```
-
-如果调用方只能传 `cliv <file>`，cliV 会在命中受信调用方时把这个位置参数当成写回目标；普通独立打开则保持为只读审阅模式。
-
-### 可选：配置 cliV 自己的 settings
-
-cliV 自己的 durable settings 统一保存在 `~/.cliv/config.toml`。设置面板中的 `Reading`、`Prompts`、受支持的 `Shortcuts` 都会写回同一个文件。Codex / Claude / Gemini 的 hook 文件不在这个边界内，cliV 也不会直接重写它们。
-
-编辑 `~/.cliv/config.toml`：
+与集成最相关的通常是：
 
 ```toml
 [launch]
@@ -80,72 +63,33 @@ ignored_callers = [
   "pwsh.exe",
   "explorer.exe",
 ]
-
-[prompts]
-reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
-reply_header_en = "Please respond to each annotation below in Markdown."
-iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
-iterate_header_en = "Please make incremental revisions based on the following annotations."
-
-[ui]
-theme = "light"
-font_size = 18
-locale = "en"
-sidebar_open = true
-sidebar_tab = "outline"
-sidebar_width = 224
-annotation_margin_width = 256
-content_width = "standard"
-page_padding = "comfortable"
-reading_density = "comfortable"
-highlight_strength = "balanced"
-
-[ui.shortcuts]
-open_file = "Mod+O"
-search = "Mod+F"
-submit_return = "Mod+Enter"
-submit_annotation = "Mod+Enter"
-add_annotation = "Mod+Alt+M"
-font_increase = "Mod+="
-font_decrease = "Mod+-"
-font_reset = "Mod+0"
 ```
 
-如果 `submit_annotation` 与 `submit_return` 共用 `Mod+Enter`，cliV 会按焦点优先级解决冲突：批注编辑器处于活动提交上下文时优先提交批注，否则同一按键会落到整体 return 提交。
+Prompts、UI 偏好、Shortcuts 也都在这个文件里，但通常更适合直接在 cliV 设置面板里修改。
 
-### 第 3 步：配置 Agent Hook
+## 4. Hook 参考
 
-选择你使用的 Agent：
+下面的片段和安装指南里的正式写法一致，这里重复保留，是为了便于你在“非默认路径”场景下做改写。
 
----
+### Codex
 
-## Codex
-
-在 `~/.codex/config.toml` 中添加：
+`~/.codex/config.toml`：
 
 ```toml
-# Linux / macOS (已配置软链接或 PATH)
 notify = ["cliv", "cache-codex"]
-
-# 🍏 macOS 最简配置（免软链接，直接粘贴绝对路径）
-# notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
-**工作原理**：Codex 完成一轮对话后，会调用 `cliv cache-codex '<json>'`，JSON 作为命令行参数传入。cliV 提取 `thread-id` 和 `last-assistant-message`，检测当前 Codex 进程 PID，把正文写到 `~/.codex/reply_cache/{pid}.md`，并把真实 thread ID 写进 `~/.codex/reply_cache/{pid}.meta.json`。
+macOS 未创建软链接：
 
-### 提取回退链
+```toml
+notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
+```
 
-1. **PID 缓存命中**：`CODEX_THREAD_ID`（保留的兼容变量名，实际通常承载当前 Codex 的 PID 缓存键）→ `~/.codex/reply_cache/{pid}.md`
-2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `real_session_id` 等于查找键的最新记录
-3. **传统缓存命中**：直接匹配 `~/.codex/reply_cache/{thread-id}.md`
+Codex 会把 JSON 作为命令行参数传给 `cliv cache-codex`。
 
----
+### Claude Code
 
-## Claude Code
-
-在 `~/.claude/settings.json` 中添加：
-
-> **🍏 macOS 免软链接提示**：如果你未配置环境变量，请将下方 JSON 中的 `"cliv cache-claude"` 替换为绝对路径：`"/Applications/cliV.app/Contents/MacOS/cliv cache-claude"`
+`~/.claude/settings.json`：
 
 ```json
 {
@@ -164,21 +108,15 @@ notify = ["cliv", "cache-codex"]
 }
 ```
 
-**工作原理**：Claude 通过 stdin 管道传入 JSON，包含 `session_id` 和 `last_assistant_message`。cliV 会写入 reply cache metadata 与兼容缓存项，使当前 lookup key 能稳定映射回真实 Claude 会话身份。
+macOS 未创建软链接：
 
-### 提取回退链
+- 把 `cliv cache-claude` 改成 `/Applications/cliV.app/Contents/MacOS/cliv cache-claude`
 
-1. **直接缓存命中**：`CLAUDE_SESSION_ID`（在 cliV 中作为兼容的 lookup-key carrier）→ `~/.claude/reply_cache/{key}.md`
-2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `key`、`real_session_id` 或 `pid` 与 lookup key 匹配的最新记录
-3. **兼容直读**：若该 key 仍存在 legacy 直存文件，则直接读取
+Claude 会通过 stdin 管道传入包含 `session_id` 和 `last_assistant_message` 的 JSON。
 
----
+### Gemini CLI
 
-## Gemini CLI
-
-在 `~/.gemini/settings.json` 中添加：
-
-> **🍏 macOS 免软链接提示**：如果你未配置环境变量，请将下方 JSON 中的 `"cliv cache-gemini"` 替换为绝对路径：`"/Applications/cliV.app/Contents/MacOS/cliv cache-gemini"`
+`~/.gemini/settings.json`：
 
 ```json
 {
@@ -197,33 +135,110 @@ notify = ["cliv", "cache-codex"]
 }
 ```
 
-**工作原理**：Gemini 通过 stdin 管道传入 JSON，包含 `prompt_response`。`GEMINI_SESSION_ID` 若存在，可提供 agent 原生会话身份；cliV 会写入 reply cache metadata 与兼容缓存项，使当前 lookup key 能确定性地解析到目标回复。
+macOS 未创建软链接：
 
-### 提取回退链
+- 把 `cliv cache-gemini` 改成 `/Applications/cliV.app/Contents/MacOS/cliv cache-gemini`
 
-1. **直接缓存命中**：`GEMINI_SESSION_ID`（在 cliV 中作为兼容的 lookup-key carrier）→ `~/.gemini/reply_cache/{key}.md`
-2. **元数据匹配**：查找 `reply_cache/*.meta.json` 中 `key`、`real_session_id` 或 `pid` 与 lookup key 匹配的最新记录
-3. **兼容直读**：若该 key 仍存在 legacy 直存文件，则直接读取
+Gemini 会通过 stdin 管道传入包含 `prompt_response` 的 JSON。
 
----
+## 5. Reply Cache 查找规则
 
-## 补充说明
+cliV 只会运行“已检测到的那个 Agent”对应的 extractor。
 
-### 零依赖
+### Codex
 
-cliV 是一个单一二进制文件。不需要 Python、Bash、Node.js 或任何包装脚本。
+reply cache 查找顺序：
 
-### Agent 自动检测
+1. PID 缓存命中：`CODEX_THREAD_ID` -> `~/.codex/reply_cache/{pid}.md`
+2. 元数据匹配：查找 `reply_cache/*.meta.json` 中 `real_session_id` 命中的最新记录
+3. 传统直读：`~/.codex/reply_cache/{thread-id}.md`
 
-当作为 `$EDITOR` 启动时，cliV 会通过环境变量（`CODEX_THREAD_ID`、`CLAUDE_SESSION_ID`、`GEMINI_SESSION_ID`）自动检测调用的 Agent。在 cliV 内部，这些环境变量统一被视为当前 reply-cache lookup key 的兼容承载字段：其值可能是 agent 原生会话 ID，也可能是 PID 派生的缓存键，取决于启动上下文。除非你想手动覆盖，否则不需要设置 `CLIV_AGENT` 环境变量。
+### Claude Code
 
-### 启动模式
+reply cache 查找顺序：
 
-- `cliv file.md`：把 `file.md` 当作审阅内容打开，不直接写回这个文件。
-- `cliv --target draft.md` / `cliv -t draft.md`：把 `draft.md` 作为显式写回目标。
-- `cliv --compose draft.md`：兼容旧调用方式，语义等同于 `--target`。
-- 若命中 `trusted_callers` 且只收到一个位置参数：该参数会被视为写回目标，用于兼容只会调用 `cliv <file>` 的 CLI。
+1. 直接缓存命中：`CLAUDE_SESSION_ID` -> `~/.claude/reply_cache/{key}.md`
+2. 元数据匹配：查找 `reply_cache/*.meta.json` 中 `key`、`real_session_id` 或 `pid` 命中的最新记录
+3. 兼容直读：读取同一个 key 的 legacy 直存文件
 
-### 提取路由
+### Gemini CLI
 
-cliV 只会调用已检测到的那个 Agent 对应的 extractor。若未检测到 Agent，则跳过 reply extraction，界面保持 fail-closed。
+reply cache 查找顺序：
+
+1. 直接缓存命中：`GEMINI_SESSION_ID` -> `~/.gemini/reply_cache/{key}.md`
+2. 元数据匹配：查找 `reply_cache/*.meta.json` 中 `key`、`real_session_id` 或 `pid` 命中的最新记录
+3. 兼容直读：读取同一个 key 的 legacy 直存文件
+
+## 6. 手工调试
+
+### Shell 说明
+
+下面的示例默认使用类 Unix shell。
+如果你在 Windows PowerShell 里执行，需要做两类替换：
+
+- `VAR=value cmd` -> `$env:VAR = 'value'; cmd`
+- `cat file` -> `Get-Content file`
+
+如果你使用 Git Bash 或 WSL，也可以直接照抄这些示例。
+
+### 验证二进制解析
+
+Linux / macOS 且 `PATH` 正常：
+
+```bash
+which cliv
+cliv --help
+```
+
+macOS 未创建软链接：
+
+```bash
+/Applications/cliV.app/Contents/MacOS/cliv --help
+```
+
+Windows：
+
+```powershell
+where.exe cliv
+cliv --help
+```
+
+### 手工验证 Hook 输出
+
+Codex：
+
+```bash
+CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
+cat ~/.codex/reply_cache/424242.md
+```
+
+Claude Code：
+
+```bash
+echo '{"hook_event_name":"Stop","session_id":"test-claude","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
+cat ~/.claude/reply_cache/test-claude.md
+```
+
+Gemini CLI：
+
+```bash
+echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-gemini cliv cache-gemini
+cat ~/.gemini/reply_cache/test-gemini.md
+```
+
+如果这些命令已经能写出正确的 `.md` 文件，就说明 cliV 本身工作正常，剩下的问题通常在这里：
+
+- hook 文件路径写错了
+- JSON / TOML 语法有误
+- shell 引号转义不对
+- 终端仍然是旧会话，没有重新加载 `PATH` 或 `EDITOR`
+
+### cliV 打开了，但没有显示回复
+
+按这个顺序排查：
+
+1. 当前启动时，是否检测到了正确的 Agent？
+2. 对应 `~/.codex`、`~/.claude`、`~/.gemini` 下是否真的写出了 cache 文件？
+3. 当前启动上下文里，cliV 查找的 lookup key 是否和你预期一致？
+4. 是否因为非默认路径或 shell 引号问题，导致 hook 根本没执行？
+5. Windows 上是否在安装或修改 `EDITOR` 之后重新打开了终端？

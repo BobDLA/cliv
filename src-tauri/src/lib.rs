@@ -4,6 +4,7 @@ mod commands;
 pub mod config;
 pub mod extract;
 pub mod logging;
+mod process;
 
 pub use cli::{CliArgs, CliMode, CliParsed};
 pub use config::{AppConfig, AppConfigState};

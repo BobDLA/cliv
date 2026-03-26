@@ -25,21 +25,24 @@ AI 编程 Agent（Codex、Claude Code、Gemini CLI）经常产出长篇结构化
 
 ## 支持的 Agent
 
-| Agent | 集成方式 | Hook 命令 |
-|---|---|---|
-| [Codex](https://github.com/openai/codex) | `notify` hook | `cliv cache-codex` |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `Stop` hook | `cliv cache-claude` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `AfterAgent` hook | `cliv cache-gemini` |
+- [Codex](https://github.com/openai/codex)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli)
 
-`cache-codex` 通过命令行参数接收 JSON；`cache-claude` 和 `cache-gemini` 通过 stdin 读取 JSON。Gemini 还依赖 `GEMINI_SESSION_ID`。
+Hook 命令、路径规则、启动语义和调试方式，统一放在下面的指南文档里。
 
 ## 安装、配置与说明
 
-请参阅独立的指南文档：
+请直接使用下面的专项指南：
 - [安装指南 (Install Guide)](docs/install-guide.zh-CN.md)
-- [Agent 集成指南 (Integrations)](docs/integrations.zh-CN.md)
+- [高级集成与调试参考](docs/integrations.zh-CN.md)
 
-这些文档详细说明了如何下载、构建 cliV，如何配置 `$EDITOR` 以及在不同 AI Agent（Codex、Claude Code、Gemini CLI）中的集成方式和各项环境配置（如 `config.toml`）。架构与贡献说明也已移至各项专项文档。
+各文档的分工如下：
+
+- `安装指南`：正式安装路径、`$EDITOR`、基础 hook 配置、验证和卸载
+- `高级集成与调试参考`：非默认可执行路径、启动语义、reply cache 查找规则、手工调试
+
+如果你需要源码构建或开发者流程，请继续阅读 [`docs/`](docs/) 下的专项文档，以及 [`AGENTS.md`](AGENTS.md) 中的协作说明。
 
 ## 快速上手
 
@@ -97,7 +100,7 @@ flowchart LR
 - 📋 **写回流程** — 将批注汇总为提示词，然后写回或复制
 - 🔄 **多 Agent 支持** — 尽力自动识别 Codex / Claude / Gemini，也可用 `CLIV_AGENT` 强制指定
 - 📂 **打开本地 Markdown** — 既能审阅缓存回复，也能直接打开 `.md` 文件，且默认按只读审阅处理
-- 🎛️ **统一设置** — 在同一个设置面板中管理 Reading、Prompts、Shortcuts、Integrations，并统一持久化到 `~/.cliv/config.toml`
+- 🎛️ **统一设置** — 在同一个设置面板中管理 Reading、Prompts、Shortcuts，并统一持久化到 `~/.cliv/config.toml`
 
 ## 技术栈
 
