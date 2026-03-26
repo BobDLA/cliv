@@ -39,14 +39,6 @@
       "nsis": {
         "installMode": "currentUser",
         "installerHooks": "./windows/hooks.nsh"
-      },
-      "wix": {
-        "fragmentPaths": [
-          "./windows/path.wxs"
-        ],
-        "componentRefs": [
-          "CliVPathComponent"
-        ]
       }
     }
   }

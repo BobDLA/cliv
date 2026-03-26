@@ -23,7 +23,7 @@ sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
 ```
 
 ### Windows
-1. 下载 `.msi` 安装包并双击运行安装向导。
+1. 下载 `-setup.exe` 安装包并双击运行安装向导。
 2. 安装程序会自动将 `cliv` 添加到当前用户的 `PATH` 环境变量中。安装完成后，你可以在 PowerShell 或 CMD 中直接使用 `cliv` 命令。由于环境变量刷新机制，首次安装可能需要重启终端软件才能生效。
 
 ### 验证
