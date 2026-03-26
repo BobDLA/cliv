@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 fn main() {
     cliv_lib::logging::init();
     cliv_lib::logging::timing("main: process start");
