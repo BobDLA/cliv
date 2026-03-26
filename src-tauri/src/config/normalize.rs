@@ -2,10 +2,41 @@ pub fn canonicalize_process_name(name: &str) -> String {
     let trimmed = name.trim();
     let basename = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed).trim();
     let lowercase = basename.to_lowercase();
-    lowercase
+    let canonical = lowercase
         .strip_suffix(".exe")
         .unwrap_or(&lowercase)
-        .to_string()
+        .to_string();
+
+    canonicalize_known_agent_binary(&canonical)
+}
+
+fn canonicalize_known_agent_binary(name: &str) -> String {
+    for agent in ["codex", "claude", "gemini"] {
+        if let Some(suffix) = name.strip_prefix(&format!("{agent}-")) {
+            if looks_like_target_triple(suffix) {
+                return agent.to_string();
+            }
+        }
+    }
+
+    name.to_string()
+}
+
+fn looks_like_target_triple(value: &str) -> bool {
+    let parts: Vec<&str> = value.split('-').collect();
+    if parts.len() < 3 {
+        return false;
+    }
+
+    let has_arch = parts
+        .first()
+        .map(|part| matches!(*part, "x86_64" | "aarch64" | "arm64" | "i686"))
+        .unwrap_or(false);
+    let has_os = parts
+        .iter()
+        .any(|part| matches!(*part, "windows" | "linux" | "darwin" | "macos"));
+
+    has_arch && has_os
 }
 
 pub fn normalize_shortcut(value: &str) -> Option<String> {

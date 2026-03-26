@@ -541,6 +541,10 @@ reply_header_zh = "自定义"
             "claude"
         );
         assert_eq!(canonicalize_process_name("/usr/local/bin/Codex"), "codex");
+        assert_eq!(
+            canonicalize_process_name("codex-x86_64-pc-windows-msvc.exe"),
+            "codex"
+        );
         assert_eq!(canonicalize_process_name("gemini"), "gemini");
     }
 }

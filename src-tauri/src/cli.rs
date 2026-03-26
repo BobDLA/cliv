@@ -1,5 +1,7 @@
 use crate::config::{canonicalize_process_name, AppConfig};
+use crate::extract::resolve_agent_lookup_by_owner_identity;
 use crate::logging;
+use crate::process::{collect_parent_processes, resolve_owner_identity, ParentProcess};
 use serde::Serialize;
 
 /// How cliV was invoked.
@@ -38,13 +40,8 @@ pub struct CliParsed {
 }
 
 #[derive(Debug, Clone)]
-struct ParentProcess {
-    pid: u32,
-    name: String,
-    /// Full command line from /proc/PID/cmdline (Linux) or equivalent.
-    /// Used as fallback when `name` (comm) is generic (e.g. "node", "python").
-    cmdline: Option<String>,
-    level: usize,
+struct OwnerCacheAgentMatch {
+    agent: String,
 }
 
 impl CliParsed {
@@ -107,8 +104,19 @@ impl CliParsed {
         }
 
         let process_chain = collect_parent_processes(config.launch.scan_depth);
-        let agent = detect_agent(&process_chain);
-        let trusted_caller = detect_trusted_caller(config, &process_chain);
+        let direct_agent = detect_agent_from_env_or_process(&process_chain);
+        let owner_cache_match = if direct_agent.is_none() {
+            detect_agent_from_owner_cache(config, &process_chain)
+        } else {
+            None
+        };
+        let agent =
+            direct_agent.or_else(|| owner_cache_match.as_ref().map(|item| item.agent.clone()));
+        if agent.is_none() {
+            logging::log("  detect: no agent detected");
+        }
+        let trusted_caller = detect_trusted_caller(config, &process_chain)
+            .or_else(|| owner_cache_match.as_ref().map(|item| item.agent.clone()));
 
         logging::log(&format!(
             "  mode=gui  detected_agent={:?} trusted_caller={:?}",
@@ -209,7 +217,7 @@ fn resolve_launch_paths(
     }
 }
 
-fn detect_agent(process_chain: &[ParentProcess]) -> Option<String> {
+fn detect_agent_from_env_or_process(process_chain: &[ParentProcess]) -> Option<String> {
     if let Ok(agent) = std::env::var("CLIV_AGENT") {
         if !agent.is_empty() {
             logging::log(&format!("  detect: CLIV_AGENT={} → using override", agent));
@@ -250,8 +258,31 @@ fn detect_agent(process_chain: &[ParentProcess]) -> Option<String> {
         return handle_agent_match(agent, pid, level);
     }
 
-    logging::log("  detect: no agent detected");
     None
+}
+
+fn detect_agent_from_owner_cache(
+    config: &AppConfig,
+    process_chain: &[ParentProcess],
+) -> Option<OwnerCacheAgentMatch> {
+    let (owner, level, canonical_name) =
+        resolve_owner_identity(process_chain, &config.launch.ignored_callers)?;
+    let matched = resolve_agent_lookup_by_owner_identity(&owner)?;
+
+    logging::log(&format!(
+        "  owner[{}]: matched cached agent {} via owner identity canonical='{}' pid={} started_at={} key={}",
+        level,
+        matched.agent,
+        canonical_name,
+        owner.pid,
+        owner.started_at,
+        matched.key
+    ));
+    set_agent_lookup_env(&matched.agent, &matched.key, level, "owner_cache_identity");
+
+    Some(OwnerCacheAgentMatch {
+        agent: matched.agent,
+    })
 }
 
 fn find_agent_process(process_chain: &[ParentProcess]) -> Option<(&'static str, u32, usize)> {
@@ -375,18 +406,28 @@ fn is_generic_interpreter(name: &str) -> bool {
 /// during GUI extraction. Their names are historical and do not guarantee that the
 /// runtime value is the agent's semantic conversation identity.
 fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<String> {
-    let pid_str = agent_pid.to_string();
-    let (env_var, agent) = match agent_name {
-        "codex" => ("CODEX_THREAD_ID", "codex"),
-        "claude" => ("CLAUDE_SESSION_ID", "claude"),
-        "gemini" => ("GEMINI_SESSION_ID", "gemini"),
-        _ => return None,
-    };
-
     logging::log(&format!(
         "  walk[{}]: matched {} at pid={}",
-        level, agent, agent_pid
+        level, agent_name, agent_pid
     ));
+
+    set_agent_lookup_env(
+        agent_name,
+        &agent_pid.to_string(),
+        level,
+        "parent_process_pid",
+    );
+
+    Some(agent_name.to_string())
+}
+
+fn set_agent_lookup_env(agent_name: &str, lookup_key: &str, level: usize, source: &str) {
+    let env_var = match agent_name {
+        "codex" => "CODEX_THREAD_ID",
+        "claude" => "CLAUDE_SESSION_ID",
+        "gemini" => "GEMINI_SESSION_ID",
+        _ => return,
+    };
 
     if std::env::var(env_var)
         .ok()
@@ -394,13 +435,11 @@ fn handle_agent_match(agent_name: &str, agent_pid: u32, level: usize) -> Option<
         .is_none()
     {
         logging::log(&format!(
-            "  walk[{}]: set {}={} (source=parent_process_pid)",
-            level, env_var, pid_str
+            "  walk[{}]: set {}={} (source={})",
+            level, env_var, lookup_key, source
         ));
-        std::env::set_var(env_var, &pid_str);
+        std::env::set_var(env_var, lookup_key);
     }
-
-    Some(agent.to_string())
 }
 
 fn matches_any(name: &str, patterns: &[String]) -> bool {
@@ -418,319 +457,6 @@ fn match_agent_name(comm: &str) -> Option<&'static str> {
     } else {
         None
     }
-}
-
-// ═══════════════════════════════════════════════════════════
-// Linux implementation — uses /proc filesystem
-// ═══════════════════════════════════════════════════════════
-
-#[cfg(target_os = "linux")]
-fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> {
-    let mut processes = Vec::new();
-    let mut pid = std::os::unix::process::parent_id();
-
-    for level in 0..scan_depth {
-        if pid <= 1 {
-            logging::debug(&format!("  walk[{}]: pid={} (init), stopping", level, pid));
-            break;
-        }
-
-        let comm = match std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
-            Ok(s) => s.trim().to_lowercase(),
-            Err(e) => {
-                logging::debug(&format!(
-                    "  walk[{}]: pid={} read comm failed: {}",
-                    level, pid, e
-                ));
-                break;
-            }
-        };
-
-        // When comm is a generic interpreter (node, python, etc.), read
-        // /proc/PID/cmdline as fallback — it contains the full invocation
-        // path which often includes the real tool name.
-        let cmdline = if match_agent_name(&comm).is_none() {
-            read_proc_cmdline(pid)
-        } else {
-            None
-        };
-
-        logging::debug(&format!(
-            "  walk[{}]: pid={} comm='{}' cmdline={:?}",
-            level, pid, comm, cmdline
-        ));
-        processes.push(ParentProcess {
-            pid,
-            name: comm,
-            cmdline,
-            level,
-        });
-
-        let stat = match std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
-            Ok(s) => s,
-            Err(e) => {
-                logging::debug(&format!(
-                    "  walk[{}]: pid={} read stat failed: {}",
-                    level, pid, e
-                ));
-                break;
-            }
-        };
-
-        let after_name = match stat.rfind(')') {
-            Some(pos) => &stat[pos + 2..],
-            None => break,
-        };
-        let ppid_str = match after_name.split_whitespace().nth(1) {
-            Some(s) => s,
-            None => break,
-        };
-        pid = match ppid_str.parse::<u32>() {
-            Ok(ppid) => ppid,
-            Err(_) => break,
-        };
-    }
-
-    processes
-}
-
-/// Read /proc/PID/cmdline and return as a single lowercase string.
-/// cmdline is NUL-separated; we join with spaces for matching.
-#[cfg(target_os = "linux")]
-fn read_proc_cmdline(pid: u32) -> Option<String> {
-    let raw = std::fs::read(format!("/proc/{}/cmdline", pid)).ok()?;
-    if raw.is_empty() {
-        return None;
-    }
-    let s = raw
-        .split(|&b| b == 0)
-        .map(|seg| String::from_utf8_lossy(seg))
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-    if s.trim().is_empty() {
-        None
-    } else {
-        Some(s)
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// macOS implementation — uses libproc / sysctl
-// ═══════════════════════════════════════════════════════════
-
-#[cfg(target_os = "macos")]
-fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> {
-    let mut processes = Vec::new();
-    let mut pid = std::os::unix::process::parent_id();
-
-    for level in 0..scan_depth {
-        if pid <= 1 {
-            logging::debug(&format!(
-                "  walk[{}]: pid={} (init/launchd), stopping",
-                level, pid
-            ));
-            break;
-        }
-
-        let comm = match macos_proc_name(pid) {
-            Some(name) => name.to_lowercase(),
-            None => {
-                logging::debug(&format!("  walk[{}]: pid={} proc_name failed", level, pid));
-                break;
-            }
-        };
-
-        // On macOS, fall back to full command line via ps when comm is generic.
-        let cmdline = if match_agent_name(&comm).is_none() {
-            macos_cmdline(pid)
-        } else {
-            None
-        };
-
-        logging::debug(&format!(
-            "  walk[{}]: pid={} comm='{}' cmdline={:?}",
-            level, pid, comm, cmdline
-        ));
-        processes.push(ParentProcess {
-            pid,
-            name: comm,
-            cmdline,
-            level,
-        });
-
-        pid = match macos_ppid(pid) {
-            Some(ppid) => ppid,
-            None => {
-                logging::debug(&format!("  walk[{}]: pid={} cannot get ppid", level, pid));
-                break;
-            }
-        };
-    }
-
-    processes
-}
-
-/// Get process name on macOS using proc_name() from libproc.
-#[cfg(target_os = "macos")]
-fn macos_proc_name(pid: u32) -> Option<String> {
-    extern "C" {
-        fn proc_name(pid: i32, buffer: *mut u8, buffersize: u32) -> i32;
-    }
-
-    let mut buf = [0u8; 256];
-    let len = unsafe { proc_name(pid as i32, buf.as_mut_ptr(), buf.len() as u32) };
-    if len > 0 {
-        Some(String::from_utf8_lossy(&buf[..len as usize]).to_string())
-    } else {
-        None
-    }
-}
-
-/// Get parent PID on macOS via ps.
-#[cfg(target_os = "macos")]
-fn macos_ppid(pid: u32) -> Option<u32> {
-    let output = std::process::Command::new("ps")
-        .args(["-o", "ppid=", "-p", &pid.to_string()])
-        .output()
-        .ok()?;
-    let ppid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    ppid_str.parse::<u32>().ok()
-}
-
-/// Get full command line on macOS via ps.
-#[cfg(target_os = "macos")]
-fn macos_cmdline(pid: u32) -> Option<String> {
-    let output = std::process::Command::new("ps")
-        .args(["-o", "command=", "-p", &pid.to_string()])
-        .output()
-        .ok()?;
-    let cmd = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_lowercase();
-    if cmd.is_empty() {
-        None
-    } else {
-        Some(cmd)
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// Windows implementation — uses ToolHelp32 API
-// ═══════════════════════════════════════════════════════════
-
-#[cfg(target_os = "windows")]
-fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> {
-    let process_map = match win_build_process_map() {
-        Some(map) => map,
-        None => {
-            logging::log("  walk: failed to build process map");
-            return Vec::new();
-        }
-    };
-
-    let own_pid = std::process::id();
-    let mut pid = match process_map.get(&own_pid) {
-        Some((_, ppid)) => *ppid,
-        None => return Vec::new(),
-    };
-
-    let mut processes = Vec::new();
-
-    for level in 0..scan_depth {
-        if pid == 0 {
-            logging::debug(&format!("  walk[{}]: pid=0 (System), stopping", level));
-            break;
-        }
-
-        let (name, ppid) = match process_map.get(&pid) {
-            Some(entry) => entry.clone(),
-            None => {
-                logging::debug(&format!("  walk[{}]: pid={} not in snapshot", level, pid));
-                break;
-            }
-        };
-
-        let comm = name.to_lowercase();
-        // On Windows, the exe name from ToolHelp32 typically includes the
-        // full filename (e.g. "node.exe"), so cmdline fallback is less
-        // critical. We set it to None for now.
-        logging::debug(&format!("  walk[{}]: pid={} comm='{}'", level, pid, comm));
-        processes.push(ParentProcess {
-            pid,
-            name: comm,
-            cmdline: None,
-            level,
-        });
-
-        pid = ppid;
-    }
-
-    processes
-}
-
-/// Build a map of PID -> (exe_name, parent_pid) using CreateToolhelp32Snapshot.
-#[cfg(target_os = "windows")]
-fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32)>> {
-    use std::collections::HashMap;
-
-    const TH32CS_SNAPPROCESS: u32 = 0x00000002;
-    const INVALID_HANDLE_VALUE: isize = -1;
-    const MAX_PATH: usize = 260;
-
-    #[repr(C)]
-    struct ProcessEntry32W {
-        dw_size: u32,
-        cnt_usage: u32,
-        th32_process_id: u32,
-        th32_default_heap_id: usize,
-        th32_module_id: u32,
-        cnt_threads: u32,
-        th32_parent_process_id: u32,
-        pc_pri_class_base: i32,
-        dw_flags: u32,
-        sz_exe_file: [u16; MAX_PATH],
-    }
-
-    extern "system" {
-        fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> isize;
-        fn Process32FirstW(hSnapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
-        fn Process32NextW(hSnapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
-        fn CloseHandle(hObject: isize) -> i32;
-    }
-
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot == INVALID_HANDLE_VALUE {
-        return None;
-    }
-
-    let mut map = HashMap::new();
-
-    let mut entry: ProcessEntry32W = unsafe { std::mem::zeroed() };
-    entry.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
-
-    let mut ok = unsafe { Process32FirstW(snapshot, &mut entry) };
-    while ok != 0 {
-        let name_len = entry
-            .sz_exe_file
-            .iter()
-            .position(|&c| c == 0)
-            .unwrap_or(MAX_PATH);
-        let name = String::from_utf16_lossy(&entry.sz_exe_file[..name_len]);
-
-        map.insert(entry.th32_process_id, (name, entry.th32_parent_process_id));
-
-        entry.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
-        ok = unsafe { Process32NextW(snapshot, &mut entry) };
-    }
-
-    unsafe { CloseHandle(snapshot) };
-
-    logging::debug(&format!(
-        "  win: built process map with {} entries",
-        map.len()
-    ));
-    Some(map)
 }
 
 #[cfg(test)]
@@ -830,12 +556,14 @@ mod tests {
                     name: "bash".into(),
                     cmdline: None,
                     level: 0,
+                    started_at: None,
                 },
                 ParentProcess {
                     pid: 11,
                     name: "codex".into(),
                     cmdline: None,
                     level: 1,
+                    started_at: None,
                 },
             ],
         );
@@ -852,6 +580,23 @@ mod tests {
                 name: "/Applications/Codex.exe".into(),
                 cmdline: None,
                 level: 0,
+                started_at: None,
+            }],
+        );
+
+        assert_eq!(caller.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn trusted_caller_matches_official_codex_platform_binary_name() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[ParentProcess {
+                pid: 131,
+                name: "codex-x86_64-pc-windows-msvc.exe".into(),
+                cmdline: None,
+                level: 0,
+                started_at: None,
             }],
         );
 
@@ -867,6 +612,7 @@ mod tests {
                 name: "my-codex-wrapper".into(),
                 cmdline: None,
                 level: 0,
+                started_at: None,
             }],
         );
 
@@ -882,6 +628,7 @@ mod tests {
                 name: "node".into(),
                 cmdline: Some("node --no-warnings /usr/local/bin/mycli /tmp/file.md".into()),
                 level: 0,
+                started_at: None,
             }],
         );
 
@@ -898,18 +645,21 @@ mod tests {
                     name: "bash".into(),
                     cmdline: None,
                     level: 0,
+                    started_at: None,
                 },
                 ParentProcess {
                     pid: 16,
                     name: "neovim".into(),
                     cmdline: None,
                     level: 1,
+                    started_at: None,
                 },
                 ParentProcess {
                     pid: 17,
                     name: "codex".into(),
                     cmdline: None,
                     level: 2,
+                    started_at: None,
                 },
             ],
         );
@@ -926,6 +676,7 @@ mod tests {
                 name: "neovim".into(),
                 cmdline: None,
                 level: 0,
+                started_at: None,
             }],
         );
 
@@ -940,12 +691,14 @@ mod tests {
                 name: "node".into(),
                 cmdline: Some("/tmp/claude-inner /tmp/buffer.md".into()),
                 level: 0,
+                started_at: None,
             },
             ParentProcess {
                 pid: 202,
                 name: "node".into(),
                 cmdline: Some("/tmp/claude-outer".into()),
                 level: 1,
+                started_at: None,
             },
         ]);
 
