@@ -588,6 +588,22 @@ mod tests {
     }
 
     #[test]
+    fn trusted_caller_matches_official_codex_platform_binary_name() {
+        let caller = detect_trusted_caller(
+            &test_config(),
+            &[ParentProcess {
+                pid: 131,
+                name: "codex-x86_64-pc-windows-msvc.exe".into(),
+                cmdline: None,
+                level: 0,
+                started_at: None,
+            }],
+        );
+
+        assert_eq!(caller.as_deref(), Some("codex"));
+    }
+
+    #[test]
     fn trusted_caller_does_not_match_substrings() {
         let caller = detect_trusted_caller(
             &test_config(),
