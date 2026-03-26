@@ -1,4 +1,6 @@
+use crate::config::LaunchConfig;
 use crate::logging;
+use crate::process::{collect_parent_processes, resolve_owner_identity, OwnerIdentity};
 use serde::Serialize;
 use serde_json::Value;
 use std::fs;
@@ -35,6 +37,8 @@ struct CacheMeta {
     agent: String,                   // "codex", "claude", "gemini"
     real_session_id: Option<String>, // agent-native conversation identity, if available
     pid: Option<u32>,                // ancestor agent PID (if found)
+    owner_pid: Option<u32>,          // stable owner-process PID for deterministic GUI matching
+    owner_started_at: Option<u64>,   // owner-process creation time for PID reuse safety
     cached_at: String,               // timestamp
     size_bytes: usize,               // content size
 }
@@ -241,90 +245,75 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
     None
 }
 
-#[cfg(target_os = "windows")]
-fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
-    let own_pid = std::process::id();
-    let mut pid = own_pid;
-    let mut matched_pid_by_name = None;
-
-    for level in 0..5 {
-        if pid == 0 {
-            break;
-        }
-        let output = std::process::Command::new("wmic")
-            .args([
-                "process",
-                "where",
-                &format!("ProcessId={}", pid),
-                "get",
-                "Name,ParentProcessId",
-                "/format:csv",
-            ])
-            .output()
-            .ok()?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        let mut found = false;
-        for line in stdout.lines() {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 3 {
-                let name = parts[1].trim().to_lowercase();
-                let ppid: u32 = parts[2].trim().parse().unwrap_or(0);
-
-                if level > 0 || pid != own_pid {
-                    logging::debug(&format!(
-                        "  ancestor[{}]: pid={} comm='{}'",
-                        level, pid, name
-                    ));
-                    if name.contains(agent_name) {
-                        logging::debug(&format!(
-                            "  ancestor: candidate {} match at pid={}",
-                            agent_name, pid
-                        ));
-                        matched_pid_by_name = Some(pid);
-                    }
-                }
-                pid = ppid;
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            break;
-        }
-    }
-
-    if let Some(pid) = matched_pid_by_name {
-        logging::debug(&format!(
-            "  ancestor: selected outermost {} pid={}",
-            agent_name, pid
-        ));
-        return Some(pid);
-    }
-
-    logging::debug(&format!(
-        "  ancestor: {} not found in process chain",
-        agent_name
-    ));
-    None
-}
-
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn find_ancestor_agent_pid(_agent_name: &str) -> Option<u32> {
     None
 }
 
-fn resolve_codex_cache_pid() -> Option<u32> {
-    find_ancestor_agent_pid("codex").or_else(|| {
-        std::env::var("CODEX_THREAD_ID")
-            .ok()
-            .and_then(|value| value.parse::<u32>().ok())
-    })
+fn resolve_cache_owner_identity(launch: &LaunchConfig) -> Option<OwnerIdentity> {
+    let process_chain = collect_parent_processes(launch.scan_depth);
+    let (owner, _, canonical_name) =
+        resolve_owner_identity(&process_chain, &launch.ignored_callers)?;
+
+    logging::log(&format!(
+        "  owner-cache: resolved owner canonical='{}' pid={} started_at={}",
+        canonical_name, owner.pid, owner.started_at
+    ));
+    Some(owner)
+}
+
+fn owner_fields(owner: &Option<OwnerIdentity>) -> (Option<u32>, Option<u64>) {
+    (
+        owner.as_ref().map(|value| value.pid),
+        owner.as_ref().map(|value| value.started_at),
+    )
+}
+
+fn resolve_codex_cache_identity(launch: &LaunchConfig) -> (Option<u32>, Option<OwnerIdentity>) {
+    let owner_identity = resolve_cache_owner_identity(launch);
+
+    #[cfg(target_os = "windows")]
+    {
+        (
+            owner_identity.as_ref().map(|owner| owner.pid),
+            owner_identity,
+        )
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let pid = find_ancestor_agent_pid("codex").or_else(|| {
+            std::env::var("CODEX_THREAD_ID")
+                .ok()
+                .and_then(|value| value.parse::<u32>().ok())
+        });
+        (pid, owner_identity)
+    }
+}
+
+fn resolve_agent_pid(
+    agent_name: &str,
+    launch: &LaunchConfig,
+) -> (Option<u32>, Option<OwnerIdentity>) {
+    let owner_identity = resolve_cache_owner_identity(launch);
+
+    #[cfg(target_os = "windows")]
+    {
+        (
+            owner_identity.as_ref().map(|owner| owner.pid),
+            owner_identity,
+        )
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        (find_ancestor_agent_pid(agent_name), owner_identity)
+    }
 }
 
 // ─── Codex ────────────────────────────────────────────────
 
-pub fn cache_codex(json_arg: &str) {
+pub fn cache_codex(json_arg: &str, launch: &LaunchConfig) {
     logging::log(&format!("cache-codex: json_len={}", json_arg.len()));
 
     let data: Value = match serde_json::from_str(json_arg) {
@@ -369,13 +358,15 @@ pub fn cache_codex(json_arg: &str) {
         .unwrap_or_else(|_| home_dir().join(".codex"));
 
     let cache_dir = codex_home.join("reply_cache");
-    let codex_pid = match resolve_codex_cache_pid() {
+    let (codex_pid, owner_identity) = resolve_codex_cache_identity(launch);
+    let codex_pid = match codex_pid {
         Some(pid) => pid,
         None => {
             logging::log("cache-codex: no cache pid resolved; skip cache write");
             return;
         }
     };
+    let (owner_pid, owner_started_at) = owner_fields(&owner_identity);
 
     let cache_path = cache_dir.join(format!("{}.md", codex_pid));
     atomic_write_cache(&cache_path, message);
@@ -387,6 +378,8 @@ pub fn cache_codex(json_arg: &str) {
             agent: "codex".to_string(),
             real_session_id: Some(thread_id.to_string()),
             pid: Some(codex_pid),
+            owner_pid,
+            owner_started_at,
             cached_at: now_cache_timestamp(),
             size_bytes: message.len(),
         },
@@ -401,7 +394,7 @@ pub fn cache_codex(json_arg: &str) {
 
 // ─── Claude ───────────────────────────────────────────────
 
-pub fn cache_claude() {
+pub fn cache_claude(launch: &LaunchConfig) {
     logging::log("cache-claude: reading stdin...");
 
     let input = match read_stdin() {
@@ -456,7 +449,8 @@ pub fn cache_claude() {
     ));
 
     let cache_dir = home_dir().join(".claude").join("reply_cache");
-    let claude_pid = find_ancestor_agent_pid("claude");
+    let (claude_pid, owner_identity) = resolve_agent_pid("claude", launch);
+    let (owner_pid, owner_started_at) = owner_fields(&owner_identity);
 
     // Write by agent PID — GUI looks up by the same PID (deterministic)
     if let Some(pid) = claude_pid {
@@ -470,6 +464,8 @@ pub fn cache_claude() {
                 agent: "claude".to_string(),
                 real_session_id: Some(session_id.to_string()),
                 pid: Some(pid),
+                owner_pid,
+                owner_started_at,
                 cached_at: now_cache_timestamp(),
                 size_bytes: message.len(),
             },
@@ -487,6 +483,8 @@ pub fn cache_claude() {
             agent: "claude".to_string(),
             real_session_id: Some(session_id.to_string()),
             pid: claude_pid,
+            owner_pid,
+            owner_started_at,
             cached_at: now_cache_timestamp(),
             size_bytes: message.len(),
         },
@@ -495,7 +493,7 @@ pub fn cache_claude() {
 
 // ─── Gemini ───────────────────────────────────────────────
 
-pub fn cache_gemini() {
+pub fn cache_gemini(launch: &LaunchConfig) {
     // Session ID is optional — Gemini CLI may not inject GEMINI_SESSION_ID.
     let session_id = std::env::var("GEMINI_SESSION_ID")
         .ok()
@@ -533,7 +531,8 @@ pub fn cache_gemini() {
     logging::log(&format!("cache-gemini: msg_len={}", message.len()));
 
     let cache_dir = home_dir().join(".gemini").join("reply_cache");
-    let gemini_pid = find_ancestor_agent_pid("gemini");
+    let (gemini_pid, owner_identity) = resolve_agent_pid("gemini", launch);
+    let (owner_pid, owner_started_at) = owner_fields(&owner_identity);
 
     // Write by agent PID — GUI looks up by the same PID (deterministic)
     if let Some(pid) = gemini_pid {
@@ -547,6 +546,8 @@ pub fn cache_gemini() {
                 agent: "gemini".to_string(),
                 real_session_id: session_id.clone(),
                 pid: Some(pid),
+                owner_pid,
+                owner_started_at,
                 cached_at: now_cache_timestamp(),
                 size_bytes: message.len(),
             },
@@ -565,6 +566,8 @@ pub fn cache_gemini() {
                 agent: "gemini".to_string(),
                 real_session_id: session_id.clone(),
                 pid: gemini_pid,
+                owner_pid,
+                owner_started_at,
                 cached_at: now_cache_timestamp(),
                 size_bytes: message.len(),
             },
