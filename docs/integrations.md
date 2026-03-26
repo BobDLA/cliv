@@ -1,67 +1,50 @@
-# cliV: Agent Integration Guide
+# cliV Advanced Integration & Debugging Guide
 
 **[中文版](integrations.zh-CN.md)**
 
-This document explains how to integrate cliV with Codex, Claude Code, and Gemini CLI.
+Use the [Installation Guide](install-guide.md) first.
+This document is the advanced reference for:
 
-## How It Works
+- non-default executable paths
+- `$EDITOR` launch behavior
+- hook adaptation across platforms
+- reply-cache lookup rules
+- manual debugging
 
-> **💡 Note**: This section explains the underlying mechanics. If you just want to use the tool, you can **skip this and go straight to [Setup](#setup)**.
+## 1. Choose The Command Path
 
-cliV is a single binary with no external dependencies (no Python, no Bash).
+Use the executable form that matches your platform:
 
-1. **Agent hook** calls `cliv cache-xxx` after each reply → caches to disk
-2. **You press Ctrl+G** → agent calls `$EDITOR` (usually just `cliv`)
-3. **cliV** auto-detects the calling agent, resolves any write target from explicit flags or trusted-caller rules, then opens the GUI
+| Platform | Recommended value for hooks and `$EDITOR` | Notes |
+|---|---|---|
+| Linux | `cliv` | Official `.deb` installs `cliv` to `/usr/bin/cliv`. |
+| Windows | `cliv` | The `-setup.exe` installer adds `%LOCALAPPDATA%\\cliv` to the current user's `PATH`. Reopen the terminal after install or update. |
+| macOS | `/Applications/cliV.app/Contents/MacOS/cliv` | The app bundle does not auto-add itself to `PATH`. You can also use `cliv` if you created a symlink manually. |
 
-```
-Agent completes a reply
-    ↓ hook fires
-    cliv cache-codex / cache-claude / cache-gemini
-    ↓ writes ~/.{agent}/reply_cache/<cache-key>.md
+If cliV is not on `PATH`, replace every `cliv` command below with the full executable path.
 
-You press Ctrl+G
-    ↓ $EDITOR = cliv
-    cliv <file>                 # legacy caller shape
-    or cliv --target <file>     # preferred when the caller supports explicit args
-    ↓ auto-detects agent from env vars
-    ↓ resolves write target from explicit flags or trusted-caller matching
-    ↓ loads cached reply
-    cliV GUI opens
-```
+## 2. Understand Launch Semantics
 
----
+cliV supports several caller shapes:
 
-## Setup
+- `cliv review.md`
+  Opens `review.md` as the review document and does not automatically treat it as a write target.
+- `cliv --target draft.md` or `cliv -t draft.md`
+  Uses `draft.md` as the explicit write target.
+- `cliv --compose draft.md`
+  Compatibility alias for `--target`.
+- `cliv <file>` from a trusted caller
+  If a trusted caller launches cliV with only one positional file, cliV treats that file as the write target for legacy `$EDITOR` flows.
 
-### Step 1: Install
+If no agent is detected, cliV skips reply extraction and stays fail-closed instead of guessing.
 
-```bash
-# From GitHub Release
-cp cliv ~/.local/bin/
-# Or: sudo dpkg -i cliv_0.2.1_amd64.deb
-```
+## 3. Optional cliV-Owned Settings
 
-### Step 2: Set $EDITOR
+Most users do not need this section.
 
-```bash
-# ~/.bashrc or ~/.zshrc
-export EDITOR="cliv"
-```
+cliV stores its own durable settings in `~/.cliv/config.toml`. The Settings UI writes this file. Agent hook files stay outside this boundary and are not rewritten by cliV.
 
-If your caller supports extra arguments, you can also use:
-
-```bash
-export EDITOR="cliv --target"
-```
-
-If the caller can only launch `cliv <file>`, cliV will still treat that positional file as the write target when the parent-process chain matches a trusted caller. Plain standalone launches stay review-only.
-
-### Optional: configure cliV-owned settings
-
-cliV keeps its own durable settings in `~/.cliv/config.toml`. The Settings panel writes the same file for `Reading`, `Prompts`, and supported `Shortcuts`. Codex / Claude / Gemini hook files stay outside this boundary and are not rewritten by cliV.
-
-Edit `~/.cliv/config.toml`:
+The most relevant integration section is usually:
 
 ```toml
 [launch]
@@ -80,72 +63,33 @@ ignored_callers = [
   "pwsh.exe",
   "explorer.exe",
 ]
-
-[prompts]
-reply_header_zh = "请基于以下批注逐条回应。请以 Markdown 格式返回。"
-reply_header_en = "Please respond to each annotation below in Markdown."
-iterate_header_zh = "请根据以下批注，对原文进行增量修改。"
-iterate_header_en = "Please make incremental revisions based on the following annotations."
-
-[ui]
-theme = "light"
-font_size = 18
-locale = "en"
-sidebar_open = true
-sidebar_tab = "outline"
-sidebar_width = 224
-annotation_margin_width = 256
-content_width = "standard"
-page_padding = "comfortable"
-reading_density = "comfortable"
-highlight_strength = "balanced"
-
-[ui.shortcuts]
-open_file = "Mod+O"
-search = "Mod+F"
-submit_return = "Mod+Enter"
-submit_annotation = "Mod+Enter"
-add_annotation = "Mod+Alt+M"
-font_increase = "Mod+="
-font_decrease = "Mod+-"
-font_reset = "Mod+0"
 ```
 
-If `submit_annotation` and `submit_return` share `Mod+Enter`, cliV resolves the conflict by focus priority: annotation submit wins while the annotation editor is active; otherwise the key falls through to return submit.
+Prompts, UI preferences, and shortcuts also live in the same file, but are usually easier to manage from the cliV Settings panel.
 
-### Step 3: Configure agent hooks
+## 4. Hook Reference
 
-Pick your agent(s) below.
+The snippets below are the same commands used by the normal install guide, repeated here so you can adapt them for non-default paths.
 
----
+### Codex
 
-## Codex
-
-Add to `~/.codex/config.toml`:
+`~/.codex/config.toml`:
 
 ```toml
-# Linux / macOS (if cliv is symlinked in PATH)
 notify = ["cliv", "cache-codex"]
-
-# 🍏 macOS Easiest Setup (Direct path, no symlink needed)
-# notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
-**How it works**: When Codex completes a turn, it calls `cliv cache-codex '<json>'` with JSON as an argument. cliV extracts `thread-id` and `last-assistant-message`, detects the active Codex PID, writes `~/.codex/reply_cache/{pid}.md`, and stores the real thread ID in `~/.codex/reply_cache/{pid}.meta.json`.
+macOS without a symlink:
 
-### Extraction fallback chain
+```toml
+notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
+```
 
-1. **PID cache hit**: `CODEX_THREAD_ID` (compatibility env name for the active Codex cache key, usually the agent PID) → `~/.codex/reply_cache/{pid}.md`
-2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `real_session_id` matches the lookup key
-3. **Legacy cache hit**: Direct file match `~/.codex/reply_cache/{thread-id}.md`
+Codex passes JSON as a command-line argument to `cliv cache-codex`.
 
----
+### Claude Code
 
-## Claude Code
-
-Add to `~/.claude/settings.json`:
-
-> **🍏 macOS Note**: If you didn't create a symlink, change `"cliv cache-claude"` below to the exact absolute path: `"/Applications/cliV.app/Contents/MacOS/cliv cache-claude"`
+`~/.claude/settings.json`:
 
 ```json
 {
@@ -164,21 +108,15 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-**How it works**: Claude pipes JSON to stdin containing `session_id` and `last_assistant_message`. cliV writes reply-cache metadata and compatible cache entries so the active lookup key can resolve back to the real Claude conversation identity.
+macOS without a symlink:
 
-### Extraction fallback chain
+- change `cliv cache-claude` to `/Applications/cliV.app/Contents/MacOS/cliv cache-claude`
 
-1. **Direct cache hit**: `CLAUDE_SESSION_ID` (used by cliV as a compatibility lookup-key carrier) → `~/.claude/reply_cache/{key}.md`
-2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `key`, `real_session_id`, or `pid` matches the lookup key
-3. **Compatibility direct hit**: Read a legacy direct file if it exists for that same key
+Claude pipes JSON to stdin containing `session_id` and `last_assistant_message`.
 
----
+### Gemini CLI
 
-## Gemini CLI
-
-Add to `~/.gemini/settings.json`:
-
-> **🍏 macOS Note**: If you didn't create a symlink, change `"cliv cache-gemini"` below to the exact absolute path: `"/Applications/cliV.app/Contents/MacOS/cliv cache-gemini"`
+`~/.gemini/settings.json`:
 
 ```json
 {
@@ -197,33 +135,110 @@ Add to `~/.gemini/settings.json`:
 }
 ```
 
-**How it works**: Gemini pipes JSON to stdin containing `prompt_response`. `GEMINI_SESSION_ID` may provide the agent-native conversation identity; cliV writes reply-cache metadata and compatible cache entries so the active lookup key can resolve deterministically.
+macOS without a symlink:
 
-### Extraction fallback chain
+- change `cliv cache-gemini` to `/Applications/cliV.app/Contents/MacOS/cliv cache-gemini`
 
-1. **Direct cache hit**: `GEMINI_SESSION_ID` (used by cliV as a compatibility lookup-key carrier) → `~/.gemini/reply_cache/{key}.md`
-2. **Metadata match**: Find the newest `reply_cache/*.meta.json` whose `key`, `real_session_id`, or `pid` matches the lookup key
-3. **Compatibility direct hit**: Read a legacy direct file if it exists for that same key
+Gemini pipes JSON to stdin containing `prompt_response`.
 
----
+## 5. Reply Cache Lookup Rules
 
-## Notes
+cliV only runs the extractor for the detected agent.
 
-### Zero dependencies
+### Codex
 
-cliV is a single binary. No Python, Bash, Node.js, or wrapper scripts needed.
+Reply-cache lookup order:
 
-### Agent auto-detection
+1. PID cache hit: `CODEX_THREAD_ID` -> `~/.codex/reply_cache/{pid}.md`
+2. Metadata match: newest `reply_cache/*.meta.json` whose `real_session_id` matches the lookup key
+3. Legacy direct hit: `~/.codex/reply_cache/{thread-id}.md`
 
-When launched as `$EDITOR`, cliV auto-detects the calling agent from environment variables (`CODEX_THREAD_ID`, `CLAUDE_SESSION_ID`, `GEMINI_SESSION_ID`). In cliV these env vars are treated as compatibility carriers for the active reply-cache lookup key: the value may be the agent-native conversation ID or a PID-derived cache key depending on launch context. No `CLIV_AGENT` env var is needed unless you want to override.
+### Claude Code
 
-### Launch modes
+Reply-cache lookup order:
 
-- `cliv file.md`: open `file.md` as the review document and do not treat it as a write target.
-- `cliv --target draft.md` / `cliv -t draft.md`: use `draft.md` as the explicit write target.
-- `cliv --compose draft.md`: compatibility alias for `--target`.
-- If a trusted caller launches cliV with only one positional file, that file is treated as the write target for legacy `$EDITOR` integrations.
+1. Direct cache hit: `CLAUDE_SESSION_ID` -> `~/.claude/reply_cache/{key}.md`
+2. Metadata match: newest `reply_cache/*.meta.json` whose `key`, `real_session_id`, or `pid` matches the lookup key
+3. Compatibility direct hit: legacy direct file for that same key
 
-### Extraction routing
+### Gemini CLI
 
-cliV only calls the extractor for the detected agent. If no agent is detected, reply extraction is skipped and the UI stays fail-closed.
+Reply-cache lookup order:
+
+1. Direct cache hit: `GEMINI_SESSION_ID` -> `~/.gemini/reply_cache/{key}.md`
+2. Metadata match: newest `reply_cache/*.meta.json` whose `key`, `real_session_id`, or `pid` matches the lookup key
+3. Compatibility direct hit: legacy direct file for that same key
+
+## 6. Manual Debugging
+
+### Shell Note
+
+The command examples below use a Unix-like shell.
+On Windows PowerShell, translate:
+
+- `VAR=value cmd` -> `$env:VAR = 'value'; cmd`
+- `cat file` -> `Get-Content file`
+
+Git Bash or WSL also works well for these tests.
+
+### Verify Binary Resolution
+
+Linux / macOS with `PATH`:
+
+```bash
+which cliv
+cliv --help
+```
+
+macOS without a symlink:
+
+```bash
+/Applications/cliV.app/Contents/MacOS/cliv --help
+```
+
+Windows:
+
+```powershell
+where.exe cliv
+cliv --help
+```
+
+### Verify Hook Output Manually
+
+Codex:
+
+```bash
+CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
+cat ~/.codex/reply_cache/424242.md
+```
+
+Claude Code:
+
+```bash
+echo '{"hook_event_name":"Stop","session_id":"test-claude","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
+cat ~/.claude/reply_cache/test-claude.md
+```
+
+Gemini CLI:
+
+```bash
+echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-gemini cliv cache-gemini
+cat ~/.gemini/reply_cache/test-gemini.md
+```
+
+If these commands write the expected `.md` files, cliV itself is working and the remaining problem is usually:
+
+- the wrong hook file path
+- malformed hook JSON or TOML
+- a shell quoting issue
+- a stale terminal session that has not reloaded `PATH` or `EDITOR`
+
+### When cliV opens but shows no reply
+
+Check these in order:
+
+1. Was the correct agent detected?
+2. Did the hook actually write a cache file under `~/.codex`, `~/.claude`, or `~/.gemini`?
+3. Is the lookup key the one cliV is expecting for that launch context?
+4. Did a non-default path or shell quoting issue stop the hook from running?
+5. On Windows, did you reopen the terminal after install or after changing `EDITOR`?

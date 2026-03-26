@@ -1,80 +1,119 @@
-# cliV Installation & Configuration Guide
+# cliV Installation Guide
 
 **[中文版](install-guide.zh-CN.md)**
 
+This guide is the normal end-user setup path.
+For non-default path setups, launch semantics, reply-cache lookup rules, and manual debugging, see the [Advanced Integration & Debugging Guide](integrations.md).
+
 ## 1. Install
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/BobDLA/cliv/releases). If you need to build the project from source or participate in development, please refer to the developer documentation in [Build Workflows](build-workflows.md).
+Download the latest release for your platform from [GitHub Releases](https://github.com/BobDLA/cliv/releases). If you need to build from source, see [Build Workflows](build-workflows.md).
 
 ### Linux
+
+Official install method:
+
 ```bash
-# Install .deb package
 sudo dpkg -i cliv_*.deb
 ```
 
+After installation, `cliv` is available from `/usr/bin/cliv`, so your hook configs and `$EDITOR` can use plain `cliv`.
+
 ### macOS
-1. Open the `.dmg` and drag `cliV.app` to your **Applications** folder.
 
-> **💡 Easiest Method**: You can skip creating a symlink. When configuring your Agents or `$EDITOR` later, just copy and paste the absolute path: `/Applications/cliV.app/Contents/MacOS/cliv`
+1. Open the `.dmg` and drag `cliV.app` to **Applications**.
+2. Choose one launch strategy:
 
-2. *(Optional)* Create a symlink to use the short `cliv` command in your terminal:
+Recommended:
+- Do not create a symlink.
+- Use the absolute path `/Applications/cliV.app/Contents/MacOS/cliv` directly in `$EDITOR` and in your agent hook commands.
+
+Optional:
+- Create a symlink if you want to use the short `cliv` command everywhere.
+
 ```bash
 sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
 ```
 
 ### Windows
-1. Download the `-setup.exe` installer and double-click to install.
-2. The installer automatically adds `cliv` to your current user's `PATH`. Once completed, you can use the `cliv` command directly in PowerShell or CMD. You may need to restart your terminal session for the path changes to take effect.
 
-### Verify
+1. Download the `-setup.exe` installer and run it.
+2. The installer places cliV under `%LOCALAPPDATA%\cliv`.
+3. The installer adds that directory to the current user's `PATH`.
+4. Reopen your terminal after install or update so the new `PATH` is visible.
+
+On Windows, your hook configs and `EDITOR` can normally use plain `cliv`.
+
+### Verify The Binary
+
+Linux / macOS with `cliv` on `PATH`:
+
 ```bash
-cliv --help  # or: which cliv
+cliv --help
+which cliv
 ```
 
-## 2. Set Environment Variable
+macOS without a symlink:
 
-> [!CAUTION]
-> **This step is critical and often missed.** A correctly configured `$EDITOR` (along with the Agent hook below) is the only way to achieve the seamless "trigger desktop review from the terminal" experience.
+```bash
+/Applications/cliV.app/Contents/MacOS/cliv --help
+```
 
-Edit your shell profile (e.g., `~/.bashrc` or `~/.zshrc`):
+Windows PowerShell or CMD:
+
+```powershell
+cliv --help
+where.exe cliv
+```
+
+## 2. Set EDITOR
+
+Use the value that matches how your platform resolves cliV.
+
+Linux:
 
 ```bash
 export EDITOR="cliv"
 ```
 
-Then run `source ~/.bashrc` (or restart your terminal).
+macOS with a symlink:
 
-> **How it works**: When an AI agent triggers `Ctrl+G`, it invokes `$EDITOR`. Setting it to `cliv` launches the cliV GUI directly.
+```bash
+export EDITOR="cliv"
+```
+
+macOS without a symlink:
+
+```bash
+export EDITOR="/Applications/cliV.app/Contents/MacOS/cliv"
+```
+
+Windows PowerShell:
+
+```powershell
+setx EDITOR cliv
+```
+
+Then open a new terminal.
+
+When an agent triggers `Ctrl+G`, it launches `$EDITOR`. That is how cliV opens from the CLI workflow.
 
 ## 3. Configure Agent Hooks
 
-> [!CAUTION]
-> **Crucial Dependency**: This is the second commonly missed setup step. If the hooks are not configured, cliV will not be able to fetch the agent's latest reply when you trigger the editor shortcut.
+If cliV is not on `PATH`, replace every `cliv` command below with the full executable path.
+In practice, this mainly applies to macOS when you skip the symlink. On Linux official `.deb` installs and Windows `-setup.exe` installs, you can normally keep `cliv` as-is.
 
-Each agent requires a one-line custom hook configuration so it automatically calls `cliv cache-xxx` to safely persist its latest reply to cache after every turn.
+### Codex
 
----
-
-### 3a. Codex
-
-Edit `~/.codex/config.toml` and add:
+Edit `~/.codex/config.toml`:
 
 ```toml
 notify = ["cliv", "cache-codex"]
 ```
 
+### Claude Code
 
-
-**Live test**:
-1. Start Codex → have a conversation
-2. Press `Ctrl+G`
-3. cliV should launch and display the latest AI reply
-
----
-
-### 3b. Claude Code
-
-Edit `~/.claude/settings.json` and add the Stop hook:
+Edit `~/.claude/settings.json`:
 
 ```json
 {
@@ -93,20 +132,11 @@ Edit `~/.claude/settings.json` and add the Stop hook:
 }
 ```
 
-> ⚠️ If the file already has other configuration, merge the `hooks` section — don't overwrite.
+If the file already has other settings, merge the `hooks` block instead of overwriting the file.
 
+### Gemini CLI
 
-
-**Live test**:
-1. Start Claude Code → have a conversation
-2. Press `Ctrl+G`
-3. cliV should launch and display Claude's latest reply
-
----
-
-### 3c. Gemini CLI
-
-Edit `~/.gemini/settings.json` and add the AfterAgent hook:
+Edit `~/.gemini/settings.json`:
 
 ```json
 {
@@ -125,73 +155,83 @@ Edit `~/.gemini/settings.json` and add the AfterAgent hook:
 }
 ```
 
+## 4. Quick Verification
 
+1. Open a fresh terminal and confirm `cliv --help` works.
+2. Confirm `EDITOR` resolves to cliV on your platform.
+3. Start one agent and let it produce a reply.
+4. Press `Ctrl+G`.
+5. cliV should open and show the latest agent reply.
 
-**Live test**:
-1. Start Gemini CLI → have a conversation
-2. Press `Ctrl+G`
-3. cliV should launch and display Gemini's latest reply
+If this fails, continue with the [Advanced Integration & Debugging Guide](integrations.md).
 
----
+## 5. Common Problems
 
-## 4. Verification Checklist
+### `cliv` is not found
 
-| Step | Command | Expected |
-|---|---|---|
-| Binary exists | `which cliv` | Shows path |
-| EDITOR is set | `echo $EDITOR` | `cliv` |
-| Codex hook config | `cat ~/.codex/config.toml` | Contains `notify = ["cliv", "cache-codex"]` |
-| Claude hook config | `cat ~/.claude/settings.json` | Contains `"command": "cliv cache-claude"` |
-| Codex cache test | Manual command above | Cache and metadata written successfully |
-| Claude cache test | Manual command above | File written successfully |
-| Ctrl+G live test | Press Ctrl+G in an agent | cliV window opens |
+- Linux: confirm the `.deb` install succeeded and `/usr/bin/cliv` exists.
+- macOS without a symlink: use `/Applications/cliV.app/Contents/MacOS/cliv` directly instead of `cliv`.
+- Windows: reopen the terminal after install or update, then run `where.exe cliv`.
 
-## 5. FAQ & Troubleshooting
+### macOS says the app is damaged
 
-### How to verify or debug if the cache hooks are working?
+This happens because unsigned apps downloaded from GitHub Releases are quarantined by Gatekeeper.
 
-If cliV isn't showing the latest reply after triggering the shortcut, you can manually test the extraction logic using the shell commands below to isolate the issue:
-
-**Codex Debugging**:
-```bash
-CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
-cat ~/.codex/reply_cache/424242.md
-```
-*(Note: 424242 simulates the pid-keyed cache entry used during GUI launches.)*
-
-**Claude Code Debugging**:
-```bash
-echo '{"hook_event_name":"Stop","session_id":"test-claude","last_assistant_message":"# Hello from Claude"}' | cliv cache-claude
-cat ~/.claude/reply_cache/test-claude.md
-```
-
-**Gemini CLI Debugging**:
-```bash
-echo '{"prompt_response":"# Hello from Gemini"}' | GEMINI_SESSION_ID=test-gemini cliv cache-gemini
-cat ~/.gemini/reply_cache/test-gemini.md
-```
-
-If these manual commands successfully write the `.md` files into the respective `reply_cache` directories, it means cliV is working correctly and the issue is most likely a typo or wrong path in your Agent's hook configuration file.
-
-### macOS says "cliV is damaged and can't be opened"
-This happens because macOS Gatekeeper quarantines apps downloaded from GitHub Releases that aren't signed with an Apple Developer certificate.
-**Solution**: Move `cliV.app` to your Applications folder, then run this command in Terminal to remove the quarantine flag:
 ```bash
 sudo xattr -rd com.apple.quarantine /Applications/cliV.app
 ```
 
+### Hook or cache debugging
+
+Use the [Advanced Integration & Debugging Guide](integrations.md) for:
+
+- manual cache-write tests
+- reply-cache file locations
+- launch target resolution
+- agent detection and lookup-key behavior
+
 ## 6. Uninstall
 
+### Linux
+
+Official `.deb` install:
+
 ```bash
-# If installed via standalone binary in ~/.local/bin
-rm ~/.local/bin/cliv
-
-# If installed via .deb
 sudo dpkg -r cliv
-
-# Clean up user data and cache (optional)
-rm -rf ~/.cliv
-rm -rf ~/.codex/reply_cache
-rm -rf ~/.claude/reply_cache
-rm -rf ~/.gemini/reply_cache
 ```
+
+If you previously used an older manual test setup, such as copying `cliv` into `~/.local/bin` yourself, remove that custom file separately.
+
+### macOS
+
+1. Delete `/Applications/cliV.app`.
+2. If you created a symlink, remove it:
+
+```bash
+sudo rm /usr/local/bin/cliv
+```
+
+### Windows
+
+Use either of these:
+
+- Settings -> Apps -> Installed apps -> `cliV` -> Uninstall
+- `%LOCALAPPDATA%\cliv\uninstall.exe`
+
+### Optional Data Cleanup
+
+The installer only removes the app itself. Your local settings and reply caches are user data and can be removed separately if you want a clean reset.
+
+Linux / macOS paths:
+
+- `~/.cliv`
+- `~/.codex/reply_cache`
+- `~/.claude/reply_cache`
+- `~/.gemini/reply_cache`
+
+Windows paths:
+
+- `%USERPROFILE%\.cliv`
+- `%USERPROFILE%\.codex\reply_cache`
+- `%USERPROFILE%\.claude\reply_cache`
+- `%USERPROFILE%\.gemini\reply_cache`
