@@ -24,7 +24,7 @@ sudo ln -s /Applications/cliV.app/Contents/MacOS/cliv /usr/local/bin/cliv
 
 ### Windows
 1. Download the `.msi` installer and double-click to install.
-2. The installer automatically adds `cliv` to your system's `PATH`. Once completed, you can use the `cliv` command directly in PowerShell or CMD. You may need to restart your terminal session for the path changes to take effect.
+2. The installer automatically adds `cliv` to your current user's `PATH`. Once completed, you can use the `cliv` command directly in PowerShell or CMD. You may need to restart your terminal session for the path changes to take effect.
 
 ### Verify
 ```bash
