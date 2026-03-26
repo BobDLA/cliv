@@ -1,6 +1,9 @@
 name: Windows Artifact
 
 on:
+  push:
+    branches:
+      - fix/windows-owner-identity
   workflow_dispatch:
     inputs:
       bundles:
