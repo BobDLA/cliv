@@ -296,10 +296,9 @@ pub(crate) fn collect_parent_processes(scan_depth: usize) -> Vec<ParentProcess> 
 #[cfg(target_os = "windows")]
 fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32, Option<u64>)>> {
     use std::collections::HashMap;
-    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 
     const TH32CS_SNAPPROCESS: u32 = 0x00000002;
-    const INVALID_HANDLE_VALUE: isize = -1;
     const MAX_PATH: usize = 260;
 
     #[repr(C)]
@@ -317,13 +316,13 @@ fn win_build_process_map() -> Option<std::collections::HashMap<u32, (String, u32
     }
 
     extern "system" {
-        fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> isize;
-        fn Process32FirstW(hSnapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
-        fn Process32NextW(hSnapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
+        fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> HANDLE;
+        fn Process32FirstW(hSnapshot: HANDLE, lppe: *mut ProcessEntry32W) -> i32;
+        fn Process32NextW(hSnapshot: HANDLE, lppe: *mut ProcessEntry32W) -> i32;
     }
 
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot == INVALID_HANDLE_VALUE {
+    if snapshot == (-1isize) as HANDLE {
         return None;
     }
 
@@ -372,7 +371,7 @@ fn win_process_started_at(pid: u32) -> Option<u64> {
     }
 
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if handle == 0 {
+    if handle.is_null() {
         return None;
     }
 

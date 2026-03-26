@@ -292,7 +292,7 @@ fn resolve_codex_cache_identity(launch: &LaunchConfig) -> (Option<u32>, Option<O
 }
 
 fn resolve_agent_pid(
-    agent_name: &str,
+    _agent_name: &str,
     launch: &LaunchConfig,
 ) -> (Option<u32>, Option<OwnerIdentity>) {
     let owner_identity = resolve_cache_owner_identity(launch);
@@ -307,7 +307,7 @@ fn resolve_agent_pid(
 
     #[cfg(not(target_os = "windows"))]
     {
-        (find_ancestor_agent_pid(agent_name), owner_identity)
+        (find_ancestor_agent_pid(_agent_name), owner_identity)
     }
 }
 
