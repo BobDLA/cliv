@@ -1,10 +1,10 @@
 !include "LogicLib.nsh"
 
-!macro CLIV_WRITE_PATH_SCRIPT
+  !macro CLIV_WRITE_PATH_SCRIPT
   InitPluginsDir
   FileOpen $0 "$PLUGINSDIR\cliv-path.ps1" w
-  FileWrite $0 "$$ErrorActionPreference = 'Stop'$\r$\n"
   FileWrite $0 "param([ValidateSet('add','remove')][string]$$Mode, [string]$$InstallDir)$\r$\n"
+  FileWrite $0 "$$ErrorActionPreference = 'Stop'$\r$\n"
   FileWrite $0 "$$Target = [System.EnvironmentVariableTarget]::User$\r$\n"
   FileWrite $0 "$\r$\n"
   FileWrite $0 "function Normalize-PathEntry([string]$$Value) {$\r$\n"
