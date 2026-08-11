@@ -107,6 +107,31 @@ notify = ["cliv", "cache-codex"]
 notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
+保留 notify 用于兼容，并创建 `~/.codex/hooks.json` 来捕获 Plan Review 内容：
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+在 Codex 中使用 `/hooks` 审核并信任该命令。如果 `config.toml` 已经有 inline Hooks，请把 Stop handler 合并进去，不要同时维护两种 Hook 格式。macOS 未创建软链接时，`command` 也要使用 cliV 的完整可执行路径。
+
+Codex 的 Plan 决策弹窗当前会接管键盘输入，因此在弹窗内按 `Ctrl+G` 不会启动 `$EDITOR`。选择 No 回到普通输入框后再按 `Ctrl+G`，cliV 会加载 Stop Hook 已捕获的计划。
+
 #### Claude Code
 
 编辑 `~/.claude/settings.json`，把下面内容合并进现有配置：

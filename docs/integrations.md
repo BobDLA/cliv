@@ -87,6 +87,31 @@ notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 
 Codex passes JSON as a command-line argument to `cliv cache-codex`.
 
+Keep that notify entry for compatibility, then add `~/.codex/hooks.json` so Plan Review replies are delivered through stdin:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Current Codex Plan Review builds may leave both assistant-message fields null. In that case cliV reads only the same-session, same-turn `item_completed/Plan` entry from the `transcript_path` supplied by the Stop hook; no additional user command is required.
+
+Review and trust the command through `/hooks` in Codex. If the same config layer already uses inline hooks, merge this handler there rather than keeping both inline hooks and `hooks.json`. On macOS without a symlink, use `/Applications/cliV.app/Contents/MacOS/cliv cache-codex` as the command.
+
 ### Claude Code
 
 `~/.claude/settings.json`:
@@ -210,6 +235,9 @@ Codex:
 ```bash
 CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
 cat ~/.codex/reply_cache/424242.md
+
+printf '%s' '{"hook_event_name":"Stop","session_id":"test-123","turn_id":"plan-1","permission_mode":"plan","last_assistant_message":"<proposed_plan>\n# Plan\n\n- Review this\n</proposed_plan>"}' | CODEX_THREAD_ID=424242 cliv cache-codex
+cat ~/.codex/reply_cache/424242.md
 ```
 
 Claude Code:
@@ -230,6 +258,8 @@ If these commands write the expected `.md` files, cliV itself is working and the
 
 - the wrong hook file path
 - malformed hook JSON or TOML
+- a Codex Stop hook that has not been trusted through `/hooks`
+- Codex hooks disabled through the `features.hooks` setting
 - a shell quoting issue
 - a stale terminal session that has not reloaded `PATH` or `EDITOR`
 
@@ -241,4 +271,5 @@ Check these in order:
 2. Did the hook actually write a cache file under `~/.codex`, `~/.claude`, or `~/.gemini`?
 3. Is the lookup key the one cliV is expecting for that launch context?
 4. Did a non-default path or shell quoting issue stop the hook from running?
-5. On Windows, did you reopen the terminal after install or after changing `EDITOR`?
+5. For Codex Plan Review, is the Stop hook listed as trusted under `/hooks`?
+6. On Windows, did you reopen the terminal after install or after changing `EDITOR`?

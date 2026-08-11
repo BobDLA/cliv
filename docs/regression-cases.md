@@ -115,6 +115,18 @@
 
 ---
 
+## Agent Reply Capture
+
+### ARC-001 — Codex Plan Review 应显示当前计划而不是空白或上一轮回复
+- **Area:** agent-integration
+- **Scenario:** Codex 同一会话先完成普通回复，随后在 Plan 模式产生 `last_assistant_message: null`，计划仅存在于同 session、同 turn 的 transcript `item_completed/Plan` 事件中；在 Plan 决策弹窗选择 No 回到普通输入框后，再通过 `$EDITOR` 调起 cliV
+- **Expected:** cliV 显示当前计划的 Markdown 内容，外层 transport tags 不可见；提交批注后内容写回 Codex 提供的临时 target
+- **Coverage:** manual
+- **Manual verification:** 在 `~/.codex/config.toml` 保留 notify，并在 `~/.codex/hooks.json` 配置、通过 `/hooks` 信任 `Stop -> cliv cache-codex`；重开 Codex，先完成一个普通回合，再进入 Plan 模式生成计划；在 Plan 决策弹窗选择 No 回到普通输入框，按 `Ctrl+G` 调起 cliV；确认显示的是当前计划，完成一条批注并验证 Codex 收到写回内容
+- **Reason:** null-message transcript fallback、双 transport、PID 覆盖和 extractor 回读已有 Rust 自动化；真实 Codex TUI 的 Plan Review、Hook trust 与外部 `$EDITOR` 交接需要安装态 Codex 进行跨进程人工验证
+
+---
+
 ## Worktree Tooling
 
 ### WT-001 — shared-cache helper 不得让默认 Rust 安装失效

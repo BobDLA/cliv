@@ -9,8 +9,8 @@ use serde::Serialize;
 pub enum CliMode {
     /// Launch the Tauri GUI (default).
     Gui,
-    /// Cache a Codex reply from notify hook: `cliv cache-codex '<json>'`
-    CacheCodex(String),
+    /// Cache a Codex reply from notify argv or Stop-hook stdin.
+    CacheCodex(Option<String>),
     /// Cache a Claude reply from Stop hook (stdin): `cliv cache-claude`
     CacheClaude,
     /// Cache a Gemini reply from AfterAgent hook (stdin): `cliv cache-gemini`
@@ -50,7 +50,7 @@ impl CliParsed {
 
         logging::log("═══════════════════════════════════════════════════");
         logging::log(&format!("cliV started  PID={}", std::process::id()));
-        logging::log(&format!("  argv={:?}", argv));
+        logging::log(&format!("  argv={:?}", redact_cache_payload(&argv)));
         logging::debug(&format!(
             "  CWD={}",
             std::env::current_dir()
@@ -78,8 +78,14 @@ impl CliParsed {
         if argv.len() >= 2 {
             match argv[1].as_str() {
                 "cache-codex" => {
-                    let json = argv.get(2).cloned().unwrap_or_default();
-                    logging::log(&format!("  mode=cache-codex  json_len={}", json.len()));
+                    let json = argv.get(2).cloned().filter(|value| !value.is_empty());
+                    match json.as_ref() {
+                        Some(value) => logging::log(&format!(
+                            "  mode=cache-codex  transport=argv  json_len={}",
+                            value.len()
+                        )),
+                        None => logging::log("  mode=cache-codex  transport=stdin"),
+                    }
                     return CliParsed {
                         mode: CliMode::CacheCodex(json),
                         args: CliArgs::default(),
@@ -140,6 +146,16 @@ impl CliParsed {
             args,
         }
     }
+}
+
+fn redact_cache_payload(argv: &[String]) -> Vec<String> {
+    let mut redacted = argv.to_vec();
+    if argv.get(1).map(String::as_str) == Some("cache-codex") {
+        if let Some(payload) = redacted.get_mut(2) {
+            *payload = format!("<redacted:{} bytes>", payload.len());
+        }
+    }
+    redacted
 }
 
 /// Parse GUI-mode arguments from an argv slice (excluding the binary name).
@@ -463,7 +479,7 @@ fn match_agent_name(comm: &str) -> Option<&'static str> {
 mod tests {
     use super::{
         detect_trusted_caller, find_agent_process, match_agent_name, parse_gui_args,
-        resolve_launch_paths, ParentProcess,
+        redact_cache_payload, resolve_launch_paths, ParentProcess,
     };
     use crate::config::{AppConfig, LaunchConfig};
 
@@ -727,5 +743,22 @@ mod tests {
         // Plain node process — no match
         let cmdline = "node /home/user/my-app/index.js";
         assert_eq!(match_agent_name(cmdline), None);
+    }
+
+    #[test]
+    fn codex_cache_payload_is_redacted_from_logged_argv() {
+        let payload = r#"{"type":"agent-turn-complete","last-assistant-message":"secret"}"#;
+        let argv = vec![
+            "/usr/bin/cliv".to_string(),
+            "cache-codex".to_string(),
+            payload.to_string(),
+        ];
+
+        let redacted = redact_cache_payload(&argv);
+
+        assert_eq!(redacted[0], "/usr/bin/cliv");
+        assert_eq!(redacted[1], "cache-codex");
+        assert_eq!(redacted[2], format!("<redacted:{} bytes>", payload.len()));
+        assert!(!redacted.join(" ").contains("secret"));
     }
 }

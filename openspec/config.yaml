@@ -38,6 +38,6 @@ rules:
     - 变更涉及用户可见流程、agent integration 或持久化行为时，必须包含验证工作。
     - 文档或公开使用方式变化时，明确是否同步对应中英文文档。
     - bug fix 在可行时补 automated regression；若暂时无法自动化，更新 `docs/regression-cases.md`。
-    - `Coverage: manual` 的回归 case 需要 `Manual verification:`；若当前还不适合自动化，再补 `Reason:`。
-    - `Coverage: pending` 的回归 case 需要 `Reason:`。
+    - "`Coverage: manual` 的回归 case 需要 `Manual verification:`；若当前还不适合自动化，再补 `Reason:`。"
+    - "`Coverage: pending` 的回归 case 需要 `Reason:`。"
     - 变更影响测试标准、回归 case 或 CI 覆盖声明时，纳入 `pnpm test:docs` 验证。

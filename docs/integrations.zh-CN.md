@@ -87,6 +87,31 @@ notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 
 Codex 会把 JSON 作为命令行参数传给 `cliv cache-codex`。
 
+保留该 notify 配置用于兼容，再添加 `~/.codex/hooks.json`，让 Plan Review 回复通过 stdin 传入：
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+当前 Codex 的 Plan Review 可能让两个 assistant-message 字段都为 `null`。此时 cliV 只读取 Stop Hook 提供的 `transcript_path` 中同 session、同 turn 的 `item_completed/Plan` 条目；用户不需要执行额外命令。
+
+请在 Codex 中通过 `/hooks` 审核并信任该命令。如果同一个配置层已经使用 inline Hooks，请把这个 handler 合并进去，不要同时保留 inline Hooks 和 `hooks.json`。macOS 未创建软链接时，command 使用 `/Applications/cliV.app/Contents/MacOS/cliv cache-codex`。
+
 ### Claude Code
 
 `~/.claude/settings.json`：
@@ -210,6 +235,9 @@ Codex：
 ```bash
 CODEX_THREAD_ID=424242 cliv cache-codex '{"type":"agent-turn-complete","thread-id":"test-123","last-assistant-message":"# Hello\nTest reply."}'
 cat ~/.codex/reply_cache/424242.md
+
+printf '%s' '{"hook_event_name":"Stop","session_id":"test-123","turn_id":"plan-1","permission_mode":"plan","last_assistant_message":"<proposed_plan>\n# Plan\n\n- Review this\n</proposed_plan>"}' | CODEX_THREAD_ID=424242 cliv cache-codex
+cat ~/.codex/reply_cache/424242.md
 ```
 
 Claude Code：
@@ -230,6 +258,8 @@ cat ~/.gemini/reply_cache/test-gemini.md
 
 - hook 文件路径写错了
 - JSON / TOML 语法有误
+- Codex Stop Hook 尚未通过 `/hooks` 信任
+- Codex 的 `features.hooks` 设置禁用了 Hooks
 - shell 引号转义不对
 - 终端仍然是旧会话，没有重新加载 `PATH` 或 `EDITOR`
 
@@ -241,4 +271,5 @@ cat ~/.gemini/reply_cache/test-gemini.md
 2. 对应 `~/.codex`、`~/.claude`、`~/.gemini` 下是否真的写出了 cache 文件？
 3. 当前启动上下文里，cliV 查找的 lookup key 是否和你预期一致？
 4. 是否因为非默认路径或 shell 引号问题，导致 hook 根本没执行？
-5. Windows 上是否在安装或修改 `EDITOR` 之后重新打开了终端？
+5. Codex Plan Review 场景下，`/hooks` 是否显示 Stop Hook 已受信任？
+6. Windows 上是否在安装或修改 `EDITOR` 之后重新打开了终端？

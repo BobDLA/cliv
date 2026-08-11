@@ -93,7 +93,7 @@ graph TB
         CLIPBOARD["System Clipboard"]
     end
 
-    CODEX -->|"notify hook"| CLI
+    CODEX -->|"notify arg / Stop stdin"| CLI
     CLAUDE -->|"Stop hook (stdin)"| CLI
     GEMINI -->|"AfterAgent hook (stdin)"| CLI
 
@@ -171,7 +171,7 @@ Each supported AI agent has a unique hook mechanism. cliV normalizes these into 
 
 | Agent | Hook Type | Trigger | Data Source | Cache Key |
 |:---|:---|:---|:---|:---|
-| Codex | `notify` | `agent-turn-complete` | CLI argument (JSON) | PID cache key + sidecar thread metadata |
+| Codex | `notify` + `Stop` | completed turn / lifecycle stop | CLI argument + stdin (JSON) | PID cache key + sidecar thread metadata |
 | Claude Code | `Stop` | `Stop` event | stdin (JSON) | `session_id` + PID |
 | Gemini CLI | `AfterAgent` | After agent response | stdin (JSON) | `GEMINI_SESSION_ID` + PID |
 
@@ -182,6 +182,29 @@ Each supported AI agent has a unique hook mechanism. cliV normalizes these into 
 ```toml
 notify = ["cliv", "cache-codex"]
 ```
+
+Add a user-level `Stop` hook in `~/.codex/hooks.json` for Plan Review, then review it through `/hooks`:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Codex's Plan decision dialog currently owns keyboard input. Choose No to return to the normal composer before pressing `Ctrl+G`; cliV then opens the plan captured by the Stop hook.
 
 **Claude Code** — Add to `~/.claude/settings.json`:
 
@@ -233,7 +256,7 @@ cliV uses a hand-rolled CLI parser (no external crate dependencies) to keep the 
 flowchart TD
     START["cliV invoked"] --> CHECK_SUB{"argv[1] is<br/>subcommand?"}
 
-    CHECK_SUB -->|"cache-codex"| CODEX_CACHE["CacheCodex Mode<br/>Parse JSON arg"]
+    CHECK_SUB -->|"cache-codex"| CODEX_CACHE["CacheCodex Mode<br/>Parse argv or stdin JSON"]
     CHECK_SUB -->|"cache-claude"| CLAUDE_CACHE["CacheClaude Mode<br/>Read stdin"]
     CHECK_SUB -->|"cache-gemini"| GEMINI_CACHE["CacheGemini Mode<br/>Read stdin"]
     CHECK_SUB -->|"No"| GUI_MODE["GUI Mode"]
@@ -261,8 +284,8 @@ flowchart TD
 pub enum CliMode {
     /// Launch the Tauri GUI (default).
     Gui,
-    /// Cache a Codex reply from notify hook: `cliv cache-codex '<json>'`
-    CacheCodex(String),
+    /// Cache a Codex reply from notify argv or Stop-hook stdin.
+    CacheCodex(Option<String>),
     /// Cache a Claude reply from Stop hook (stdin): `cliv cache-claude`
     CacheClaude,
     /// Cache a Gemini reply from AfterAgent hook (stdin): `cliv cache-gemini`
@@ -1262,7 +1285,8 @@ graph TB
 cliv document.md
 
 # Cache an agent reply (called by hooks, not users)
-cliv cache-codex '<json>'
+cliv cache-codex '<json>'  # notify payload from argv
+cliv cache-codex           # Stop-hook payload from stdin
 cliv cache-claude          # reads from stdin
 cliv cache-gemini          # reads from stdin
 
@@ -1292,7 +1316,7 @@ mindmap
       serde_json
       dirs crate
     Integration
-      Codex notify hook
+      Codex notify + Stop hooks
       Claude Stop hook
       Gemini AfterAgent hook
     Storage

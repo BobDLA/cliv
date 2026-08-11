@@ -107,6 +107,31 @@ On macOS, if `cliv` is not in PATH, use:
 notify = ["/Applications/cliV.app/Contents/MacOS/cliv", "cache-codex"]
 ```
 
+Keep notify for compatibility, and create `~/.codex/hooks.json` to capture Plan Review content:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Use `/hooks` in Codex to review and trust the command. If inline hooks already exist in `config.toml`, merge the Stop handler there instead of maintaining both hook formats. On macOS without a symlink, use the full cliV executable path in `command` too.
+
+Codex's Plan decision dialog currently captures keyboard input, so `Ctrl+G` does not launch `$EDITOR` inside that dialog. Choose No to return to the normal composer, then press `Ctrl+G`; cliV will load the plan captured by the Stop hook.
+
 #### Claude Code
 
 Edit `~/.claude/settings.json` and merge this into your existing config:

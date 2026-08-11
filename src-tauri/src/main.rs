@@ -14,7 +14,7 @@ fn main() {
             cliv_lib::run_gui(parsed.args, app_config);
         }
         cliv_lib::CliMode::CacheCodex(ref json) => {
-            cliv_lib::cache::cache_codex(json, &app_config.launch)
+            cliv_lib::cache::cache_codex(json.as_deref(), &app_config.launch)
         }
         cliv_lib::CliMode::CacheClaude => cliv_lib::cache::cache_claude(&app_config.launch),
         cliv_lib::CliMode::CacheGemini => cliv_lib::cache::cache_gemini(&app_config.launch),

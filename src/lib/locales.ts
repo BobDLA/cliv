@@ -157,6 +157,8 @@ const zh = {
   "settings.integrations.uiFromLegacy": "当前仍兼容旧 localStorage 偏好；一旦保存设置，就会迁移到统一 config。",
   "settings.integrations.agentBoundaryTitle": "外部 Agent Hook 边界",
   "settings.integrations.agentBoundaryDesc": "下面这些文件仍由各自的 agent CLI 管理。cliV 只展示边界，不会在这里直接改写它们。",
+  "settings.integrations.codexFiles": "Codex：`~/.codex/config.toml` + `~/.codex/hooks.json`",
+  "settings.integrations.codexHookTrust": "Plan Review 内容捕获需要已信任的 Stop Hook；请在 Codex 中使用 `/hooks` 完成审核。",
 
   // ── Annotation: Card ──
   "ann.edit": "编辑",
@@ -388,6 +390,8 @@ const en: Record<keyof typeof zh, string> = {
   "settings.integrations.uiFromLegacy": "Legacy localStorage preferences are still honored for compatibility until the first save migrates them into the unified config.",
   "settings.integrations.agentBoundaryTitle": "External agent hook boundary",
   "settings.integrations.agentBoundaryDesc": "These files are still owned by their respective agent CLIs. cliV shows the boundary here but does not rewrite them directly.",
+  "settings.integrations.codexFiles": "Codex: `~/.codex/config.toml` + `~/.codex/hooks.json`",
+  "settings.integrations.codexHookTrust": "Plan Review capture requires a trusted Stop hook; review it with `/hooks` in Codex.",
 
   // ── Annotation: Card ──
   "ann.edit": "Edit",
