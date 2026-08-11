@@ -4,8 +4,8 @@ use crate::process::{collect_parent_processes, resolve_owner_identity, OwnerIden
 use serde::Serialize;
 use serde_json::Value;
 use std::fs;
-use std::io::Read;
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
 
 fn home_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
@@ -104,6 +104,14 @@ fn read_stdin() -> Option<String> {
     }
 }
 
+fn agent_process_name_matches(candidate: &str, agent_name: &str) -> bool {
+    Path::new(candidate).components().any(|component| {
+        let value = component.as_os_str().to_string_lossy().to_lowercase();
+        let value = value.strip_suffix(".exe").unwrap_or(&value);
+        value == agent_name || value.starts_with(&format!("{agent_name}-"))
+    })
+}
+
 /// Walk PPID chain to find the ancestor agent process PID.
 #[cfg(target_os = "linux")]
 fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
@@ -125,7 +133,7 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             level, pid, comm
         ));
 
-        if comm.contains(agent_name) {
+        if agent_process_name_matches(&comm, agent_name) {
             logging::debug(&format!(
                 "  ancestor: candidate {} match at pid={}",
                 agent_name, pid
@@ -135,15 +143,13 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
 
         // Fallback: when comm is a generic interpreter (e.g. "node"),
         // read /proc/PID/cmdline for the full invocation path.
-        if !comm.contains(agent_name) {
+        if !agent_process_name_matches(&comm, agent_name) {
             if let Ok(raw) = std::fs::read(format!("/proc/{}/cmdline", pid)) {
-                let cmdline = raw
+                let cmdline_matches = raw
                     .split(|&b| b == 0)
-                    .map(|seg| String::from_utf8_lossy(seg))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-                    .to_lowercase();
-                if cmdline.contains(agent_name) {
+                    .map(String::from_utf8_lossy)
+                    .any(|token| agent_process_name_matches(&token, agent_name));
+                if cmdline_matches {
                     logging::debug(&format!(
                         "  ancestor: candidate {} cmdline match at pid={}",
                         agent_name, pid
@@ -213,7 +219,7 @@ fn find_ancestor_agent_pid(agent_name: &str) -> Option<u32> {
             level, pid, comm
         ));
 
-        if comm.contains(agent_name) {
+        if agent_process_name_matches(&comm, agent_name) {
             logging::debug(&format!(
                 "  ancestor: candidate {} match at pid={}",
                 agent_name, pid
@@ -313,44 +319,209 @@ fn resolve_agent_pid(
 
 // ─── Codex ────────────────────────────────────────────────
 
-pub fn cache_codex(json_arg: &str, launch: &LaunchConfig) {
-    logging::log(&format!("cache-codex: json_len={}", json_arg.len()));
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CodexPayloadSource {
+    Notify,
+    Stop,
+}
 
-    let data: Value = match serde_json::from_str(json_arg) {
-        Ok(v) => v,
-        Err(e) => {
-            logging::log(&format!("cache-codex: JSON parse error: {}", e));
-            return;
+impl CodexPayloadSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Notify => "notify",
+            Self::Stop => "stop",
         }
-    };
+    }
+}
 
-    let event_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("");
-    logging::debug(&format!("cache-codex: type={}", event_type));
-    if event_type != "agent-turn-complete" {
-        logging::debug("cache-codex: not agent-turn-complete, skip");
-        return;
+#[derive(Debug, PartialEq, Eq)]
+struct CodexCachePayload {
+    source: CodexPayloadSource,
+    session_id: String,
+    turn_id: Option<String>,
+    permission_mode: Option<String>,
+    message: String,
+}
+
+fn non_empty_string(data: &Value, key: &str) -> Option<String> {
+    data.get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn normalize_codex_message(message: &str) -> Option<String> {
+    if message.trim().is_empty() {
+        return None;
     }
 
-    let thread_id = match data.get("thread-id").and_then(|v| v.as_str()) {
-        Some(id) if !id.is_empty() => id,
-        _ => {
-            logging::log("cache-codex: no thread-id");
-            return;
+    let trimmed = message.trim();
+    if let Some(inner) = trimmed
+        .strip_prefix("<proposed_plan>")
+        .and_then(|value| value.strip_suffix("</proposed_plan>"))
+    {
+        let plan = inner.trim_matches(['\r', '\n']);
+        return (!plan.trim().is_empty()).then(|| plan.to_string());
+    }
+
+    Some(message.to_string())
+}
+
+fn read_codex_plan_from_transcript(
+    transcript_path: &Path,
+    session_id: &str,
+    turn_id: &str,
+) -> Result<Option<String>, String> {
+    let transcript = fs::File::open(transcript_path)
+        .map_err(|error| format!("plan transcript open failed: {error}"))?;
+    let mut matched_plan = None;
+
+    for line in BufReader::new(transcript).lines() {
+        let line = line.map_err(|error| format!("plan transcript read failed: {error}"))?;
+        let event: Value = match serde_json::from_str(&line) {
+            Ok(event) => event,
+            Err(_) => continue,
+        };
+        let payload = match event.get("payload") {
+            Some(payload) => payload,
+            None => continue,
+        };
+        let item = match payload.get("item") {
+            Some(item) => item,
+            None => continue,
+        };
+
+        let is_current_plan = event.get("type").and_then(Value::as_str) == Some("event_msg")
+            && payload.get("type").and_then(Value::as_str) == Some("item_completed")
+            && payload.get("thread_id").and_then(Value::as_str) == Some(session_id)
+            && payload.get("turn_id").and_then(Value::as_str) == Some(turn_id)
+            && item.get("type").and_then(Value::as_str) == Some("Plan");
+
+        if is_current_plan {
+            matched_plan = item
+                .get("text")
+                .and_then(Value::as_str)
+                .and_then(normalize_codex_message);
+        }
+    }
+
+    Ok(matched_plan)
+}
+
+fn parse_codex_payload(input: &str) -> Result<Option<CodexCachePayload>, String> {
+    let data: Value =
+        serde_json::from_str(input).map_err(|error| format!("JSON parse error: {error}"))?;
+
+    let (source, session_key, message_key, turn_key) =
+        if data.get("type").and_then(Value::as_str) == Some("agent-turn-complete") {
+            (
+                CodexPayloadSource::Notify,
+                "thread-id",
+                "last-assistant-message",
+                "turn-id",
+            )
+        } else if data.get("hook_event_name").and_then(Value::as_str) == Some("Stop") {
+            (
+                CodexPayloadSource::Stop,
+                "session_id",
+                "last_assistant_message",
+                "turn_id",
+            )
+        } else {
+            return Ok(None);
+        };
+
+    let session_id = non_empty_string(&data, session_key)
+        .ok_or_else(|| format!("{} payload has no {session_key}", source.as_str()))?;
+    let turn_id = non_empty_string(&data, turn_key);
+    let direct_message = data
+        .get(message_key)
+        .and_then(Value::as_str)
+        .and_then(normalize_codex_message);
+    let message = match direct_message {
+        Some(message) => message,
+        None if source == CodexPayloadSource::Stop => {
+            let transcript_path = non_empty_string(&data, "transcript_path").ok_or_else(|| {
+                format!(
+                    "{} payload has no {message_key} or transcript_path",
+                    source.as_str()
+                )
+            })?;
+            let current_turn_id = turn_id.as_deref().ok_or_else(|| {
+                format!(
+                    "{} payload has no {message_key} or {turn_key}",
+                    source.as_str()
+                )
+            })?;
+            read_codex_plan_from_transcript(
+                Path::new(&transcript_path),
+                &session_id,
+                current_turn_id,
+            )?
+            .ok_or_else(|| {
+                format!(
+                    "{} transcript has no Plan for the current session and turn",
+                    source.as_str()
+                )
+            })?
+        }
+        None => {
+            return Err(format!(
+                "{} payload has no non-empty {message_key}",
+                source.as_str()
+            ));
         }
     };
 
-    let message = match data.get("last-assistant-message").and_then(|v| v.as_str()) {
-        Some(m) if !m.is_empty() => m,
-        _ => {
-            logging::log("cache-codex: no last-assistant-message");
+    Ok(Some(CodexCachePayload {
+        source,
+        session_id,
+        turn_id,
+        permission_mode: non_empty_string(&data, "permission_mode"),
+        message,
+    }))
+}
+
+pub fn cache_codex(json_arg: Option<&str>, launch: &LaunchConfig) {
+    let input = match json_arg.filter(|value| !value.is_empty()) {
+        Some(json) => {
+            logging::debug(&format!("cache-codex: argv_len={}", json.len()));
+            json.to_string()
+        }
+        None => {
+            logging::debug("cache-codex: reading stdin...");
+            match read_stdin() {
+                Some(input) => {
+                    logging::debug(&format!("cache-codex: stdin_len={}", input.len()));
+                    input
+                }
+                None => {
+                    logging::log("cache-codex: empty stdin");
+                    return;
+                }
+            }
+        }
+    };
+
+    let payload = match parse_codex_payload(&input) {
+        Ok(Some(payload)) => payload,
+        Ok(None) => {
+            logging::debug("cache-codex: unsupported event, skip");
+            return;
+        }
+        Err(error) => {
+            logging::log(&format!("cache-codex: {error}"));
             return;
         }
     };
 
     logging::log(&format!(
-        "cache-codex: thread_id={}  msg_len={}",
-        thread_id,
-        message.len()
+        "cache-codex: source={} session_id={} turn_id={:?} permission_mode={:?} msg_len={}",
+        payload.source.as_str(),
+        payload.session_id,
+        payload.turn_id,
+        payload.permission_mode,
+        payload.message.len()
     ));
 
     let codex_home = std::env::var("CODEX_HOME")
@@ -369,26 +540,225 @@ pub fn cache_codex(json_arg: &str, launch: &LaunchConfig) {
     let (owner_pid, owner_started_at) = owner_fields(&owner_identity);
 
     let cache_path = cache_dir.join(format!("{}.md", codex_pid));
-    atomic_write_cache(&cache_path, message);
+    atomic_write_cache(&cache_path, &payload.message);
     write_cache_meta(
         &cache_path,
         &CacheMeta {
             source: "pid".to_string(),
             key: codex_pid.to_string(),
             agent: "codex".to_string(),
-            real_session_id: Some(thread_id.to_string()),
+            real_session_id: Some(payload.session_id.clone()),
             pid: Some(codex_pid),
             owner_pid,
             owner_started_at,
             cached_at: now_cache_timestamp(),
-            size_bytes: message.len(),
+            size_bytes: payload.message.len(),
         },
     );
 
     // Clean up legacy thread-id keyed artifacts now that Codex caches are pid-keyed.
-    let legacy_path = cache_dir.join(format!("{}.md", thread_id));
+    let legacy_path = cache_dir.join(format!("{}.md", payload.session_id));
     if legacy_path != cache_path {
         remove_cache_artifacts(&legacy_path);
+    }
+}
+
+#[cfg(test)]
+mod codex_tests {
+    use super::{agent_process_name_matches, parse_codex_payload, CodexPayloadSource};
+    use std::fs;
+
+    #[test]
+    fn parses_legacy_notify_payload() {
+        let payload = parse_codex_payload(
+            r##"{"type":"agent-turn-complete","thread-id":"thread-1","turn-id":"turn-1","last-assistant-message":"# Reply"}"##,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(payload.source, CodexPayloadSource::Notify);
+        assert_eq!(payload.session_id, "thread-1");
+        assert_eq!(payload.turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(payload.permission_mode, None);
+        assert_eq!(payload.message, "# Reply");
+    }
+
+    #[test]
+    fn parses_plan_mode_stop_payload_and_removes_outer_envelope() {
+        let payload = parse_codex_payload(
+            r#"{"hook_event_name":"Stop","session_id":"thread-2","turn_id":"turn-2","permission_mode":"plan","last_assistant_message":"<proposed_plan>\n# Plan\n\n- Step\n</proposed_plan>"}"#,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(payload.source, CodexPayloadSource::Stop);
+        assert_eq!(payload.session_id, "thread-2");
+        assert_eq!(payload.turn_id.as_deref(), Some("turn-2"));
+        assert_eq!(payload.permission_mode.as_deref(), Some("plan"));
+        assert_eq!(payload.message, "# Plan\n\n- Step");
+    }
+
+    #[test]
+    fn recovers_plan_from_same_session_and_turn_when_stop_message_is_null() {
+        let temp = tempfile::tempdir().unwrap();
+        let transcript_path = temp.path().join("rollout.jsonl");
+        let transcript = [
+            serde_json::json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "item_completed",
+                    "thread_id": "thread-2",
+                    "turn_id": "older-turn",
+                    "item": {"type": "Plan", "text": "# Older plan"}
+                }
+            }),
+            serde_json::json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "item_completed",
+                    "thread_id": "thread-2",
+                    "turn_id": "plan-turn",
+                    "item": {"type": "Plan", "text": "# Current plan\n\n- Review this"}
+                }
+            }),
+            serde_json::json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "task_complete",
+                    "turn_id": "plan-turn",
+                    "last_agent_message": null
+                }
+            }),
+        ]
+        .into_iter()
+        .map(|event| event.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+        fs::write(&transcript_path, transcript).unwrap();
+
+        let input = serde_json::json!({
+            "hook_event_name": "Stop",
+            "session_id": "thread-2",
+            "turn_id": "plan-turn",
+            "permission_mode": "plan",
+            "transcript_path": transcript_path,
+            "last_assistant_message": null
+        })
+        .to_string();
+        let payload = parse_codex_payload(&input).unwrap().unwrap();
+
+        assert_eq!(payload.source, CodexPayloadSource::Stop);
+        assert_eq!(payload.message, "# Current plan\n\n- Review this");
+    }
+
+    #[test]
+    fn transcript_fallback_rejects_plan_from_another_turn() {
+        let temp = tempfile::tempdir().unwrap();
+        let transcript_path = temp.path().join("rollout.jsonl");
+        fs::write(
+            &transcript_path,
+            serde_json::json!({
+                "type": "event_msg",
+                "payload": {
+                    "type": "item_completed",
+                    "thread_id": "thread-2",
+                    "turn_id": "other-turn",
+                    "item": {"type": "Plan", "text": "# Unrelated plan"}
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let input = serde_json::json!({
+            "hook_event_name": "Stop",
+            "session_id": "thread-2",
+            "turn_id": "plan-turn",
+            "permission_mode": "plan",
+            "transcript_path": transcript_path,
+            "last_assistant_message": null
+        })
+        .to_string();
+
+        assert!(parse_codex_payload(&input).is_err());
+    }
+
+    #[test]
+    fn accepts_non_plan_stop_payload_without_rewriting_message() {
+        let message = "  <proposed_plan>embedded</proposed_plan> trailing  ";
+        let input = serde_json::json!({
+            "hook_event_name": "Stop",
+            "session_id": "thread-3",
+            "permission_mode": "default",
+            "last_assistant_message": message
+        })
+        .to_string();
+
+        let payload = parse_codex_payload(&input).unwrap().unwrap();
+
+        assert_eq!(payload.source, CodexPayloadSource::Stop);
+        assert_eq!(payload.message, message);
+    }
+
+    #[test]
+    fn skips_unsupported_events() {
+        let payload = parse_codex_payload(r#"{"hook_event_name":"SessionStart"}"#).unwrap();
+        assert_eq!(payload, None);
+    }
+
+    #[test]
+    fn rejects_invalid_or_empty_payloads() {
+        assert!(parse_codex_payload("not-json").is_err());
+        assert!(parse_codex_payload(
+            r#"{"hook_event_name":"Stop","session_id":"thread-4","last_assistant_message":null}"#
+        )
+        .is_err());
+        assert!(parse_codex_payload(
+            r#"{"hook_event_name":"Stop","session_id":"thread-4","last_assistant_message":"   "}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn preserves_embedded_proposed_plan_examples() {
+        let message = "Example: `<proposed_plan>text</proposed_plan>`";
+        let input = serde_json::json!({
+            "type": "agent-turn-complete",
+            "thread-id": "thread-5",
+            "last-assistant-message": message
+        })
+        .to_string();
+
+        let payload = parse_codex_payload(&input).unwrap().unwrap();
+        assert_eq!(payload.message, message);
+    }
+
+    #[test]
+    fn agent_process_matching_uses_path_components_not_substrings() {
+        assert!(agent_process_name_matches("/usr/bin/codex", "codex"));
+        assert!(agent_process_name_matches(
+            "/usr/bin/codex-x86_64-pc-windows-msvc.exe",
+            "codex"
+        ));
+        assert!(agent_process_name_matches(
+            "/opt/node_modules/@openai/codex/bin/cli.js",
+            "codex"
+        ));
+        assert!(agent_process_name_matches(
+            "/opt/node_modules/@anthropic-ai/claude-code/cli.js",
+            "claude"
+        ));
+        assert!(agent_process_name_matches(
+            "/opt/node_modules/@google/gemini-cli/dist/index.js",
+            "gemini"
+        ));
+        assert!(!agent_process_name_matches(
+            "/tmp/fix--codex-plan-review/anti_crosstalk",
+            "codex"
+        ));
+        assert!(!agent_process_name_matches(
+            "/tmp/my-codex-wrapper",
+            "codex"
+        ));
     }
 }
 

@@ -96,7 +96,7 @@ setx EDITOR cliv
 
 然后重新打开一个新的终端。
 
-当 Agent 触发 `Ctrl+G` 时，它会启动 `$EDITOR`，这就是 cliV 被唤起的入口。
+在 Agent 的普通输入框中触发 `Ctrl+G` 时，它会启动 `$EDITOR`。Codex 的 Plan 决策弹窗当前会接管键盘输入，因此需要先回到输入框再使用该快捷键。
 
 ## 3. 配置 Agent Hook
 
@@ -110,6 +110,29 @@ setx EDITOR cliv
 ```toml
 notify = ["cliv", "cache-codex"]
 ```
+
+`notify` 继续兼容普通已完成回合。为了在 Codex 进入 Plan Review 时捕获计划，还要创建 `~/.codex/hooks.json`：
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+测试前请在 Codex 中打开 `/hooks` 并信任该 Hook；新的或发生变化的 command Hook 在完成审核前会被跳过。如果你已经在 `config.toml` 中使用 inline Codex Hooks，请把这个 `Stop` handler 合并到现有配置，不要同时维护两种表示。macOS 未创建软链接时，把 command 改为 `/Applications/cliV.app/Contents/MacOS/cliv cache-codex`。
 
 ### Claude Code
 

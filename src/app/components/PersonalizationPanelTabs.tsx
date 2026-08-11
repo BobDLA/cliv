@@ -398,7 +398,8 @@ export function IntegrationsTab({ t }: { t: TranslateFn }) {
           {t("settings.integrations.agentBoundaryDesc")}
         </p>
         <div className="mt-3 space-y-2 text-xs text-text-muted">
-          <div>Codex: `~/.codex/config.toml`</div>
+          <div>{t("settings.integrations.codexFiles")}</div>
+          <div>{t("settings.integrations.codexHookTrust")}</div>
           <div>Claude: `~/.claude/settings.json`</div>
           <div>Gemini: `~/.gemini/settings.json`</div>
         </div>

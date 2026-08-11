@@ -182,6 +182,135 @@ fn codex_thread_lookup_is_stable_when_cached_at_ties() {
     assert_eq!(result.unwrap(), "Tie reply B");
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn cache_codex_notify_then_plan_stop_returns_current_plan_from_same_pid() {
+    let tmp = TempDir::new().unwrap();
+    let fake_home = tmp.path().join("home");
+    let codex_home = fake_home.join(".codex");
+    let wrapper_path = tmp.path().join("codex");
+    let transcript_path = codex_home.join("sessions").join("rollout.jsonl");
+    let notify_payload = serde_json::json!({
+        "type": "agent-turn-complete",
+        "thread-id": "fixture-thread",
+        "turn-id": "ordinary-turn",
+        "last-assistant-message": "# Ordinary reply\n\nThis must be replaced.\n"
+    })
+    .to_string();
+    let stop_payload = serde_json::json!({
+        "hook_event_name": "Stop",
+        "session_id": "fixture-thread",
+        "turn_id": "plan-turn",
+        "permission_mode": "plan",
+        "transcript_path": transcript_path,
+        "last_assistant_message": null
+    })
+    .to_string();
+    let transcript = [
+        serde_json::json!({
+            "type": "event_msg",
+            "payload": {
+                "type": "item_completed",
+                "thread_id": "fixture-thread",
+                "turn_id": "ordinary-turn",
+                "item": {"type": "AgentMessage", "text": "# Ordinary reply"}
+            }
+        }),
+        serde_json::json!({
+            "type": "event_msg",
+            "payload": {
+                "type": "item_completed",
+                "thread_id": "fixture-thread",
+                "turn_id": "plan-turn",
+                "item": {
+                    "type": "Plan",
+                    "text": "# Current plan\n\n- Review this step"
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "event_msg",
+            "payload": {
+                "type": "task_complete",
+                "turn_id": "plan-turn",
+                "last_agent_message": null
+            }
+        }),
+    ]
+    .into_iter()
+    .map(|event| event.to_string())
+    .collect::<Vec<_>>()
+    .join("\n");
+    let script = format!(
+        "#!/usr/bin/env bash\nset -euo pipefail\nexport HOME=\"{home}\"\nexport CODEX_HOME=\"{codex_home}\"\n\"{cliv}\" cache-codex '{notify}'\nprintf '%s' '{stop}' | \"{cliv}\" cache-codex\n",
+        home = fake_home.display(),
+        codex_home = codex_home.display(),
+        cliv = env!("CARGO_BIN_EXE_cliv"),
+        notify = notify_payload,
+        stop = stop_payload,
+    );
+
+    fs::create_dir_all(&fake_home).unwrap();
+    fs::create_dir_all(transcript_path.parent().unwrap()).unwrap();
+    fs::write(&transcript_path, transcript).unwrap();
+    fs::write(&wrapper_path, script).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&wrapper_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&wrapper_path, perms).unwrap();
+    }
+
+    let status = Command::new("/bin/bash")
+        .arg(&wrapper_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let cache_dir = codex_home.join("reply_cache");
+    let entries = fs::read_dir(&cache_dir)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(entries.len(), 2, "expected one md + meta cache pair");
+    let cache_path = entries
+        .iter()
+        .map(|entry| entry.path())
+        .find(|path| path.extension().and_then(|ext| ext.to_str()) == Some("md"))
+        .expect("expected PID-keyed Codex cache");
+    let codex_pid = cache_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let meta_path = cache_path.with_extension("meta.json");
+    let cached = fs::read_to_string(&cache_path).unwrap();
+    let metadata = fs::read_to_string(&meta_path).unwrap();
+    let log = fs::read_to_string(fake_home.join(".cliv").join("cliv.log")).unwrap();
+
+    assert_eq!(cached, "# Current plan\n\n- Review this step");
+    assert!(!cached.contains("Ordinary reply"));
+    assert!(!cached.contains("proposed_plan"));
+    assert!(metadata.contains("\"real_session_id\": \"fixture-thread\""));
+    assert!(metadata.contains(&format!("\"pid\": {}", codex_pid)));
+    assert!(!log.contains("Ordinary reply"));
+    assert!(!log.contains("Current plan"));
+
+    let by_pid =
+        cliv_lib::extract::codex::extract_codex_reply_from(&codex_home, Some(codex_pid)).unwrap();
+    let by_session = cliv_lib::extract::codex::extract_codex_reply_from(
+        &codex_home,
+        Some("fixture-thread".to_string()),
+    )
+    .unwrap();
+    assert_eq!(by_pid, cached);
+    assert_eq!(by_session, cached);
+}
+
 // ═══════════════════════════════════════════════════════════
 // Error cases
 // ═══════════════════════════════════════════════════════════

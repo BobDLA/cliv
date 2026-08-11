@@ -171,7 +171,16 @@ describe("PersonalizationPanel", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("External agent hook boundary")).toBeInTheDocument();
-    expect(screen.getByText("Codex: `~/.codex/config.toml`")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Codex: `~/.codex/config.toml` + `~/.codex/hooks.json`",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Plan Review capture requires a trusted Stop hook; review it with `/hooks` in Codex.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Claude: `~/.claude/settings.json`"),
     ).toBeInTheDocument();

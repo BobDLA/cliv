@@ -96,7 +96,7 @@ setx EDITOR cliv
 
 Then open a new terminal.
 
-When an agent triggers `Ctrl+G`, it launches `$EDITOR`. That is how cliV opens from the CLI workflow.
+When an agent triggers `Ctrl+G` from its normal composer, it launches `$EDITOR`. Codex's Plan decision dialog currently owns keyboard input, so return to the composer before using this shortcut.
 
 ## 3. Configure Agent Hooks
 
@@ -110,6 +110,29 @@ Edit `~/.codex/config.toml`:
 ```toml
 notify = ["cliv", "cache-codex"]
 ```
+
+`notify` keeps compatibility with ordinary completed turns. To capture plans when Codex enters Plan Review, also create `~/.codex/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cliv cache-codex",
+            "timeout": 5,
+            "statusMessage": "Caching reply for cliV"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Open `/hooks` in Codex and trust this hook before testing it. Codex skips new or changed command hooks until they are reviewed. If you already define inline Codex hooks in `config.toml`, merge this `Stop` handler there instead of configuring both representations. On macOS without a symlink, replace the command with `/Applications/cliV.app/Contents/MacOS/cliv cache-codex`.
 
 ### Claude Code
 

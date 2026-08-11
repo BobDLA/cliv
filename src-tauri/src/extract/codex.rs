@@ -4,7 +4,7 @@ use crate::logging;
 use std::path::Path;
 
 /// Read the cached Codex reply for a given cache key or thread-id.
-/// The cache is populated by `cliv cache-codex` (called from Codex notify hook).
+/// The cache is populated by `cliv cache-codex` from Codex notify or Stop hooks.
 /// Returns an explicit error if no lookup key is available or cache is missing.
 #[tauri::command]
 pub fn extract_codex_reply(
